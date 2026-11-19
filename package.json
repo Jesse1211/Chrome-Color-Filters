@@ -1,0 +1,37 @@
+{
+  "name": "chrome-color-filters",
+  "version": "0.1.0",
+  "private": true,
+  "description": "给用户指定的网站套用色觉滤镜",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "test:run": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "icons": "node scripts/generate-icons.mjs",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "^1.1.5",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^4.1.12",
+    "web-ext": "^10.5.0",
+    "wxt": "0.21.5"
+  }
+}

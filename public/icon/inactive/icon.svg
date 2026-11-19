@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <g opacity="0.45">
+    <clipPath id="r"><rect x="6.25" y="6.25" width="87.5" height="87.5" rx="18.75" ry="18.75"/></clipPath>
+    <g clip-path="url(#r)">
+      <rect x="0" y="0" width="50" height="100" fill="#8a8f96"/>
+      <rect x="50" y="0" width="50" height="100" fill="#8a8f96"/>
+    </g>
+  </g>
+</svg>
