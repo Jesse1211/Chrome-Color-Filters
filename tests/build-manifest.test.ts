@@ -10,7 +10,7 @@
  * 📌 这是 DESIGN.md T1 gate 自身区分 `TEST_CMD` 与 `npm run build` 的直接结果,
  * 不是为了绕过失败而设的跳过。
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -103,5 +103,59 @@ describe.skipIf(!built)(
 describe('构建产物目录约定', () => {
   it('WXT 的产物目录是 .output/chrome-mv3/,不是 dist/', () => {
     expect(existsSync(resolve(ROOT, 'dist'))).toBe(false);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// T6a:popup 样式在**生产构建产物**中的门禁。
+//
+// 为什么必须在产物上验:`src/ui/popup.css` 通过 `@import` 串起 `tokens.css`,
+// 而 jsdom 里的样式是测试自己拼接注入的(见 `src/ui/__tests__/css-harness.ts`)。
+// 若打包链路把 `@import` 丢了,单测照样全绿而真实 popup 一片无样式 ——
+// 这正是 §8 第 8 条所警告的那类「mock 下看不见」的风险。
+//
+// 跳过条件与本文件其余部分一致:产物不存在时跳过(构建是独立 gate 步骤)。
+// ───────────────────────────────────────────────────────────────────────────
+
+describe.skipIf(!built)('T6a · popup 样式产物(§5.1 / ADR-043)', () => {
+  const css = (): string => {
+    const assetsDir = resolve(OUT_DIR, 'assets');
+    if (!existsSync(assetsDir)) return '';
+    const file = readdirSync(assetsDir).find(
+      (f) => f.startsWith('popup') && f.endsWith('.css'),
+    );
+    return file ? readFileSync(resolve(assetsDir, file), 'utf8') : '';
+  };
+
+  it('产物中存在 popup 的 CSS 资源', () => {
+    expect(css().length).toBeGreaterThan(0);
+  });
+
+  it('§5.1 设计 token 确实被打进产物(@import 链路没断)', () => {
+    const text = css().toLowerCase();
+    for (const token of ['--ground', '--surface', '--ink', '--accent', '--warn', '--bad']) {
+      expect(text, `产物缺少 token ${token}`).toContain(token);
+    }
+    // 浅色与深色两套都要在(OQ-05)。
+    expect(text).toContain('#2563eb'); // 浅色 accent
+    expect(text).toContain('#6195f5'); // 深色 accent
+    expect(text).toContain('prefers-color-scheme');
+  });
+
+  it('§5.1 尺寸 360×452 进了产物', () => {
+    const text = css();
+    expect(text).toContain('360px');
+    expect(text).toContain('452px');
+  });
+
+  it('ADR-043 · focus 态用长写三件套进了产物', () => {
+    const text = css().replace(/\s+/g, '');
+    expect(text).toContain('outline-width:var(--focus-outline-width)');
+    expect(text).toContain('outline-style:solid');
+    expect(text).toContain('outline-color:var(--accent)');
+  });
+
+  it('🔴 ADR-032 · 产物中不含 line-through', () => {
+    expect(css()).not.toContain('line-through');
   });
 });
