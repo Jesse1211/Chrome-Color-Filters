@@ -33,6 +33,7 @@ interface Manifest {
     run_at?: string;
     all_frames?: boolean;
     js?: string[];
+    css?: string[];
   }>;
 }
 
@@ -63,6 +64,34 @@ describe.skipIf(!built)(
       expect(first.matches).toContain('<all_urls>');
       // ADR-016:根元素 filter 天然覆盖 iframe,无需注入子框架。
       expect(first.all_frames).toBe(false);
+    });
+
+    it('🔴 T4a/INV-3:滤镜样式表进入 manifest 的 css 数组(非 JS 注入)', () => {
+      const cs = manifest.content_scripts?.[0];
+      // 线索要求的「css 数组」:浏览器在 document_start 先于脚本注入,
+      // 不等 DOM、不经 JS,因而落在首帧之前。这是 chrome.storage 异步性的唯一解法。
+      expect(cs?.css, 'content_scripts[].css 缺失 —— INV-3 失去首帧前生效的保证').toBeTruthy();
+      expect(cs!.css!.length).toBeGreaterThan(0);
+      const cssPath = cs!.css![0]!;
+      expect(existsSync(resolve(OUT_DIR, cssPath)), `缺少产物 ${cssPath}`).toBe(true);
+    });
+
+    it('🔴 T4a/INV-1:滤镜作用于根元素 <html>,绝不是 body(T0 §1/§4.3)', () => {
+      const cssPath = manifest.content_scripts?.[0]?.css?.[0];
+      const css = readFileSync(resolve(OUT_DIR, cssPath as string), 'utf8');
+      // 根元素享有 CSS Filter Effects 的规范特例:不为 fixed 后代建立 containing block。
+      // body{filter} 没有该特例 —— T0 实测 fixed header 跑到 y=-1000。
+      expect(css).toMatch(/html\[data-ccf-on\]/);
+      expect(css).not.toMatch(/(^|[^-\w])body\s*\{[^}]*filter/);
+    });
+
+    it('🔴 T4a:顶层(top layer)补偿规则存在 —— 漏掉它是一个真实缺陷(T0 §4.5)', () => {
+      const cssPath = manifest.content_scripts?.[0]?.css?.[0];
+      const css = readFileSync(resolve(OUT_DIR, cssPath as string), 'utf8');
+      // modal/popover/fullscreen 在绘制树中不是根元素的后代,根 filter 到不了它们。
+      for (const sel of [':modal', '[popover]:popover-open', ':fullscreen', '::backdrop']) {
+        expect(css, `顶层补偿缺少 ${sel}`).toContain(sel);
+      }
     });
 
     it('注册了 popup 与 service worker', () => {

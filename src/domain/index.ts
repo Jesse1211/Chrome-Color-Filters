@@ -12,3 +12,4 @@ export * from './color-matrix.js';
 export * from './filter-rule.js';
 export * from './filter-settings.js';
 export * from './resolve-rule.js';
+export * from './filter-css.js';

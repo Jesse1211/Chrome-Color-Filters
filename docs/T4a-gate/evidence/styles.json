@@ -1,0 +1,41 @@
+{
+  "github": {
+    "onState": true,
+    "count": 2324,
+    "controlDiffs": 60,
+    "treatDiffs": 60,
+    "attributable": 0,
+    "attributableSample": [],
+    "residue": {
+      "attrs": [],
+      "styleHasVar": false,
+      "injectedNodes": 0
+    }
+  },
+  "wikipedia": {
+    "onState": true,
+    "count": 6509,
+    "controlDiffs": 0,
+    "treatDiffs": 0,
+    "attributable": 0,
+    "attributableSample": [],
+    "residue": {
+      "attrs": [],
+      "styleHasVar": false,
+      "injectedNodes": 0
+    }
+  },
+  "hn": {
+    "onState": true,
+    "count": 817,
+    "controlDiffs": 0,
+    "treatDiffs": 0,
+    "attributable": 0,
+    "attributableSample": [],
+    "residue": {
+      "attrs": [],
+      "styleHasVar": false,
+      "injectedNodes": 0
+    }
+  }
+}
