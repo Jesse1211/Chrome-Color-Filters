@@ -1,0 +1,122 @@
+/*
+ * 设计 Token(DESIGN.md §5.1)—— **共享基础**。
+ *
+ * T6a 建立,T6b / T6c 复用(§6 T6a spec:「这两节是共享基础,由 T6a 建立」)。
+ *
+ * 权威来源(ADR-042):视觉层(设计 token、尺寸、字体、圆角)以仓内
+ * `docs/design/popup-mockup.html` 为准,且与 §5.1 的色值表逐值一致。
+ * 两者在本文件覆盖的范围内**完全吻合**,无需取舍。
+ *
+ * ADR-029:UI 配色为近乎无色的中性灰(带轻微冷调),全局仅一个蓝色强调色 ——
+ * 界面本身是调色工具,UI 若有自己的色彩倾向会干扰用户判断滤镜效果。
+ *
+ * ⚠️ 色值**只在此处定义一次**。组件一律引用 var(--token),不得内联硬编码色值,
+ * 否则深色模式(OQ-05)会出现漏网的浅色残留。
+ */
+
+:root {
+  /* ── 浅色(§5.1) ── */
+  --ground: #F2F3F5;
+  --surface: #FFFFFF;
+  --surface-2: #FAFAFB;
+  --ink: #16181D;
+  --ink-2: #4B5563;
+  --muted: #8B919C;
+  --line: #E4E6EA;
+  --line-2: #EFF1F4;
+  --accent: #2563EB;
+  --accent-soft: #EFF4FF;
+  --ok: #15803D;
+  --warn: #B45309;
+  --warn-soft: #FEF6E7;
+  --bad: #B42318;
+  --bad-soft: #FEF3F2;
+
+  --shadow: 0 1px 2px rgba(16, 18, 24, .06), 0 4px 16px rgba(16, 18, 24, .07);
+
+  /* ── 尺寸(§5.1:360px 宽 × 452px 高,固定;OQ-06 已定为固定) ── */
+  --popup-width: 360px;
+  --popup-height: 452px;
+
+  /* ── 圆角(§5.1:卡片 12px · 控件 7–9px · 色块 4px) ── */
+  --radius-card: 12px;
+  --radius-control: 9px;
+  --radius-control-sm: 7px;
+  --radius-swatch: 4px;
+
+  /* ── 字体(§5.1) ── */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  /* ADR-033:网址模式一律用等宽字体渲染 —— `*` 与 `.` 需一眼分清。 */
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  /* ── focus 态(ADR-043,固定值,不可改) ── */
+  --focus-outline-width: 2px;
+  --focus-outline-offset: 2px;
+
+  color-scheme: light dark;
+}
+
+/*
+ * 深色(§5.1 / OQ-05:交由 Dev 按系统偏好处理,设计稿已含深色 token)。
+ *
+ * `[data-theme="light"]` 的逃生舱与设计稿一致 —— 供测试与 T6b/T6c 在
+ * 不改系统偏好的前提下断言两套 token。
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ground: #101216;
+    --surface: #1A1D23;
+    --surface-2: #15181D;
+    --ink: #E8EAEE;
+    --ink-2: #AFB6C0;
+    --muted: #737A86;
+    --line: #2A2E36;
+    --line-2: #23272E;
+    --accent: #6195F5;
+    --accent-soft: #1B2740;
+    --ok: #4ADE80;
+    --warn: #E0A33E;
+    --warn-soft: #2E2412;
+    --bad: #F07167;
+    --bad-soft: #2E1817;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .35);
+  }
+}
+
+:root[data-theme='dark'] {
+  --ground: #101216;
+  --surface: #1A1D23;
+  --surface-2: #15181D;
+  --ink: #E8EAEE;
+  --ink-2: #AFB6C0;
+  --muted: #737A86;
+  --line: #2A2E36;
+  --line-2: #23272E;
+  --accent: #6195F5;
+  --accent-soft: #1B2740;
+  --ok: #4ADE80;
+  --warn: #E0A33E;
+  --warn-soft: #2E2412;
+  --bad: #F07167;
+  --bad-soft: #2E1817;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .35);
+}
+
+/*
+ * ADR-043:focus 态固定为 `outline: 2px solid var(--accent)` + `outline-offset: 2px`。
+ *
+ * 用**长写形式**(longhand)而非 `outline:` 简写 —— 门禁要求断言计算后的
+ * `outlineWidth` / `outlineStyle` / `outlineColor`,「看起来有」不接受。
+ *
+ * 本项目目标用户含色觉异常者,焦点不能只靠颜色传达,故用轮廓宽度(ADR-043)。
+ * 全局兜底 + 组件各自不得覆盖,保证「所有可聚焦元素」都满足。
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline-width: var(--focus-outline-width);
+  outline-style: solid;
+  outline-color: var(--accent);
+  outline-offset: var(--focus-outline-offset);
+}
