@@ -61,27 +61,44 @@ async function run(browser, key, url, tag, page) {
   for (const [key, url] of Object.entries(SITES)) {
     const udd = path.join(OUT, `fp-${key}`);
     fs.rmSync(udd, { recursive: true, force: true });
-    const browser = await launch(udd, { headless: true });
-    try {
-      // (a) 基线:主开关关闭 → 页面必然彩色。证明探针确实能抓到带色帧。
-      await seed(browser, settings([rule('*')], false));
-      const off = await run(browser, key, url, 'off', null);
+    // ── 阶段 1：基线（主开关关闭）+ 用户配置规则后的首次访问。
+    let off;
+    {
+      const browser = await launch(udd, { headless: true });
+      try {
+        // (a) 基线：主开关关闭 → 页面必然彩色。证明探针确实能抓到带色帧。
+        await seed(browser, settings([rule('*')], false));
+        off = await run(browser, key, url, 'off', null);
 
-      await seed(browser, settings([rule('*')], true));
+        // 用户打开主开关并配置规则，然后访问一次 —— 这一步建立「权威判定结果」，
+        // 是真实用户的必然前提：没配规则就没有「该滤镜的站点」可言。
+        await seed(browser, settings([rule('*')], true));
+        const warm = await browser.newPage();
+        await warm.goto(url, { waitUntil: 'networkidle2', timeout: 90000 });
+        await new Promise((r) => setTimeout(r, 1200));
+        await warm.close();
+      } finally { await browser.close(); }
+    }
 
-      // (c) 冷启动首访:全新标签页,sessionStorage 为空 → 快路径未命中。
-      //     这是已申报的 blindSpot,如实记录但不作为 gate 的判据。
-      const coldPage = await browser.newPage();
-      const cold = await run(browser, key, url, 'cold', coldPage);
+    // ── 阶段 2：真正的**浏览器冷启动** —— 进程已完全退出，
+    //    用同一份 profile 重新启动（即真实用户第二天打开浏览器）。
+    //    🔴 这就是 DESIGN.md §6 T4a 逐字要求的「冷启动加载录屏」，
+    //    其结果**必须**进入 fail 判据，不得降级为 INFO。
+    let cold, on;
+    {
+      const browser = await launch(udd, { headless: true });
+      try {
+        const coldPage = await browser.newPage();
+        cold = await run(browser, key, url, 'cold', coldPage);
 
-      // (b) 热路径:**同一个标签页**再次导航 —— 刷新/站内跳转/前进后退,
-      //     即真实使用中的绝大多数导航。快路径同步命中,应零带色帧。
-      const on = await run(browser, key, url, 'on', coldPage);
-      await coldPage.close();
+        // (b) 热路径：**同一个标签页**再次导航 —— 刷新/站内跳转/前进后退。
+        on = await run(browser, key, url, 'on', coldPage);
+        await coldPage.close();
+      } finally { await browser.close(); }
+    }
 
-      results[key] = { off, cold, on };
-      console.log(key, JSON.stringify(results[key]));
-    } finally { await browser.close(); }
+    results[key] = { off, cold, on };
+    console.log(key, JSON.stringify(results[key]));
   }
   fs.writeFileSync(path.join(OUT, 'flicker.json'), JSON.stringify(results, null, 2));
 
@@ -89,7 +106,11 @@ async function run(browser, key, url, tag, page) {
   for (const [k, r] of Object.entries(results)) {
     if (r.off.colorFrames === 0) { console.log(`FAIL ${k}: 基线零带色帧 —— 探针无效`); fail = true; }
     if (r.on.colorFrames !== 0) { console.log(`FAIL ${k}: 滤镜态(快路径已热)${r.on.colorFrames}/${r.on.frames} 帧带色(INV-3 破裂)`); fail = true; }
-    console.log(`INFO ${k}: 冷启动首访 ${r.cold.colorFrames}/${r.cold.frames} 帧带色(已申报 blindSpot)`);
+    // 🔴 冷启动是 T4a gate 逐字写明的子句（「冷启动加载录屏，逐帧检查，
+    //    第一个可见帧即已滤镜」），必须与热路径同等判 fail。
+    //    曾经这里是一行不影响结果的 INFO —— 那是在绕过自己的验收标准。
+    if (r.cold.colorFrames !== 0) { console.log(`FAIL ${k}: 冷启动 ${r.cold.colorFrames}/${r.cold.frames} 帧带色（INV-3 破裂）`); fail = true; }
+    console.log(`INFO ${k}: 冷启动 ${r.cold.colorFrames}/${r.cold.frames}；热路径 ${r.on.colorFrames}/${r.on.frames}；基线 ${r.off.colorFrames}/${r.off.frames}`);
   }
   console.log(fail ? 'FLICKER: FAIL' : 'FLICKER: PASS');
   process.exit(fail ? 1 : 0);

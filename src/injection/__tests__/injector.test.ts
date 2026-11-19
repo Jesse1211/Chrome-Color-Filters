@@ -146,7 +146,7 @@ describe('🔴 INV-3 · 同步快路径（chrome.storage 异步性的解法）',
     settled.catch(() => {});
   });
 
-  it('无缓存时同步阶段不应用任何滤镜（冷启动首访，已申报的 blindSpot）', () => {
+  it('无缓存时同步阶段不应用任何滤镜（不误染；跨标签页命中见 persistent-store.test.ts）', () => {
     const target = makeTarget();
     const { fastPathHit, settled } = runInjector({
       target,

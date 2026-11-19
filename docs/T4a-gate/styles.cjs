@@ -7,21 +7,6 @@ const OUT=path.join(__dirname,'out'); fs.mkdirSync(OUT,{recursive:true});
 
 const PROPS=['position','top','left','right','bottom','width','height','display','transform','zIndex','overflow'];
 
-const SNAP=`(() => {
-  const props=${JSON.stringify(PROPS)};
-  const out=[];
-  const all=document.querySelectorAll('*');
-  for(let i=0;i<all.length;i++){
-    const cs=getComputedStyle(all[i]);
-    const rec={};
-    for(const p of props) rec[p]=cs[p];
-    const r=all[i].getBoundingClientRect();
-    rec._r=[Math.round(r.x*100)/100,Math.round(r.y*100)/100,Math.round(r.width*100)/100,Math.round(r.height*100)/100];
-    rec._t=all[i].tagName;
-    out.push(rec);
-  }
-  return out;
-})()`;
 
 const SITES={github:'https://github.com/',wikipedia:'https://en.wikipedia.org/wiki/CSS',hn:'https://news.ycombinator.com/'};
 
@@ -39,42 +24,52 @@ const SITES={github:'https://github.com/',wikipedia:'https://en.wikipedia.org/wi
 
       const onState=await page.evaluate(()=>document.documentElement.hasAttribute('data-ccf-on'));
 
-      // ── 方法论:配对对照(paired control)────────────────────────────────
-      // 直接比「滤镜态 vs 移除后」会把**页面自身的动画/动态内容**算进差异。
-      // 判别器证据:github 首页有常驻横向滚动动画 —— 完全不动滤镜、同样间隔
-      // 再拍一次即产生上千处差异(dbg13.cjs 的 CONTROL),签名与带滤镜比对完全相同。
-      // 故本 gate 测的是「**切换滤镜**是否比**什么都不做**多出差异」:
-      //   control = snapA → 等待 → snapB            (滤镜全程不变)
-      //   treat   = snapC → 等待+移除滤镜 → snapD   (唯一变量是滤镜)
-      // 判据:treat 的差异集合不得包含 control 之外的**新**元素/属性。
-      const GAP=300;
-      const diffOf=(x,y)=>{
-        const n=Math.min(x.length,y.length); const set=new Set();
-        for(let i=0;i<n;i++){
-          for(const p of PROPS) if(x[i][p]!==y[i][p]) set.add(i+'|'+p);
-          for(let k=0;k<4;k++) if(x[i]._r[k]!==y[i]._r[k]) set.add(i+'|rect'+k);
+      // ── 方法论：**同步配对**（animation-immune paired comparison）──────────
+      // 页面自身的动画会伪装成 INV-1 违规：github 首页有常驻横向滚动动画，
+      // 完全不动滤镜、隔 300ms 再拍一次即可产生上千处差异。
+      //
+      // 旧实现用「control（滤镜不变）/ treat（切换滤镜）」两组各自隔 300ms 取样，
+      // 再取 treat \ control。这有两个结构性缺陷，实测会**随机**误报：
+      //   1. 差异按**数组下标**计键 —— 页面在两次取样间插入/删除节点就整体错位；
+      //   2. control 与 treat 的 300ms 窗口落在动画的不同相位，
+      //      control 覆盖不到 treat 那一拍恰好前进的那些元素。
+      // 判别器：把滤镜**全程不动**跑同样的结构（placebo），旧实现仍报出
+      // 6 处「可归因」差异 —— 纯假阳性。实测 github 4/4 次 FAIL（6/12/38/11 处）。
+      //
+      // 本实现改为：两份快照在**同一个 evaluate() 内同步采集**，中间只做
+      // 「移除滤镜」这一个同步操作，**不跨任何 timer/await** —— 浏览器在同一个
+      // 任务内不会推进动画、也不会重排 DOM 顺序，故动画相位天然相同。
+      // 元素身份直接用同一个 NodeList 的同一个元素对象，不靠下标跨快照配对。
+      const probe = await page.evaluate(`(() => {
+        const props=${JSON.stringify(PROPS)};
+        const de=document.documentElement;
+        const all=document.querySelectorAll('*');
+        const snap=(el)=>{
+          const cs=getComputedStyle(el);
+          const rec={};
+          for(const p of props) rec[p]=cs[p];
+          const r=el.getBoundingClientRect();
+          rec._r=[Math.round(r.x*100)/100,Math.round(r.y*100)/100,
+                  Math.round(r.width*100)/100,Math.round(r.height*100)/100];
+          return rec;
+        };
+        // 1) 滤镜态快照（先强制 reflow，确保样式已结算）。
+        void de.offsetHeight;
+        const withF=[]; for(let i=0;i<all.length;i++) withF.push(snap(all[i]));
+        // 2) 同步移除滤镜。
+        de.removeAttribute('data-ccf-on');
+        de.style.removeProperty('--ccf-filter');
+        void de.offsetHeight;
+        // 3) 立即再拍 —— 与 (1) 同处一个任务，动画不可能前进。
+        const without=[]; for(let i=0;i<all.length;i++) without.push(snap(all[i]));
+        const diffs=[];
+        for(let i=0;i<all.length;i++){
+          for(const p of props) if(withF[i][p]!==without[i][p]) diffs.push(all[i].tagName+'#'+i+'|'+p);
+          for(let k=0;k<4;k++) if(withF[i]._r[k]!==without[i]._r[k]) diffs.push(all[i].tagName+'#'+i+'|rect'+k);
         }
-        return set;
-      };
-
-      // control:滤镜保持开启,隔 GAP 拍两次。
-      const a=await page.evaluate(SNAP);
-      await new Promise(r=>setTimeout(r,GAP));
-      const bSnap=await page.evaluate(SNAP);
-      const control=diffOf(a,bSnap);
-
-      // treat:再拍一次,移除滤镜,隔同样的 GAP 拍一次。
-      const withFilter=await page.evaluate(SNAP);
-      await page.evaluate(()=>{
-        document.documentElement.removeAttribute('data-ccf-on');
-        document.documentElement.style.removeProperty('--ccf-filter');
-      });
-      await new Promise(r=>setTimeout(r,GAP));
-      const without=await page.evaluate(SNAP);
-      const treat=diffOf(withFilter,without);
-
-      // 只保留 control 里没有出现过的差异 —— 那才可能归因于滤镜。
-      const attributable=[...treat].filter(k=>!control.has(k));
+        return { count: all.length, diffs };
+      })()`);
+      const attributable=probe.diffs;
 
       const residue=await page.evaluate(()=>{
         const de=document.documentElement;
@@ -85,11 +80,10 @@ const SITES={github:'https://github.com/',wikipedia:'https://en.wikipedia.org/wi
         };
       });
 
-      report[key]={onState,count:Math.min(withFilter.length,without.length),
-        controlDiffs:control.size, treatDiffs:treat.size,
+      report[key]={onState,count:probe.count,
         attributable:attributable.length, attributableSample:attributable.slice(0,20), residue};
-      console.log(key,JSON.stringify({onState,count:report[key].count,
-        control:control.size,treat:treat.size,attributable:attributable.length,residue}));
+      console.log(key,JSON.stringify({onState,count:probe.count,
+        attributable:attributable.length,residue}));
       if(attributable.length) console.log('  归因于滤镜的差异:',JSON.stringify(attributable.slice(0,10)));
     } finally { await b.close(); }
   }
