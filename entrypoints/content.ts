@@ -18,7 +18,7 @@ import '../src/injection/filter.css';
 
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { SettingsRepository } from '../src/storage/index.js';
-import { runInjector } from '../src/injection/index.js';
+import { defaultBrowserStore, runInjector } from '../src/injection/index.js';
 
 /**
  * - `matches: ['<all_urls>']`(ADR-004)—— 规则匹配在领域层做(resolveRule),
@@ -42,7 +42,11 @@ export default defineContentScript({
     // 故这里**不 await** —— await 会让出执行权,正是 INV-3 要避免的事。
     const { settled } = runInjector({
       target: document.documentElement,
-      store: sessionStorage,
+      // 🔴 持久层（localStorage）优先，sessionStorage 兜底 —— 这是 INV-3
+      // **冷启动**那一格的解法：sessionStorage 按标签页隔离，
+      // 「本标签页首次访问该 host」必然落空，实测 5/6 次冷启动
+      // 出现未滤镜的彩色帧。详见 src/injection/persistent-store.ts 头注释。
+      store: defaultBrowserStore(),
       url: location.href,
       readSettings: () => new SettingsRepository().read(),
     });

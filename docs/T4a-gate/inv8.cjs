@@ -16,7 +16,10 @@ const AUDIT=`(() => {
     injectedStyle: document.querySelectorAll('style[id*="ccf"],style[data-ccf]').length,
     injectedSvg: document.querySelectorAll('svg[id*="ccf"]').length,
     ccfNodes: document.querySelectorAll('[id*="ccf"],[class*="ccf"]').length,
+    // 🔴 两层都要查：T4a 为关上 INV-3 的冷启动缺口接入了 localStorage（跨标签页），
+    //    只查 sessionStorage 会让持久层的残留完全逃过 INV-8 判定。
     sessionKeys: (()=>{try{return Object.keys(sessionStorage).filter(k=>k.indexOf('__ccf')===0);}catch(e){return ['ERR'];}})(),
+    localKeys: (()=>{try{return Object.keys(localStorage).filter(k=>k.indexOf('__ccf')===0);}catch(e){return ['ERR'];}})(),
   };
 })()`;
 
@@ -52,7 +55,8 @@ const AUDIT=`(() => {
     if(r.off.varVal){console.log(`FAIL ${k}: 主开关关闭仍设了 CSS 变量`);fail=true;}
     if(r.off.computedFilter!=='none'){console.log(`FAIL ${k}: 主开关关闭仍有 filter=${r.off.computedFilter}`);fail=true;}
     if(r.off.injectedStyle||r.off.injectedSvg||r.off.ccfNodes){console.log(`FAIL ${k}: 主开关关闭仍有注入节点`);fail=true;}
-    if(r.off.sessionKeys.length){console.log(`FAIL ${k}: 主开关关闭仍残留快路径缓存 ${JSON.stringify(r.off.sessionKeys)}`);fail=true;}
+    if(r.off.sessionKeys.length){console.log(`FAIL ${k}: 主开关关闭仍残留会话层快路径缓存 ${JSON.stringify(r.off.sessionKeys)}`);fail=true;}
+    if(r.off.localKeys.length){console.log(`FAIL ${k}: 主开关关闭仍残留持久层快路径缓存 ${JSON.stringify(r.off.localKeys)}`);fail=true;}
     // 对照必须生效,否则上面全是假阴性。
     if(!r.on.attr||r.on.computedFilter==='none'){console.log(`FAIL ${k}: 对照组滤镜未生效,INV-8 断言无意义`);fail=true;}
   }

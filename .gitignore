@@ -28,3 +28,7 @@ web-ext.config.ts
 # Chrome for Testing(REAL_STACK_GATE 用,按需下载,不入库)
 docs/T0-spike/spike-code/chrome/
 docs/T0-spike/spike-code/node_modules/
+
+# REAL_STACK_GATE 的运行期输出（每次跑都会重建）。
+# 入库的是 docs/T4a-gate/evidence/ 里经过挑选的证据，不是这里的原始产物。
+docs/T4a-gate/out/
