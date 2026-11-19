@@ -1,0 +1,53 @@
+{
+  "github": {
+    "off": {
+      "frames": 295,
+      "colorFrames": 293,
+      "worst": 0.0276
+    },
+    "cold": {
+      "frames": 198,
+      "colorFrames": 0,
+      "worst": 0
+    },
+    "on": {
+      "frames": 173,
+      "colorFrames": 0,
+      "worst": 0
+    }
+  },
+  "wikipedia": {
+    "off": {
+      "frames": 101,
+      "colorFrames": 100,
+      "worst": 0.3319
+    },
+    "cold": {
+      "frames": 37,
+      "colorFrames": 0,
+      "worst": 0
+    },
+    "on": {
+      "frames": 96,
+      "colorFrames": 0,
+      "worst": 0
+    }
+  },
+  "hn": {
+    "off": {
+      "frames": 4,
+      "colorFrames": 3,
+      "worst": 0.0228
+    },
+    "cold": {
+      "frames": 2,
+      "colorFrames": 0,
+      "worst": 0
+    },
+    "on": {
+      "frames": 3,
+      "colorFrames": 0,
+      "worst": 0
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "github": {
+    "onState": true,
+    "count": 2310,
+    "attributable": 0,
+    "attributableSample": [],
+    "residue": {
+      "attrs": [],
+      "styleHasVar": false,
+      "injectedNodes": 0
+    }
+  },
+  "wikipedia": {
+    "onState": true,
+    "count": 6509,
+    "attributable": 0,
+    "attributableSample": [],
+    "residue": {
+      "attrs": [],
+      "styleHasVar": false,
+      "injectedNodes": 0
+    }
+  },
+  "hn": {
+    "onState": true,
+    "count": 817,
+    "attributable": 0,
+    "attributableSample": [],
+    "residue": {
+      "attrs": [],
+      "styleHasVar": false,
+      "injectedNodes": 0
+    }
+  }
+}
