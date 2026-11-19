@@ -1,0 +1,20 @@
+{
+  "github": {
+    "approach": "a5",
+    "totalFrames": 1055,
+    "coloredFrames": 0,
+    "worst": null
+  },
+  "wikipedia": {
+    "approach": "a5",
+    "totalFrames": 211,
+    "coloredFrames": 0,
+    "worst": null
+  },
+  "hn": {
+    "approach": "a5",
+    "totalFrames": 4,
+    "coloredFrames": 0,
+    "worst": null
+  }
+}

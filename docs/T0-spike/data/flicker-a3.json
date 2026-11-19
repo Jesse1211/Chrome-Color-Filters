@@ -1,0 +1,35 @@
+{
+  "github": {
+    "approach": "a3",
+    "totalFrames": 640,
+    "coloredFrames": 8,
+    "worst": {
+      "i": 1,
+      "maxd": 252,
+      "colored": 5060,
+      "total": 1024000
+    }
+  },
+  "wikipedia": {
+    "approach": "a3",
+    "totalFrames": 58,
+    "coloredFrames": 2,
+    "worst": {
+      "i": 1,
+      "maxd": 178,
+      "colored": 22293,
+      "total": 1024000
+    }
+  },
+  "hn": {
+    "approach": "a3",
+    "totalFrames": 5,
+    "coloredFrames": 1,
+    "worst": {
+      "i": 2,
+      "maxd": 255,
+      "colored": 24756,
+      "total": 1024000
+    }
+  }
+}

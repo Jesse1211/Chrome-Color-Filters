@@ -1,0 +1,77 @@
+{
+  "off": {
+    "scrollY": 1000,
+    "hdr": {
+      "x": 0,
+      "y": 0
+    },
+    "side": {
+      "x": 845,
+      "y": 600
+    },
+    "stick": {
+      "x": 0,
+      "y": 60
+    }
+  },
+  "a1_html_filter": {
+    "scrollY": 1000,
+    "hdr": {
+      "x": 0,
+      "y": 0
+    },
+    "side": {
+      "x": 845,
+      "y": 600
+    },
+    "stick": {
+      "x": 0,
+      "y": 60
+    }
+  },
+  "a2_html_filter_plus_js": {
+    "scrollY": 1000,
+    "hdr": {
+      "x": 0,
+      "y": 1000
+    },
+    "side": {
+      "x": 845,
+      "y": 1600
+    },
+    "stick": {
+      "x": 0,
+      "y": 60
+    }
+  },
+  "a4_body_filter": {
+    "scrollY": 1000,
+    "hdr": {
+      "x": 0,
+      "y": -1000
+    },
+    "side": {
+      "x": 845,
+      "y": 2940
+    },
+    "stick": {
+      "x": 0,
+      "y": 60
+    }
+  },
+  "a5_html_filter_toplayer": {
+    "scrollY": 1000,
+    "hdr": {
+      "x": 0,
+      "y": 0
+    },
+    "side": {
+      "x": 845,
+      "y": 600
+    },
+    "stick": {
+      "x": 0,
+      "y": 60
+    }
+  }
+}

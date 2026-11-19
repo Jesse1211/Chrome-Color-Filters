@@ -1,0 +1,114 @@
+{
+ "off": {
+  "scrollY": 1000,
+  "hdr": {
+   "y": 0,
+   "x": 0
+  },
+  "side": {
+   "y": 600,
+   "x": 845
+  },
+  "stick": {
+   "y": 60,
+   "x": 0
+  },
+  "htmlFilter": "none"
+ },
+ "html_filter": {
+  "scrollY": 1000,
+  "hdr": {
+   "y": 0,
+   "x": 0
+  },
+  "side": {
+   "y": 600,
+   "x": 845
+  },
+  "stick": {
+   "y": 60,
+   "x": 0
+  },
+  "htmlFilter": "grayscale(1)"
+ },
+ "body_filter": {
+  "scrollY": 1000,
+  "hdr": {
+   "y": -1000,
+   "x": 0
+  },
+  "side": {
+   "y": 2940,
+   "x": 845
+  },
+  "stick": {
+   "y": 60,
+   "x": 0
+  },
+  "htmlFilter": "none"
+ },
+ "html_transform": {
+  "scrollY": 1000,
+  "hdr": {
+   "y": -1000,
+   "x": 0
+  },
+  "side": {
+   "y": 2940,
+   "x": 845
+  },
+  "stick": {
+   "y": 60,
+   "x": 0
+  },
+  "htmlFilter": "none"
+ },
+ "html_willchange": {
+  "scrollY": 1000,
+  "hdr": {
+   "y": 0,
+   "x": 0
+  },
+  "side": {
+   "y": 600,
+   "x": 845
+  },
+  "stick": {
+   "y": 60,
+   "x": 0
+  },
+  "htmlFilter": "none"
+ },
+ "html_backdrop": {
+  "scrollY": 1000,
+  "hdr": {
+   "y": 0,
+   "x": 0
+  },
+  "side": {
+   "y": 600,
+   "x": 845
+  },
+  "stick": {
+   "y": 60,
+   "x": 0
+  },
+  "htmlFilter": "none"
+ },
+ "html_opacity": {
+  "scrollY": 1000,
+  "hdr": {
+   "y": 0,
+   "x": 0
+  },
+  "side": {
+   "y": 600,
+   "x": 845
+  },
+  "stick": {
+   "y": 60,
+   "x": 0
+  },
+  "htmlFilter": "none"
+ }
+}

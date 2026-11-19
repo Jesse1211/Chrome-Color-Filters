@@ -1,0 +1,756 @@
+[
+  {
+    "approach": "off",
+    "siteKey": "github",
+    "applied": {
+      "htmlFilter": "none",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(2)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 0,
+      "docH": 8475,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(2)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 8475,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a1",
+    "siteKey": "github",
+    "applied": {
+      "htmlFilter": "grayscale(1)",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 0,
+      "docH": 8475,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 8475,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a2",
+    "siteKey": "github",
+    "applied": {
+      "htmlFilter": "grayscale(1)",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 0,
+      "docH": 8475,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 1200,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 8475,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a3",
+    "siteKey": "github",
+    "applied": {
+      "htmlFilter": "none",
+      "bodyFilter": "none",
+      "overlay": {
+        "backdrop": "grayscale(1)",
+        "pointerEvents": "none",
+        "z": "2147483647"
+      }
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        },
+        {
+          "path": "div#__t0_spike_overlay",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 860
+        }
+      ],
+      "scrollY": 0,
+      "docH": 8475,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        },
+        {
+          "path": "div#__t0_spike_overlay",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 860
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 8475,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a4",
+    "siteKey": "github",
+    "applied": {
+      "htmlFilter": "none",
+      "bodyFilter": "grayscale(1)",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 0,
+      "docH": 8475,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": -1200,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 8475,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a5",
+    "siteKey": "github",
+    "applied": {
+      "htmlFilter": "grayscale(1)",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 0,
+      "docH": 8475,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(1)>div:nth-child(2)>span:nth-child(2)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1265,
+          "h": 2
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 8475,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "off",
+    "siteKey": "wikipedia",
+    "applied": {
+      "htmlFilter": "none",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(2)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 135.84,
+          "w": 208,
+          "h": 392.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 135.84,
+          "w": 196,
+          "h": 78.53
+        }
+      ],
+      "scrollY": 0,
+      "docH": 28880,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(2)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 24,
+          "w": 208,
+          "h": 392.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 24,
+          "w": 196,
+          "h": 78.53
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 28880,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a1",
+    "siteKey": "wikipedia",
+    "applied": {
+      "htmlFilter": "grayscale(1)",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 672.84,
+          "w": 208,
+          "h": 392.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 672.84,
+          "w": 196,
+          "h": 475.53
+        },
+        {
+          "path": "div#p-dock-bottom",
+          "pos": "fixed",
+          "x": 1231.41,
+          "y": 847.2,
+          "w": 25.59,
+          "h": 4.8
+        }
+      ],
+      "scrollY": 0,
+      "docH": 28298,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "div#centralNotice>div:nth-child(3)",
+          "pos": "fixed",
+          "x": 0,
+          "y": 727.81,
+          "w": 1265,
+          "h": 132.19
+        },
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 24,
+          "w": 208,
+          "h": 392.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 24,
+          "w": 196,
+          "h": 475.53
+        },
+        {
+          "path": "div#p-dock-bottom",
+          "pos": "fixed",
+          "x": 1231.41,
+          "y": 847.2,
+          "w": 25.59,
+          "h": 4.8
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 28298,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a2",
+    "siteKey": "wikipedia",
+    "applied": {
+      "htmlFilter": "grayscale(1)",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 135.84,
+          "w": 208,
+          "h": 392.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 135.84,
+          "w": 196,
+          "h": 475.53
+        },
+        {
+          "path": "div#p-dock-bottom",
+          "pos": "fixed",
+          "x": 1231.41,
+          "y": 847.2,
+          "w": 25.59,
+          "h": 4.8
+        }
+      ],
+      "scrollY": 0,
+      "docH": 27641,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 24,
+          "w": 208,
+          "h": 392.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 24,
+          "w": 196,
+          "h": 475.53
+        },
+        {
+          "path": "div#p-dock-bottom",
+          "pos": "fixed",
+          "x": 1231.41,
+          "y": 2047.2,
+          "w": 25.59,
+          "h": 4.8
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 27641,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a3",
+    "siteKey": "wikipedia",
+    "error": "Attempted to use detached Frame '3C7046758C5E7746175548AEEAA2AFF6'."
+  },
+  {
+    "approach": "a4",
+    "siteKey": "wikipedia",
+    "applied": {
+      "htmlFilter": "none",
+      "bodyFilter": "grayscale(1)",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 24,
+          "w": 208,
+          "h": 548.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 24,
+          "w": 196,
+          "h": 475.53
+        },
+        {
+          "path": "div#p-dock-bottom",
+          "pos": "fixed",
+          "x": 1231.41,
+          "y": -20106.8,
+          "w": 25.59,
+          "h": 4.8
+        }
+      ],
+      "scrollY": 20954,
+      "docH": 27641,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 24,
+          "w": 208,
+          "h": 548.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 24,
+          "w": 196,
+          "h": 475.53
+        },
+        {
+          "path": "div#p-dock-bottom",
+          "pos": "fixed",
+          "x": 1231.41,
+          "y": -352.8,
+          "w": 25.59,
+          "h": 4.8
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 27641,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a5",
+    "siteKey": "wikipedia",
+    "applied": {
+      "htmlFilter": "grayscale(1)",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 135.84,
+          "w": 208,
+          "h": 392.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 135.84,
+          "w": 196,
+          "h": 475.53
+        },
+        {
+          "path": "div#p-dock-bottom",
+          "pos": "fixed",
+          "x": 1231.41,
+          "y": 847.2,
+          "w": 25.59,
+          "h": 4.8
+        }
+      ],
+      "scrollY": 0,
+      "docH": 27641,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "html>body:nth-child(3)>div:nth-child(4)>div:nth-child(1)>div:nth-child(2)>div:nth-child(2)",
+          "pos": "sticky",
+          "x": 32,
+          "y": 24,
+          "w": 208,
+          "h": 392.53
+        },
+        {
+          "path": "main#content>div:nth-child(3)>div:nth-child(1)",
+          "pos": "sticky",
+          "x": 1025,
+          "y": 24,
+          "w": 196,
+          "h": 475.53
+        },
+        {
+          "path": "div#p-dock-bottom",
+          "pos": "fixed",
+          "x": 1231.41,
+          "y": 847.2,
+          "w": 25.59,
+          "h": 4.8
+        }
+      ],
+      "scrollY": 1200,
+      "docH": 27641,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "off",
+    "siteKey": "hn",
+    "applied": {
+      "htmlFilter": "none",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [],
+      "scrollY": 0,
+      "docH": 1217,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [],
+      "scrollY": 357,
+      "docH": 1217,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a1",
+    "siteKey": "hn",
+    "applied": {
+      "htmlFilter": "grayscale(1)",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [],
+      "scrollY": 0,
+      "docH": 1217,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [],
+      "scrollY": 357,
+      "docH": 1217,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a2",
+    "siteKey": "hn",
+    "applied": {
+      "htmlFilter": "grayscale(1)",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [],
+      "scrollY": 0,
+      "docH": 1217,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [],
+      "scrollY": 357,
+      "docH": 1217,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a3",
+    "siteKey": "hn",
+    "applied": {
+      "htmlFilter": "none",
+      "bodyFilter": "none",
+      "overlay": {
+        "backdrop": "grayscale(1)",
+        "pointerEvents": "none",
+        "z": "2147483647"
+      }
+    },
+    "top": {
+      "els": [
+        {
+          "path": "div#__t0_spike_overlay",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1280,
+          "h": 860
+        }
+      ],
+      "scrollY": 0,
+      "docH": 860,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [
+        {
+          "path": "div#__t0_spike_overlay",
+          "pos": "fixed",
+          "x": 0,
+          "y": 0,
+          "w": 1280,
+          "h": 860
+        }
+      ],
+      "scrollY": 0,
+      "docH": 860,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a4",
+    "siteKey": "hn",
+    "applied": {
+      "htmlFilter": "none",
+      "bodyFilter": "grayscale(1)",
+      "overlay": null
+    },
+    "top": {
+      "els": [],
+      "scrollY": 0,
+      "docH": 1217,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [],
+      "scrollY": 357,
+      "docH": 1217,
+      "innerH": 860
+    }
+  },
+  {
+    "approach": "a5",
+    "siteKey": "hn",
+    "applied": {
+      "htmlFilter": "grayscale(1)",
+      "bodyFilter": "none",
+      "overlay": null
+    },
+    "top": {
+      "els": [],
+      "scrollY": 0,
+      "docH": 1217,
+      "innerH": 860
+    },
+    "scrolled": {
+      "els": [],
+      "scrollY": 357,
+      "docH": 1217,
+      "innerH": 860
+    }
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "T0 Spike - Color Filter Feasibility",
+  "version": "0.0.1",
+  "description": "Throwaway feasibility probe for INV-1 / INV-3. Not shipped.",
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "config.js",
+        "spike.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}
