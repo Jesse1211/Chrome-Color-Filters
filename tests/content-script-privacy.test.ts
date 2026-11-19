@@ -3,7 +3,7 @@
  *
  * 📌 完整的三项审计(含 Network 实测)是 **T4b** 的 gate。
  * 本文件只覆盖 T4a 已经能够断言、且与 T4a 注入路径直接相关的静态项 ——
- * 因为 T4a 引入了 Web Storage（`localStorage` / `sessionStorage`）快路径，
+ * 因为 T4a 引入了 Web Storage（`sessionStorage`）快路径，
  * 必须就地证明它没有顺手读取页面内容。
  *
  * 产物不存在时跳过(同 build-manifest.test.ts 的理由:构建是独立 gate 步骤)。
@@ -39,10 +39,20 @@ describe.skipIf(!built)('content script 非侵入静态审计(INV-9 / ADR-026)',
     expect(code).not.toContain('getElementsByTagName');
   });
 
+  it('🔴 BC 边界（DESIGN.md §1）：绝不碰宿主页面的 localStorage', () => {
+    // §1：「宿主页面的 DOM、样式、脚本**不属于**本 BC —— 只可观察，永不拥有」。
+    // localStorage 按源且跨会话，往里写就是在页面自己的源里**持有**一份
+    // 跨重启、按站点、页面可读的持久记录 —— 那是「拥有」。
+    // sessionStorage 随标签页蒸发，不构成持久所有权，故仅它被允许。
+    //
+    // 这条断言是**机械**的：产物里只要出现 localStorage 就失败，
+    // 不依赖任何人「读一遍代码确认没越界」。
+    expect(code, '产物触碰了宿主页面的 localStorage —— 越过 DESIGN.md §1 的所有权边界')
+      .not.toContain('localStorage');
+  });
+
   it('Web Storage 只用于扩展自己的 __ccf_ 前缀键（快路径缓存）', () => {
     expect(code).toContain('__ccf_fp_');
-    // 🔴 两层都要把关：T4a 为了关上 INV-3 的冷启动缺口接入了 localStorage
-    //    （跨标签页可见），隐私纪律必须与 sessionStorage 完全同等。
     for (const api of ['sessionStorage', 'localStorage']) {
       // 不得枚举 —— 枚举等同于读取页面写入的数据。
       expect(code, `产物枚举了 ${api}`).not.toContain(`${api}.key`);

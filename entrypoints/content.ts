@@ -18,7 +18,7 @@ import '../src/injection/filter.css';
 
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { SettingsRepository } from '../src/storage/index.js';
-import { defaultBrowserStore, runInjector } from '../src/injection/index.js';
+import { defaultSessionStore, runInjector } from '../src/injection/index.js';
 
 /**
  * - `matches: ['<all_urls>']`(ADR-004)—— 规则匹配在领域层做(resolveRule),
@@ -40,15 +40,21 @@ export default defineContentScript({
   main() {
     // `runInjector` 的同步阶段在它返回之前就已跑完(快路径命中即已应用滤镜),
     // 故这里**不 await** —— await 会让出执行权,正是 INV-3 要避免的事。
+    const repo = new SettingsRepository();
+
     const { settled } = runInjector({
       target: document.documentElement,
-      // 🔴 持久层（localStorage）优先，sessionStorage 兜底 —— 这是 INV-3
-      // **冷启动**那一格的解法：sessionStorage 按标签页隔离，
-      // 「本标签页首次访问该 host」必然落空，实测 5/6 次冷启动
-      // 出现未滤镜的彩色帧。详见 src/injection/persistent-store.ts 头注释。
-      store: defaultBrowserStore(),
+      // 🔴 只用 sessionStorage,**不升级到 localStorage** —— DESIGN.md §1:
+      // 宿主页面不属于本 BC,「只可观察,永不拥有」。按源且跨会话的
+      // localStorage 会让扩展在页面自己的源里持有一份持久记录,越界。
+      // 详见 src/injection/session-store.ts 头注释。
+      store: defaultSessionStore(),
       url: location.href,
-      readSettings: () => new SettingsRepository().read(),
+      readSettings: () => repo.read(),
+      // 🔴 INV-8 / ADR-027:主开关被关掉的那一刻就抹掉本 host 的快路径推测。
+      // 不接这个订阅,下一次导航的同步阶段仍会按陈旧推测上色约 2ms
+      // (实测,见 injector.ts 中 subscribeSettings 的注释)。
+      subscribeSettings: (listener) => repo.subscribe(listener),
     });
 
     // 异步阶段的失败不得让 content script 抛到页面上(INV-1:不改变页面可观察行为,

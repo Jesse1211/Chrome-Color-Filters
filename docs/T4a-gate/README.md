@@ -24,58 +24,114 @@ node docs/T4a-gate/modes.cjs      # 四种模式在真实 Chrome 中确实生效
 
 | 项 | 结果 |
 |---|---|
-| **geometry**(INV-1) | **PASS** — github/wikipedia 所有同时存在的 fixed/sticky 元素位移 **dx=0, dy=0**;滤镜态 `maxChannelSpread=0`(真灰阶),基线 202/200/255(探针有效) |
-| **styles**(INV-1) | **PASS** — 可归因于滤镜的计算样式/几何差异 **0 处**(github 2310 元素 / wikipedia 6509 / hn 817);移除后**零残留**。连跑 4 次全部 PASS(改用同步配对后不再抖动,见下) |
-| **flicker**(INV-3) | **PASS** — **冷启动 0 带色帧**(github 0/198、wikipedia 0/37、hn 0/2);热路径 0/173、0/96、0/3;基线 293/295、100/101、3/4 证明探针有效 |
-| **inv8**(INV-8) | **PASS** — 主开关关闭时无属性、无变量、`computedFilter: none`、无注入节点、**会话层与持久层均无快路径缓存**;对照组滤镜正常生效 |
+| **geometry**(INV-1) | **PASS** — github/wikipedia 所有同时存在的 fixed/sticky 元素位移 **dx=0, dy=0**;滤镜态 `maxChannelSpread=0`(真灰阶),基线 255 等(探针有效) |
+| **styles**(INV-1) | **PASS** — 可归因于滤镜的计算样式/几何差异 **0 处**(github 2314 元素 / wikipedia 6509 / hn 817);移除后**零残留** |
+| **flicker**(INV-3) | **热路径 PASS,冷启动⚠️ 见下** — 热路径 0/165、0/93、0/2;基线 285/288、100/102、3/5(探针有效) |
+| **inv8**(INV-8) | **PASS** — 主开关关闭时**整个加载过程中滤镜一瞬都未出现**(`everOn=false`),无属性/变量/注入节点,两层 Web Storage 均无残留;对照组 `everOn=true` 证明探针有效 |
 | **modes** | **PASS** — 四种模式全部在真实 Chrome 生效,三种辅助模式的内联 `data:` URI 被 Chrome 接受 |
 
-## 本轮修掉的两个缺陷（均由评审指出，属实）
+## 本轮修掉的缺陷
 
-### 1. 【产品缺陷】冷启动首帧未滤镜 —— INV-3 真的破了
+### 1. 【产品缺陷】INV-8 被同步快路径绕过 —— 评审指出,属实
 
-上一轮 `flicker.cjs` 把冷启动结果写成一行**不参与 fail 判定**的 `INFO`，
-于是脚本打印 `FLICKER: PASS` 却同时携带 `hn 冷启动 2/4 帧带色`。
-那是在绕过 T4a gate 逐字写明的子句（「**冷启动**加载录屏，逐帧检查，
-**第一个可见帧即已滤镜**」）。
+旧实现的同步快路径**无条件**读缓存并上色,而此时 `masterEnabled` 还在异步的
+`chrome.storage` 里、尚不可知。于是主开关 OFF 时仍会先上色、再由异步阶段撤掉。
+INV-8 的原文是「**不注入**」,ADR-027 给的理由是「关主开关可**彻底止血**」——
+「先上色再纠正」两条都不满足。
 
-复现确认：`news.ycombinator.com` 冷启动 **6 次试验中 5 次**出现未滤镜的彩色帧，
-worst frame 是一整条**全彩的 HN 橙色头部**，带色比例 0.0228 与「主开关关闭」
-的基线逐位相同 —— 不是探针抖动，是真实缺陷。
+**修复分两处,缺一不可:**
 
-**根因**：`filter.css` 确实走 manifest `css` 数组、首帧前就位，但门控属性
-`data-ccf-on` 必须等异步 `chrome.storage` 读完才能加；而旧实现的同步快路径建在
-`sessionStorage` 上，它**按标签页隔离**，「本标签页首次访问该 host」必然未命中 ——
-那恰恰就是冷启动。
+1. `fast-path-cache.ts` — 缓存条目记录写入时的 `masterEnabled`,
+   `readFastPath` 只在它为 `true` 时才返回命中,否则返回 `unknown`(= 什么都不画)。
+2. `injector.ts` — 订阅设置变更,主开关转 OFF 的**那一刻**就抹掉本 host 的缓存。
+   只做第 1 条不够:条目记录的是**写入时**的状态,用户之后关主开关它并不知道,
+   于是下一次导航的同步阶段仍会命中陈旧条目。
+   **实测**(news.ycombinator.com):只做第 1 条时,关主开关后第 1 次导航
+   仍有约 **2ms** 的可见上色窗口(第 2 次之后才干净);接上订阅后降为 **0**。
 
-**修复**（`src/injection/persistent-store.ts`）：同一套机制换上**跨标签页**的
-同步存储 `localStorage`（按源而非按标签页作用），`sessionStorage` 降级兜底，
-两者都不可用时退回「永远未命中」的空实现。于是任一标签页跑完一次权威判定后，
-结果对该源的**所有后续标签页**同步可见，冷启动同步命中。
+**门禁同步修复(旧门禁看不见这个缺陷):** `inv8.cjs` 旧版只在导航后 +1000ms
+采一次样 —— 那是**异步纠正之后**的状态,「先上色再撤」必然显示为 PASS。
+新版在 `document_start` 装一个高频轮询探针,判据改为
+「整个加载过程中滤镜**一瞬都不得出现**」,并要求对照组 `everOn=true`
+以防探针失效造成假阴性。
 
-实测：三站冷启动 **0 带色帧**（github 0/198、wikipedia 0/37、hn 0/2）。
-`flicker.cjs` 的冷启动子句已改为**与热路径同等判 fail**，且冷启动阶段改为
-**真正的浏览器冷启动**（进程完全退出后用同一份 profile 重启）。
+> **判别器已验证**:把 `fast-path-cache.ts` 里的 `masterEnabled` 门禁一行注释掉
+> (其余不动),新 `inv8.cjs` 在 **github / wikipedia / hn 三站全部 FAIL**
+> (`off.everOn=true`);恢复后全部 PASS。旧 `inv8.cjs` 对同一个缺陷报 PASS。
+> 单测侧同样有判别器:`injector.test.ts` 的「同步阶段零写入」用例在该变异下失败。
 
-> 仍然成立的边界：某 host 的**有史以来第一次**访问（权威结果尚不存在于任何地方）
-> 物理上无法在首帧前知道答案 —— MV3 没有同步的扩展存储 API。
-> 但那一次用户尚未看到过该站的滤镜效果，不属于「冷启动加载」的验收语义；
-> 此后每一次（含浏览器重启、新标签页）都已覆盖。**此项已如实申报为 blindSpot。**
+### 2. 【架构回退】localStorage 越过了 BC 所有权边界 —— 评审指出,属实
 
-### 2. 【门禁缺陷】styles.cjs 随机误报，会红绿随机化后续任务
+上一轮为关冷启动缺口把快路径底层换成 `localStorage`。DESIGN.md §1:
+「宿主页面(host page)的 DOM、样式、脚本**不属于**本 BC —— 只可观察,**永不拥有**」。
+`localStorage` 按源且跨会话,等于让扩展在页面自己的源里持有一份
+跨重启、按站点、页面可读的持久记录 —— 那是「拥有」。已回退为仅 `sessionStorage`
+(随标签页蒸发,不构成持久所有权),`persistent-store.ts` 整个删除。
 
-旧实现用「control（滤镜不变）/ treat（切换滤镜）」各隔 300ms 取样后取
-`treat \ control`。两个结构性缺陷使其**随机假阳性**（实测 github 4/4 次 FAIL，
-6/12/38/11 处「可归因」差异，而 placebo —— 全程不动滤镜 —— 同样报出 6 处）：
+机械回归:`tests/content-script-privacy.test.ts` 断言**产物中不得出现
+`localStorage` 字样**;`inv8.cjs` 断言页面 `localStorage` 中不得出现 `__ccf` 键。
 
-1. 差异按**数组下标**计键，页面在两次取样间增删节点就整体错位；
-2. control 与 treat 的 300ms 窗口落在动画的不同相位，control 覆盖不到
-   treat 那一拍恰好前进的元素。
+### 3. 【架构回退】缓存里存了派生值,违反 ADR-025 —— 评审指出,属实
 
-**修复**：两份快照在**同一个 `evaluate()` 内同步采集**，中间只做「移除滤镜」
-一个同步操作，**不跨任何 timer/await** —— 同一任务内浏览器不会推进动画，
-动画相位天然相同，元素身份直接复用同一个 NodeList 对象。
-实测连跑 4 次全部 **0 处差异**，不再抖动。
+旧缓存存的是 `filterCssValue(mode,intensity)` 的结果 —— 对三种辅助模式就是
+完整的 `feColorMatrix` 系数串。ADR-025:「`ColorMatrix` 为派生值,不持久化 |
+持久化会产生可漂移的双份真相」,范围由 DESIGN.md:736 点明是**双份真相**。
+那正是一份有独立生命周期、会漂移的第二真相。
+
+**修复:** 缓存只存 `(mode, intensity)` 这两个**非派生的用户设置值**,
+filter 字符串在**读取时**由 `filterCssValue` 当场算出。
+`writeFastPath` 的签名里根本没有 filter 字符串参数 —— **结构上**拒绝写入派生值。
+回归用例见 `injector.test.ts` 的「ADR-025」一节(断言产物 JSON 不含
+`feColorMatrix` / `data:image/svg` / `grayscale(` 等派生特征)。
+
+### 4. 【门禁缺陷】lib.cjs 写死了机器绝对路径
+
+`EXT` 曾是 `/tmp/ff-wt/T4a/.output/chrome-mv3`,而 README 让读者在仓库根跑 ——
+照做会撞上「缺少生产构建产物」并误判成构建坏了。现改为相对**仓库根**解析
+(可用 `CCF_EXT_DIR` 覆盖)。
+
+---
+
+## 🔴 已申报的 blindSpot:浏览器重启后的冷启动首帧(INV-3 未完全满足)
+
+**实测数据(本轮,生产产物 + 真实 Chrome + news.ycombinator.com,6 次试验):
+`sessionStorage` 方案下冷启动(进程完全退出后用同一 profile 重启)
+3/6 次出现带色帧。** `flicker.cjs` 连跑两次,第二次 hn 报 `冷启动 2/4` 判 FAIL。
+
+**这是一个真实的 INV-3 缺口,不是探针抖动,也不掩饰。** 根因是平台约束:
+
+| 同步通道 | `document_start` 同步可读 | 能携带动态 filter 值 | 跨浏览器重启存活 | 在 BC 边界内 |
+|---|---|---|---|---|
+| manifest `css` 数组 | ✅ | ❌ 静态文件 | ✅ | ✅ |
+| `chrome.storage.*` | ❌ **全系异步** | ✅ | ✅ | ✅ |
+| `registerContentScripts` 的 `css` | ✅ | ❌ **只接受文件路径** | ❌ **实测不存活** | ✅ |
+| `sessionStorage` | ✅ | ✅ | ❌ 按标签页 | 边缘可接受 |
+| `localStorage` | ✅ | ✅ | ✅ | ❌ **违反 §1** |
+
+(后两行的「实测」均为本轮亲自验证:`chrome.scripting` 需 `scripting` 权限,
+注册成功但 `css` 只收文件路径;且同 profile 重启后 `getRegisteredContentScripts()` 返回空。)
+
+**没有任何通道同时满足四列。** 于是:
+
+- 要满足 INV-3 的冷启动子句,必须用 `localStorage` → 违反 DESIGN.md §1 / INV-9;
+- 要守住 §1,就只能用 `sessionStorage` → 冷启动首帧可能带色,违反 INV-3 / ADR-018。
+
+**这是两条不变式的真实冲突,不是实现缺陷。** 本轮选择**守住 §1 的边界**,
+把 INV-3 的缺口如实申报,理由是 DESIGN.md §8.1:
+「任务与 ADR 冲突时**停下并上报**,不得自行发明架构」——
+上一轮用 `localStorage` 换 INV-3,正是在没有 ADR 授权的情况下
+自行裁定了「INV-3 优先于 INV-9/§1」。ADR-018 说零闪烁是硬性不变式,
+但它**没有**授予拿其他不变式去交换的权力。
+
+**需要人工裁决的问题(建议新开一条 ADR):**
+冷启动首帧的零闪烁,是否值得用「在宿主页面 origin 的 `localStorage` 里
+存一条按站点、跨会话、页面可读的记录」来换?
+若裁定「值得」,把 `session-store.ts` 换回分层存储即可(改动约 30 行,已验证可行);
+若裁定「不值得」,则 INV-3 的冷启动子句需要放宽措辞,
+明确它只覆盖「同一浏览会话内」。
+
+**在裁决之前,现状是:热路径(刷新 / 站内跳转 / 前进后退 / 同标签页再访)
+零闪烁已完全满足;仅「浏览器重启后对某 host 的首次访问」可能有 1–2 帧带色。**
 
 ## 两个方法论陷阱(后续任务请勿重蹈)
 
