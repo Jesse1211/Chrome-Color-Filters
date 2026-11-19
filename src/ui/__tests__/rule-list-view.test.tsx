@@ -17,7 +17,12 @@ import {
   MAX_RULES,
   defaultSettings,
 } from '../../domain/filter-settings.js';
-import { capacityError, classifyStorageError, lockedError } from '../../storage/errors.js';
+import {
+  capacityError,
+  classifyStorageError,
+  invalidInputError,
+  lockedError,
+} from '../../storage/errors.js';
 import { RuleListView, type ActionResult } from '../RuleListView.js';
 import { type TabState } from '../tab-state.js';
 import {
@@ -625,6 +630,85 @@ describe('§5.4 状态变体 ⑤存储失败(ADR-046)', () => {
       fireEvent.click(screen.getByTestId('rule-delete-1'));
     });
     expect(screen.queryByTestId('save-error')).toBeNull();
+  });
+
+  /**
+   * 🔴 **逐字钉死报错条的完整文案 —— 不用 `toContain`。**
+   *
+   * 上一轮门禁抓到的真实缺陷:`save-error.ts` 把 `SAVE_FAILED_PREFIX + error.message`
+   * 与 `adviceFor(error)` 直接相接,而 T3 的 `message` 本身**已经**含有「保存失败」
+   * 和建议句,于是真实 Chrome 中渲染成:
+   *
+   * > `保存失败:存储空间已满,保存失败。请删除几条规则后重试。请删除几条规则后重试。`
+   *
+   * 当时的五条测试全部只用 `toContain('保存失败:')` / `toContain('请删除几条规则后重试。')`
+   * —— 而**子串断言在文本重复时更容易通过**,整个套件对这一类缺陷结构性失明。
+   *
+   * 故此处对每一种 `WriteError` 分类断言 `banner.textContent` 的**精确值**,
+   * 把「`{原因}` + 建议」的组装方式钉死,而不是抽样。
+   */
+  describe('🔴 报错条文案逐字精确(不得重复「保存失败」或建议句)', () => {
+    const bannerTextFor = async (error: ReturnType<typeof capacityError>) => {
+      const onDeleteRule = vi.fn(() => ({ ok: false as const, error }));
+      renderView({ settings: settingsWith({ rules: [rule('a.com')] }), onDeleteRule });
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('rule-delete-0'));
+      });
+      // 去掉 `aria-hidden` 的 ⚠ 图标,只留文案本身。
+      return (screen.getByTestId('save-error').textContent ?? '').replace('⚠', '');
+    };
+
+    it('quota(storage-failure):存储空间已满', async () => {
+      expect(await bannerTextFor(classifyStorageError(new Error('QUOTA_BYTES exceeded')))).toBe(
+        '保存失败:存储空间已满。请删除几条规则后重试。',
+      );
+    });
+
+    it('other / capacity-exceeded:已达 20 条上限', async () => {
+      expect(await bannerTextFor(capacityError())).toBe(
+        `保存失败:规则数量已达上限 ${String(MAX_RULES)} 条。请删除几条规则后重试。`,
+      );
+    });
+
+    it('other / storage-failure:设置未被写入', async () => {
+      expect(await bannerTextFor(classifyStorageError(new Error('disk on fire')))).toBe(
+        '保存失败:设置未被写入。请重试;若反复失败,请删除几条规则后再试。',
+      );
+    });
+
+    it('other / invalid-input:透出调用点的具体原因', async () => {
+      expect(
+        await bannerTextFor(invalidInputError('网址模式非法(通配符位置错误),未写入。')),
+      ).toBe('保存失败:网址模式非法(通配符位置错误),未写入。请检查网址模式后重试。');
+    });
+
+    /**
+     * 结构性护栏:即便日后 T3 改了 `message` 措辞、或 T6b/T6c 新增了分类,
+     * 也不允许「保存失败」或任一建议句在同一条报错里出现两次。
+     */
+    it('🔴 任一分类都不得出现重复的短语', async () => {
+      const errors = [
+        classifyStorageError(new Error('QUOTA_BYTES exceeded')),
+        capacityError(),
+        classifyStorageError(new Error('disk on fire')),
+        invalidInputError('规则下标越界:7。'),
+      ];
+      for (const error of errors) {
+        cleanup();
+        const text = await bannerTextFor(error);
+        // 「保存失败」只能作为前缀出现一次。
+        expect(text.split('保存失败').length - 1).toBe(1);
+        for (const advice of [
+          '请删除几条规则后重试。',
+          '请检查网址模式后重试。',
+          '请重试;若反复失败,请删除几条规则后再试。',
+        ]) {
+          expect(text.split(advice).length - 1).toBeLessThanOrEqual(1);
+        }
+        // `{原因}` 与建议之间不得粘连出两个句号。
+        expect(text).not.toMatch(/。。/u);
+      }
+    });
   });
 
   it('🔴 T3 gate I1:`locked` 分类**不**弹红色报错条', async () => {

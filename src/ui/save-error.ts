@@ -14,6 +14,7 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
 
+import { MAX_RULES } from '../domain/filter-settings.js';
 import { type WriteError } from '../storage/errors.js';
 import { SAVE_FAILED_PREFIX } from './strings.js';
 
@@ -22,6 +23,45 @@ export interface SaveErrorBanner {
   readonly text: string;
   /** 可操作建议 —— ADR-046 要求报错条带「可操作建议」,而非只报坏消息。 */
   readonly advice: string;
+}
+
+/**
+ * 🔴 **原因(`{原因}`)必须由结构化字段推导,不得直接拼 `error.message`。**
+ *
+ * T3 的 `WriteError.message` 是一句**面向用户的完整句子**,它自己就可能已经
+ * 含有「保存失败」这个短语、甚至已经含有建议句。例如
+ * `classifyStorageError` 的配额分支:
+ *
+ * > `存储空间已满,保存失败。请删除几条规则后重试。`
+ *
+ * 若按 `SAVE_FAILED_PREFIX + error.message + adviceFor(error)` 拼装,真实 Chrome 里
+ * 渲染出来的是:
+ *
+ * > `保存失败:存储空间已满,保存失败。请删除几条规则后重试。请删除几条规则后重试。`
+ *
+ * ——「保存失败」出现两次、建议句出现两次。§5.4 要的是
+ * 「保存失败:{原因}」+ 可操作建议,**`{原因}` 是原因短语,不是完整句子**。
+ *
+ * 故本表按 `kind` / `reason`(ADR-046 的结构化字段,正是为「供 UI 渲染」而存在)
+ * 给出去掉了「保存失败」与建议句之后的**纯原因短语**。
+ */
+function reasonPhraseFor(error: WriteError): string {
+  if (error.kind === 'quota' || error.reason === 'storage-failure') {
+    // 两条 `storage-failure` 的 message 都自带「保存失败」字样,必须改写而非复用。
+    return error.kind === 'quota' ? '存储空间已满' : '设置未被写入';
+  }
+  if (error.reason === 'capacity-exceeded') {
+    // `规则数量已达上限 20 条,请先删除几条再添加。` —— 后半句是建议,归 advice。
+    return `规则数量已达上限 ${String(MAX_RULES)} 条`;
+  }
+  // `invalid-input` 的 message 由调用点动态构造(含越界下标、非法 pattern 等),
+  // 是唯一无法在此枚举的分支 —— 原样透出,只去掉句末句号避免与 advice 连读粘连。
+  return stripTrailingPeriod(error.message);
+}
+
+/** 去掉句末的中/英文句号 —— `{原因}` 后面紧跟 advice,保留句号会读成两句不连贯的话。 */
+function stripTrailingPeriod(text: string): string {
+  return text.replace(/[。.]+$/u, '');
 }
 
 /**
@@ -35,7 +75,7 @@ export function toSaveErrorBanner(error: WriteError): SaveErrorBanner | null {
   if (error.kind === 'locked') return null;
 
   return {
-    text: `${SAVE_FAILED_PREFIX}${error.message}`,
+    text: `${SAVE_FAILED_PREFIX}${reasonPhraseFor(error)}。`,
     advice: adviceFor(error),
   };
 }
@@ -54,5 +94,7 @@ function adviceFor(error: WriteError): string {
   if (error.reason === 'invalid-input') {
     return '请检查网址模式后重试。';
   }
-  return '设置未被写入,请重试;若反复失败,请删除几条规则后再试。';
+  // 🔴 这里**只放动作**。原先是「设置未被写入,请重试;……」,而「设置未被写入」
+  // 已经是本分支的 `{原因}`(见 `reasonPhraseFor`)—— 建议句再说一遍就是重复。
+  return '请重试;若反复失败,请删除几条规则后再试。';
 }
