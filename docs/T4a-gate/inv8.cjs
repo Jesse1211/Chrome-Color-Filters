@@ -16,12 +16,49 @@ const AUDIT=`(() => {
     injectedStyle: document.querySelectorAll('style[id*="ccf"],style[data-ccf]').length,
     injectedSvg: document.querySelectorAll('svg[id*="ccf"]').length,
     ccfNodes: document.querySelectorAll('[id*="ccf"],[class*="ccf"]').length,
-    // 🔴 两层都要查：T4a 为关上 INV-3 的冷启动缺口接入了 localStorage（跨标签页），
-    //    只查 sessionStorage 会让持久层的残留完全逃过 INV-8 判定。
+    // 两层都查。localStorage 本不该再出现任何 __ccf 键（BC 边界已回退到
+    // 仅 sessionStorage），这条断言因此同时是**边界回归**的机械判定。
     sessionKeys: (()=>{try{return Object.keys(sessionStorage).filter(k=>k.indexOf('__ccf')===0);}catch(e){return ['ERR'];}})(),
     localKeys: (()=>{try{return Object.keys(localStorage).filter(k=>k.indexOf('__ccf')===0);}catch(e){return ['ERR'];}})(),
   };
 })()`;
+
+// 🔴 **加载全程探针** —— 本轮新增,修的是上一轮门禁的真实盲点。
+//
+// 旧 inv8.cjs 只在导航后 +1000ms 采一次样,那是**异步纠正之后**的状态。
+// 于是「同步阶段先上色、异步阶段再撤掉」这种 INV-8 破绽,在旧门禁下
+// 永远显示为 PASS —— 评审正是这样指出来的。
+//
+// 本探针在 document_start 装好(先于页面脚本),高频轮询 documentElement,
+// **记录整个加载过程中滤镜是否曾经出现过哪怕一瞬**。
+// INV-8 的原文是「不注入」,不是「注入了再纠正」,故判据是「一次都没有」。
+//
+// 📌 两个实测到的坑(别改回去):
+//  1. 探针首次执行时 `document.documentElement` **尚不存在**,
+//     故必须每次轮询时重新取,不能在装载时捕获一个引用(捕获会永远读到旧对象)。
+//  2. 轮询优于 MutationObserver:观察器要先拿到 documentElement 才能 observe,
+//     而那时同步阶段可能已经跑完了。
+function earlyProbe(){
+  window.__ccfEverOn=false;
+  // 📌 第三个坑:同标签页再导航时,新文档的 evaluateOnNewDocument 会在
+  //    **旧文档还挂在屏幕上**时就跑起来(实测 t=7ms 读到 readyState:complete
+  //    的旧页面,它身上还带着上一次导航留下的滤镜,11ms 后才被正确撤掉)。
+  //    把那一下算进 everOn 就是把「上一页的滤镜正在被撤」误判成
+  //    「本页被上了色」—— 一个纯粹的测量假阳性。
+  //    判别:只统计**本次导航的新文档**(readyState 从 loading 开始的那个)。
+  const started=document.readyState==='loading';
+  const check=()=>{
+    if(!started) return;
+    const de=document.documentElement;
+    if(!de) return;
+    if(de.hasAttribute('data-ccf-on')||de.style.getPropertyValue('--ccf-filter')){
+      window.__ccfEverOn=true;
+    }
+  };
+  check();
+  const iv=setInterval(check,2);
+  setTimeout(()=>clearInterval(iv),5000);
+}
 
 (async()=>{
   const report={};
@@ -29,20 +66,41 @@ const AUDIT=`(() => {
     const udd=path.join(OUT,`i8-${key}`); fs.rmSync(udd,{recursive:true,force:true});
     const b=await launch(udd,{headless:true});
     try{
+      // 🔴 **先把快路径缓存捂热,再关主开关** —— 这才是 ADR-027 讲的那个场景:
+      //    「万一某条规则有问题,关主开关可彻底止血」。用户是在滤镜**已经用过**
+      //    之后才去关主开关的,此时该 host 的快路径缓存里躺着一条「该上色」的推测。
+      //
+      //    若直接在全新 profile 上播种 master=false,缓存是空的,
+      //    「同步阶段拿陈旧缓存上色」这个缺陷根本没有触发条件 ——
+      //    门禁会对着一个不可能失败的场景报 PASS(实测确认:带缺陷的实现
+      //    在没有这一步时同样 PASS)。这一步是该断言有效性的前提。
+      //    快路径缓存是 sessionStorage(按标签页),故捂热必须发生在
+      //    **同一个标签页**里 —— 换标签页则缓存天然为空,缺陷无从触发。
+      const p=await b.newPage();
+      await seed(b,settings([rule('*')],true));
+      await p.goto(url,{waitUntil:'networkidle2',timeout:90000});
+      await new Promise(r=>setTimeout(r,1200));
+
       // 规则存在,但主开关关闭 —— 这才是 INV-8 的考点(不是「没有规则」)。
       await seed(b,settings([rule('*')],false));
-      const p=await b.newPage();
+      // 🔴 必须在导航**之前**装好:evaluateOnNewDocument 在 document_start
+      //    执行,才能观测到同步阶段的瞬时上色。
+      await p.evaluateOnNewDocument(earlyProbe);
       await p.goto(url,{waitUntil:'networkidle2',timeout:90000});
       await new Promise(r=>setTimeout(r,1000));
       const off=await p.evaluate(AUDIT);
+      // 整个加载过程中是否曾经上过色(哪怕后来被撤掉)。
+      off.everOn=await p.evaluate('window.__ccfEverOn===true');
       const shot=await p.screenshot();
       fs.writeFileSync(path.join(OUT,`inv8-${key}-masteroff.png`),Buffer.from(shot));
 
       // 对照:打开主开关,同一标签页重新导航 —— 证明规则本来是会命中的。
       await seed(b,settings([rule('*')],true));
+      // 探针由 evaluateOnNewDocument 在每个新文档上自动重装并重置标志。
       await p.goto(url,{waitUntil:'networkidle2',timeout:90000});
       await new Promise(r=>setTimeout(r,1000));
       const on=await p.evaluate(AUDIT);
+      on.everOn=await p.evaluate('window.__ccfEverOn===true');
 
       report[key]={off,on};
       console.log(key,JSON.stringify(report[key]));
@@ -56,7 +114,13 @@ const AUDIT=`(() => {
     if(r.off.computedFilter!=='none'){console.log(`FAIL ${k}: 主开关关闭仍有 filter=${r.off.computedFilter}`);fail=true;}
     if(r.off.injectedStyle||r.off.injectedSvg||r.off.ccfNodes){console.log(`FAIL ${k}: 主开关关闭仍有注入节点`);fail=true;}
     if(r.off.sessionKeys.length){console.log(`FAIL ${k}: 主开关关闭仍残留会话层快路径缓存 ${JSON.stringify(r.off.sessionKeys)}`);fail=true;}
-    if(r.off.localKeys.length){console.log(`FAIL ${k}: 主开关关闭仍残留持久层快路径缓存 ${JSON.stringify(r.off.localKeys)}`);fail=true;}
+    if(r.off.localKeys.length){console.log(`FAIL ${k}: localStorage 出现 __ccf 键 —— 越过 DESIGN.md §1 的 BC 所有权边界 ${JSON.stringify(r.off.localKeys)}`);fail=true;}
+    // 🔴 核心断言:主开关关闭时,滤镜在整个加载过程中**一瞬都不得出现**。
+    //    「先上色再纠正」同样是 FAIL —— INV-8 说的是不注入,ADR-027 的理由
+    //    是「关主开关可彻底止血」,先上色就止不住。
+    if(r.off.everOn){console.log(`FAIL ${k}: 主开关关闭,但加载过程中滤镜曾经出现过(同步快路径在 masterEnabled 可知之前上了色)`);fail=true;}
+    // 对照:主开关开启时探针必须抓到 everOn=true,否则上面那条是假阴性。
+    if(!r.on.everOn){console.log(`FAIL ${k}: 对照组 everOn=false —— document_start 探针失效,INV-8 的 everOn 断言无意义`);fail=true;}
     // 对照必须生效,否则上面全是假阴性。
     if(!r.on.attr||r.on.computedFilter==='none'){console.log(`FAIL ${k}: 对照组滤镜未生效,INV-8 断言无意义`);fail=true;}
   }
