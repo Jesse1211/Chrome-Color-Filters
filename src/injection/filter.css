@@ -1,0 +1,88 @@
+/*
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 零闪烁滤镜样式表(INV-3 / ADR-018 / ADR-038)—— 本文件是 INV-3 的**唯一**落点。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *
+ * 本文件被 `entrypoints/content.ts` 以 `import` 引入。WXT 在**生产构建**时会把它
+ * 收集成 `content-scripts/content.css`,并写进 manifest 的 `content_scripts[].css`
+ * 数组(`cssInjectionMode` 取默认值 `"manifest"`,已核实 WXT 0.21.5
+ * `dist/internal/manifest.mjs` 的 `getContentScriptCssFiles`)。
+ *
+ * 📌 **这就是 DESIGN.md §6 T4a 线索所指的「css 数组」。** 走 manifest `css` 数组的样式表
+ * 由浏览器在 `document_start` **先于脚本**注入,不等待 DOM、不经过任何 JS,
+ * 因而能落在首帧之前 —— 这是 `chrome.storage` 异步性唯一绕不过去的解法。
+ *
+ * ⚠️ 绝不可改用 `cssInjectionMode: "ui"`:那会把 CSS 移出 manifest、
+ * 改为运行时 fetch 进 Shadow Root,首帧前生效的保证随之消失(T4a 线索明文警告)。
+ *
+ * ⚠️ ADR-038:dev 模式的 manifest 完全不含 `content_scripts`,本文件不会被静态注入。
+ * 零闪烁验收一律在 `npm run build` 产物上做,dev 模式的结果不作数。
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * ## 为什么是「属性门控 + CSS 变量」,而不是 JS 写 style 标签
+ *
+ * 静态样式表赶得上首帧,但它是**静态**的 —— 写死在构建产物里,无从得知
+ * 当前页面匹配哪条规则、用哪个 mode/intensity(那要读异步存储)。
+ *
+ * 故拆成两半,各自承担它唯一擅长的事:
+ *
+ * - **CSS(本文件)** 负责「**怎么画**」:在首帧之前就位,等着一个变量被填上。
+ * - **JS(`apply-filter.ts`)** 负责「**画不画、画哪个**」:异步读设置、跑 resolveRule,
+ *   然后只做一件极廉价的事 —— 往 `documentElement` 上写一个属性和一个变量。
+ *
+ * 这正是 T4a 线索说的「JS 只负责匹配判断」。
+ *
+ * ## 门控属性的默认态是「不滤镜」,以及这为什么不违反 INV-3
+ *
+ * 下面的规则要求 `[data-ccf-on]` 存在才生效。属性由 JS 在拿到匹配结果后才加,
+ * 所以在 JS 完成之前页面是**未滤镜**的。
+ *
+ * 这看起来像是放弃了 INV-3,其实不是 —— 真正的保证来自 `apply-filter.ts` 里
+ * **同步执行的 `sessionStorage` 快路径**:同一标签页内,一旦某个 host 被判定为匹配,
+ * 判定结果连同 filter 值被记在 `sessionStorage`(同步 API,无需 await)。
+ * 此后该标签页在该 host 上的每一次导航,JS 都能在 `document_start` 的
+ * **同一个同步执行块**里把属性和变量写好 —— 与静态 CSS 同处首帧之前。
+ *
+ * 反过来,默认「不滤镜」是 INV-1 与 INV-8 所必需的:
+ * 若默认就把整页变灰再由 JS 撤销,则**每一个不匹配的页面**都会闪一下灰
+ * (而不匹配的页面是绝大多数),那是比彩色闪帧更严重的 INV-1 破坏;
+ * 且 `masterEnabled === false` 时 content script 必须**完全不工作**(INV-8/ADR-027),
+ * 一个「默认全灰」的样式表在主开关关闭时仍会把全网染灰 —— 直接违反 INV-8。
+ *
+ * ## 为什么作用在 `<html>` 而不是 `<body>`(T0 spike §1,不要改)
+ *
+ * CSS Filter Effects 对**根元素**有特例:根元素的 filter 作用于视口传播的结果,
+ * **不为 `position:fixed` 后代建立 containing block**。T0 实测 dx=0, dy=0(§3.1)。
+ * 换成 `<body>` 则特例不适用,fixed 后代全部退化为相对 body 定位 ——
+ * T0 实测 fixed header 跑到 y=-1000(§4.3)。**这是 INV-1 最容易被破坏的点。**
+ *
+ * 同理:**不要**为 fixed 元素添加任何「补偿」逻辑。T0 §4.2 实测补偿会把
+ * 本来正确的位置二次偏移 +1000px —— 它解决的是一个不存在的问题。
+ */
+
+/*
+ * 主规则:根元素滤镜。
+ *
+ * `!important` 用于对抗站点自身可能存在的 `html{filter:...}`(T0 §6 第 4 条:
+ * 同等优先级时由 DOM 顺序决定,存活性恢复是 T4b/INV-5 的职责)。
+ */
+html[data-ccf-on] {
+  filter: var(--ccf-filter) !important;
+}
+
+/*
+ * 顶层(top layer)补偿 —— **不是可选项,漏掉它就是一个真实缺陷**(T0 spike §4.5)。
+ *
+ * `<dialog showModal()>`、`[popover]`、`:fullscreen` 的渲染发生在 top layer,
+ * 在绘制树中**不是根元素的后代**,根 filter 到不了它们。
+ * T0 实测:仅 `html{filter}` 时 modal 的 maxChannelSpread = 238(全彩,滤镜未生效);
+ * 补上本规则后为 0(完全灰阶)。证据:docs/T0-spike/edge-cases/toplayer-*.png
+ *
+ * `::backdrop` 同理 —— 它是 top layer 元素身后的那层底,也不是根的后代。
+ */
+html[data-ccf-on] :modal,
+html[data-ccf-on] [popover]:popover-open,
+html[data-ccf-on] :fullscreen,
+html[data-ccf-on] ::backdrop {
+  filter: var(--ccf-filter) !important;
+}

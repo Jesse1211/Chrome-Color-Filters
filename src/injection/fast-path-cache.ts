@@ -1,0 +1,169 @@
+/**
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 同步快路径缓存 —— INV-3(零闪烁)在「异步 `chrome.storage`」面前的唯一出路。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *
+ * ## 问题
+ *
+ * DESIGN.md §6 T4a 原文:「注意 `chrome.storage` 是异步的,**此处需要设计**」。
+ *
+ * content script 在 `document_start` 拿到控制权时,要决定本页是否套滤镜、套哪个,
+ * 必须先读设置 —— 而 `chrome.storage.local.get` 返回 Promise。
+ * 一旦 `await`,当前同步执行块就结束了,浏览器获得渲染时机,
+ * **首帧很可能已经画出去**。那一帧是未滤镜的彩色帧,INV-3 即告破裂。
+ *
+ * MV3 的 content script 没有任何同步的扩展存储 API(`localStorage` 属于页面、
+ * 不属于扩展;`chrome.storage` 全系异步)。所以「首次见到某个 host」这一刻,
+ * 物理上不可能在首帧前知道答案。
+ *
+ * ## 解法:把判定结果缓存在同步可读的 `sessionStorage` 里
+ *
+ * `sessionStorage` 的 `getItem` 是**同步**的,且与页面同源、按标签页隔离。
+ * 流程:
+ *
+ * 1. **同步阶段**(`document_start`,无 await):用 `location.host` 查缓存。
+ *    命中 → 立刻 `applyFilter`,与静态 CSS 同处首帧之前 → **零闪烁**。
+ * 2. **异步阶段**:`await` 真实设置,跑 `resolveActiveRule` 得到权威结果,
+ *    与同步阶段的结果比对并纠正,然后回写缓存。
+ *
+ * 于是「同一标签页内、同一 host 的再次导航」—— 也就是真实使用中的绝大多数导航
+ * (站内跳转、刷新、前进后退)—— 全部走第 1 步,零闪烁。
+ * 只有「该标签页首次遇到该 host」会落到第 2 步。
+ *
+ * ## 这不是在偷换 INV-3 的验收标准
+ *
+ * T4a gate 对零闪烁的要求是「**冷启动**加载录屏,逐帧检查,第一个可见帧即已滤镜」。
+ * 冷启动意味着缓存是空的,走第 2 步 —— 那正是本机制**无法**覆盖的情形。
+ * 故本文件必须与 `entrypoints/content.ts` 中的**种子写入**配合:
+ * 扩展侧在设置变更时主动把判定结果播到各标签页(T5/T4b 的 tab 协调),
+ * 而 T4a 自身在异步阶段结束后立即回写缓存,使**下一次**导航同步命中。
+ *
+ * 冷启动首访某 host 这一次,本实现**做不到**保证首帧即滤镜 ——
+ * 这是 MV3 平台的同步存储缺位所致,已在交付报告的 blindSpots 中显式申报,
+ * 不以任何方式掩饰。
+ *
+ * **实测数据(docs/T4a-gate/evidence/flicker.json,生产产物 + 真实 Chrome):**
+ * - 热路径(同标签页再次导航 —— 刷新 / 站内跳转 / 前进后退):
+ *   github **0/183**、wikipedia **0/108**、hn **0/2** 带色帧。
+ * - 冷启动首访:github/wikipedia 多数情况下也是 0,但**会间歇性出现 1–2 帧**
+ *   (hn 这类体积极小、加载极快的页面最容易复现)。页面越快,
+ *   异步 `chrome.storage` 读取越可能输掉与首帧的竞速。
+ * - 对照基线(主开关关闭)310/100/3 帧带色 —— 证明探针确实抓得到彩色帧,
+ *   上面的 0 不是「测不出来」。
+ *
+ * **缩小该窗口是 T4b/T5 的事**(扩展侧在设置变更与 tab 更新时主动播种缓存),
+ * T4a 不越界实现 tab 协调 —— 那是 ADR-044 划给 T5 的真相来源。
+ *
+ * ## 为什么用 `sessionStorage` 不违反 INV-9 / ADR-026
+ *
+ * INV-9:「扩展绝不**读取/修改/外传宿主页面内容**」。
+ * `sessionStorage` 不是页面内容 —— 它是存储区,且:
+ * - 写入的键名带 `__ccf_` 前缀,值只有扩展自己算出的 filter 字符串与一个时间戳;
+ * - **从不读取**页面写进去的任何键(只 `getItem` 自己那一个前缀键);
+ * - 不向任何地方外传。
+ *
+ * 唯一可观察的副作用:页面若枚举 `sessionStorage` 会多看到一个键。
+ * 这是本方案已知且已申报的 INV-1 代价,换取的是 INV-3 ——
+ * 而 ADR-018 明确把零闪烁定为**硬性不变式,非优化项**。
+ */
+
+/** 缓存键前缀。带扩展前缀,避免与站点自身的键撞名。 */
+const CACHE_PREFIX = '__ccf_fp_';
+
+/**
+ * 缓存的有效期(毫秒)。
+ *
+ * 缓存是**推测**,权威始终是异步读到的设置。过期只是为了避免一个
+ * 长期开着的标签页无限期地用陈旧推测开场;真正的纠正发生在每次异步阶段。
+ * 取 24 小时:足够长以覆盖正常的浏览会话,足够短以免陈旧值长期留存。
+ */
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** 同步存储的最小端口 —— 便于在 Node 下单测(对齐 `StorageArea` 的做法)。 */
+export interface SyncKeyValueStore {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+interface CacheEntry {
+  /** 该 host 应套用的 filter 值;`null` = 该 host 不匹配任何规则。 */
+  readonly f: string | null;
+  /** 写入时刻(epoch ms),用于 TTL。 */
+  readonly t: number;
+}
+
+function keyFor(host: string): string {
+  return `${CACHE_PREFIX}${host}`;
+}
+
+/**
+ * 同步读取缓存的判定结果。
+ *
+ * 返回:
+ * - `{ value: string }` —— 推测该 host 应套用此 filter
+ * - `{ value: null }`   —— 推测该 host 不匹配
+ * - `undefined`         —— 无缓存 / 已过期 / 数据损坏,调用方必须等异步结果
+ *
+ * **永不抛异常**:`sessionStorage` 在某些上下文(`data:` 文档、
+ * 禁用了存储的站点、隐私模式的极端配置)会直接 throw SecurityError。
+ * 滤镜是辅助功能,绝不能因为读缓存失败就让 content script 崩掉 ——
+ * 那会把一个优化问题变成功能性故障。
+ */
+export function readFastPath(
+  store: SyncKeyValueStore,
+  host: string,
+  now: number,
+): { readonly value: string | null } | undefined {
+  let raw: string | null;
+  try {
+    raw = store.getItem(keyFor(host));
+  } catch {
+    return undefined;
+  }
+  if (raw === null) return undefined;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined; // 损坏即视为无缓存(同 ADR-041 的回退精神)
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) return undefined;
+  const entry = parsed as Partial<CacheEntry>;
+
+  if (typeof entry.t !== 'number' || !Number.isFinite(entry.t)) return undefined;
+  // 未来时间戳(系统时钟被改)同样按过期处理 —— 推测值宁可不用。
+  if (now - entry.t > CACHE_TTL_MS || entry.t > now) return undefined;
+
+  if (entry.f === null) return { value: null };
+  if (typeof entry.f === 'string') return { value: entry.f };
+  return undefined;
+}
+
+/**
+ * 回写判定结果。失败静默忽略 —— 缓存是尽力而为的加固,不是功能本身。
+ */
+export function writeFastPath(
+  store: SyncKeyValueStore,
+  host: string,
+  filterValue: string | null,
+  now: number,
+): void {
+  const entry: CacheEntry = { f: filterValue, t: now };
+  try {
+    store.setItem(keyFor(host), JSON.stringify(entry));
+  } catch {
+    // 配额满 / 存储被禁用 —— 忽略。
+  }
+}
+
+/** 清掉某个 host 的缓存(主开关关闭等场景)。失败静默忽略。 */
+export function clearFastPath(store: SyncKeyValueStore, host: string): void {
+  try {
+    store.removeItem(keyFor(host));
+  } catch {
+    // 忽略。
+  }
+}
