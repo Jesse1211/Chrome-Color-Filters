@@ -22,6 +22,7 @@ import {
   SettingsRepository,
   MIN_DEBOUNCE_MS,
   MAX_DEBOUNCE_WAIT_MS,
+  MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS,
 } from '../settings-repository.js';
 import { MemoryStorageArea } from '../memory-storage-area.js';
 
@@ -919,6 +920,151 @@ describe('🔴 T3 gate · 时钟倒退不缩短锁定(ADR-059 / INV-15)', () => 
     clock.advance(60_000);
     const second = (await repo.read()).maxSeenTime;
     expect(second).toBe(first + 60_000);
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // 🔴 回归:读路径必须把 maxSeenTime **落盘**,不能只在内存里推进。
+  //
+  // 此前的断言全部经 `repo.read()` 读回 —— 同一个实例会用**活的注入时钟**
+  // 把下界重新算一遍,恰好把「从未落盘」这个缺陷完整掩盖掉。
+  // 下面的用例一律断言 **`area.snapshot()` 里的原始持久化值**,
+  // 或构造一个「重启后」的新实例来观察,绕开这层重算。
+  // ──────────────────────────────────────────────────────────────────
+
+  it('🔴 只读操作也要把推进后的 maxSeenTime 落盘(DESIGN.md:710「每次读写」)', async () => {
+    const { repo, clock, area } = makeRepo();
+    await repo.setLockUntil(clock.now() + 3_600_000);
+
+    const atLockStart = persisted(area).maxSeenTime as number;
+    expect(atLockStart).toBe(T0);
+
+    // 锁定期间的正常使用:只读,不写(popup 打开、content script 读取)。
+    clock.advance(50 * 60_000);
+    await repo.read();
+
+    // 内存里的值对了还不够 —— 磁盘上的下界也必须前进,否则重启即丢。
+    expect(persisted(area).maxSeenTime).toBe(T0 + 50 * 60_000);
+  });
+
+  it('🔴 isCurrentlyLocked() 这条读路径同样落盘', async () => {
+    const { repo, clock, area } = makeRepo();
+    await repo.setLockUntil(clock.now() + 3_600_000);
+
+    clock.advance(30 * 60_000);
+    expect(await repo.isCurrentlyLocked()).toBe(true);
+
+    expect(persisted(area).maxSeenTime).toBe(T0 + 30 * 60_000);
+  });
+
+  it('🔴 INV-15:只读一段时间 → 倒拨时钟 → 重启,剩余锁定时长不增加', async () => {
+    const area = new MemoryStorageArea();
+    const c1 = fakeClock(T0);
+    const repo1 = new SettingsRepository({ area, clock: c1.now });
+
+    // 锁 7 天。
+    const until = T0 + 7 * 86_400_000;
+    await repo1.setLockUntil(until);
+
+    // 6 天过去,期间用户**一次写入都没尝试过** —— 只是打开 popup 看了看。
+    // 锁定期间所有用户写入本就被设计拒绝,所以「只读」才是常态。
+    for (let day = 1; day <= 6; day += 1) {
+      c1.set(T0 + day * 86_400_000);
+      await repo1.read();
+      await repo1.isCurrentlyLocked();
+    }
+
+    // 持久化的单调下界必须已跟到第 6 天,而不是冻结在锁定开始那一刻。
+    expect(persisted(area).maxSeenTime).toBe(T0 + 6 * 86_400_000);
+
+    // 攻击:把系统时钟倒拨回锁定开始,然后「重启浏览器」(全新实例 + 全新时钟)。
+    const c2 = fakeClock(T0);
+    const repo2 = new SettingsRepository({ area, clock: c2.now });
+
+    expect(await repo2.isCurrentlyLocked()).toBe(true);
+
+    const s = await repo2.read();
+    // 真实剩余 ≤ 1 天;若下界丢了,这里会是整整 7 天 —— 锁被重置。
+    const remaining = (s.lockUntil ?? 0) - s.maxSeenTime;
+    expect(remaining).toBeLessThanOrEqual(86_400_000);
+    expect(remaining).toBeGreaterThan(0);
+
+    // 写入仍然被拒 —— 倒拨 + 重启不是解锁手段。
+    expect((await repo2.setMasterEnabled(false)).ok).toBe(false);
+  });
+
+  it('🔴 倒拨的时钟不会把已落盘的 maxSeenTime 改小', async () => {
+    const { repo, clock, area } = makeRepo();
+    await repo.setLockUntil(clock.now() + 3_600_000);
+
+    clock.advance(10 * 60_000);
+    await repo.read();
+    const high = persisted(area).maxSeenTime as number;
+    expect(high).toBe(T0 + 10 * 60_000);
+
+    // 往回拨一整天后反复读 —— 磁盘上的下界只能持平,绝不能回落。
+    clock.set(T0 - 86_400_000);
+    await repo.read();
+    await repo.isCurrentlyLocked();
+    await repo.read();
+
+    expect(persisted(area).maxSeenTime).toBe(high);
+  });
+
+  it('读路径的回写有节流 —— 热读不会被放大成热写', async () => {
+    const { repo, clock, area } = makeRepo();
+    await repo.read();
+    const baseline = area.setCallCount;
+
+    // 节流窗口内连读 50 次:至多再落盘一次。
+    for (let i = 0; i < 50; i += 1) {
+      clock.advance(100); // 共 5s,远小于 MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS
+      await repo.read();
+    }
+    expect(area.setCallCount - baseline).toBeLessThanOrEqual(1);
+
+    // 跨过节流窗口后,下一次读必须真的落盘。
+    clock.advance(MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS + 1);
+    await repo.read();
+    expect(persisted(area).maxSeenTime).toBe(clock.now());
+  });
+
+  it('回写只动 maxSeenTime —— 用户设置三元组一字未动(INV-11)', async () => {
+    const { repo, clock, area } = makeRepo();
+    await repo.addRule(rule('a.com'));
+    await repo.addRule(rule('b.com'));
+    await repo.setLockUntil(clock.now() + 3_600_000);
+
+    const before = persisted(area);
+    clock.advance(10 * 60_000);
+    await repo.read();
+    const after = persisted(area);
+
+    expect(after.masterEnabled).toEqual(before.masterEnabled);
+    expect(after.rules).toEqual(before.rules);
+    expect(after.lockUntil).toEqual(before.lockUntil);
+    expect(after.version).toEqual(before.version);
+    // 唯一变的就是这个防御性字段(INV-11 例外 b)。
+    expect(after.maxSeenTime).toBe(T0 + 10 * 60_000);
+  });
+
+  it('回写落盘失败时 read() 仍正常返回,不抛异常(ADR-041)', async () => {
+    const { repo, clock, area } = makeRepo();
+    await repo.addRule(rule('a.com'));
+
+    area.failSet = () => new Error('boom');
+    clock.advance(10 * 60_000);
+
+    const s = await repo.read();
+    expect(s.rules.map((r) => r.pattern)).toEqual(['a.com']);
+    expect(s.maxSeenTime).toBe(T0 + 10 * 60_000);
+  });
+
+  it('存储为空时的读不产生无谓写入', async () => {
+    const { repo, area } = makeRepo();
+    await repo.read();
+    await repo.read();
+    // 空存储 → 下界为 clock(),磁盘上没有记录,需要落一次;但不该每读一次写一次。
+    expect(area.setCallCount).toBeLessThanOrEqual(1);
   });
 });
 

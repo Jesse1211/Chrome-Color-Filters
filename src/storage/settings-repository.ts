@@ -106,6 +106,26 @@ export const MIN_DEBOUNCE_MS = 300;
  */
 export const MAX_DEBOUNCE_WAIT_MS = 1_000;
 
+/**
+ * `maxSeenTime` **读路径回写**的节流窗口(ADR-059 / INV-15)。
+ *
+ * DESIGN.md §6 T3 逐字要求「**每次读写**时把 `maxSeenTime` 更新为
+ * `max(maxSeenTime, clock())`」。写路径一直是对的;**读路径此前只在内存里推进、
+ * 从不落盘** —— 而锁定期间所有用户写入都按设计被拒绝,于是一个「只看不写」的
+ * 正常用户(popup 打开、content script 读取)会让持久化的单调下界永远冻结在
+ * 锁定开始的那一刻。把系统时钟倒拨回锁定开始时间再重启浏览器,
+ * 剩余时长就恢复成完整时长,且可以无限次重置 —— INV-15 被彻底绕过。
+ *
+ * 因此读路径也必须回写。但读是热路径(每个 content script、每次 popup 渲染都读),
+ * 逐次回写等于把一次读变成一次读 + 一次写。故用**节流**(throttle,非防抖):
+ * 下界至多每 `MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS` 落盘一次。
+ *
+ * 60 秒的取值依据:这是倒拨时钟所能偷回的**最大**窗口。锁定的量纲是小时 / 天
+ * (§4.1),被偷回 ≤ 60 秒既无实际价值,又把读放大的 I/O 压到可忽略
+ * (`chrome.storage.local` 无写入频率配额 —— 该限制只存在于 sync)。
+ */
+export const MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS = 60_000;
+
 export interface SettingsRepositoryOptions {
   /** 存储端口。默认真实的 `chrome.storage.local`(ADR-010)。 */
   readonly area?: StorageArea;
@@ -163,6 +183,15 @@ export class SettingsRepository {
   #changeListener: StorageChangeListener | null = null;
 
   /**
+   * 上一次把 `maxSeenTime` 落盘时所用的下界值(读路径回写的节流状态)。
+   *
+   * `null` = 本实例尚未落过盘 → 下一次读若发现下界前进了就立刻回写一次
+   * (覆盖「浏览器刚重启、只读不写」这一关键场景:新实例的第一次读
+   * 就把跨会话推进的下界钉到磁盘上)。
+   */
+  #lastWrittenMaxSeenTime: number | null = null;
+
+  /**
    * 防抖中的待写入规则列表(列表侧连续操作)。
    *
    * 只缓存 `rules` —— 落盘时 `replaceRules` 会重新读取当前设置,
@@ -208,7 +237,11 @@ export class SettingsRepository {
    * 比回退到「无规则」要糟得多(ADR-041 的同一理由:关掉一个真实崩溃路径)。
    */
   async read(): Promise<FilterSettings> {
-    return (await this.#readContext()).current;
+    const ctx = await this.#readContext();
+    // ADR-059 / INV-15:「每次**读**写」—— 读路径也要把推进后的单调下界落盘,
+    // 否则锁定期间(所有用户写入都被拒绝)下界只存在于内存,重启即丢失。
+    await this.#writeBackMaxSeenTime(ctx);
+    return ctx.current;
   }
 
   /** 读取并推进 `maxSeenTime`,但**不写回**存储 —— 写回由具体写入方法负责。 */
@@ -237,6 +270,60 @@ export class SettingsRepository {
     const now = effectiveNow(tick, maxSeenTime);
 
     return { current, now, locked: isLocked(current, now) };
+  }
+
+  /**
+   * **读路径**上的 `maxSeenTime` 回写(ADR-059 / INV-15)。
+   *
+   * ⚠️ 这条路径是 INV-15 的真正落点,不是优化。没有它,
+   * 「锁定 7 天 → 6 天里只读不写 → 把系统时钟倒拨回锁定开始 → 重启浏览器」
+   * 会让剩余时长回到完整的 7 天,且可无限次重复。
+   * 持久化的下界必须跟着**读**一起前进,因为锁定期间根本不存在成功的用户写入。
+   *
+   * 与 INV-11 的关系:**不冲突**。回写的只有 `maxSeenTime`;
+   * `masterEnabled` / `rules` / `lockUntil` 原样取自刚读到的已持久化值。
+   * INV-11 例外 b 明文规定该字段是防御性元数据,**必须在锁定期间继续推进**。
+   *
+   * 节流:至多每 `MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS` 落盘一次,
+   * 避免把热读路径放大成热写路径。
+   *
+   * 失败**静默忽略** —— 读路径永不 throw(ADR-041),
+   * 且下界推进是尽力而为的加固,不是用户发起的操作。
+   */
+  async #writeBackMaxSeenTime(ctx: WriteContext): Promise<void> {
+    const advanced = ctx.current.maxSeenTime;
+    const last = this.#lastWrittenMaxSeenTime;
+
+    // 只在下界**真的前进了**时才回写 —— 时钟倒退时 effectiveNow 会夹住,
+    // 这里拿到的 advanced 不会变小,于是不产生任何写入。
+    if (last !== null && advanced - last < MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS) {
+      return;
+    }
+
+    // 本实例还没落过盘时(刚构造 / 浏览器刚重启),先比对磁盘上的值:
+    // 已经是最新就不必写,避免每次新建实例都平白产生一次写。
+    if (last === null) {
+      let storedMax: number;
+      try {
+        const got = await this.#area.get(SETTINGS_KEY);
+        storedMax = coerceSettings(got?.[SETTINGS_KEY]).maxSeenTime;
+      } catch {
+        // 读不出来就当磁盘上没有下界,走下面的回写。
+        storedMax = 0;
+      }
+      if (advanced <= storedMax) {
+        // 磁盘上的下界已经不落后 —— 记下它,后续按节流窗口判断即可。
+        this.#lastWrittenMaxSeenTime = storedMax;
+        return;
+      }
+    }
+
+    try {
+      await this.#area.set({ [SETTINGS_KEY]: toPersisted(ctx.current) });
+      this.#lastWrittenMaxSeenTime = advanced;
+    } catch {
+      /* 尽力而为;见上方说明 */
+    }
   }
 
   // ──────────────────────── 锁定强制(INV-14) ────────────────────────
@@ -278,6 +365,8 @@ export class SettingsRepository {
 
     try {
       await this.#area.set({ [SETTINGS_KEY]: toPersisted(settings) });
+      // 写路径同样落了下界 —— 同步节流状态,免得紧接着的读又写一次。
+      this.#lastWrittenMaxSeenTime = settings.maxSeenTime;
     } catch (cause) {
       // ADR-046:返回结构化错误,**不得只 throw 或只 console.error**。
       return writeFail(classifyStorageError(cause));
@@ -295,6 +384,7 @@ export class SettingsRepository {
   async #touchMaxSeenTime(ctx: WriteContext): Promise<void> {
     try {
       await this.#area.set({ [SETTINGS_KEY]: toPersisted(ctx.current) });
+      this.#lastWrittenMaxSeenTime = ctx.current.maxSeenTime;
     } catch {
       /* 尽力而为;见上方说明 */
     }
@@ -525,7 +615,10 @@ export class SettingsRepository {
 
   /** 当前是否处于锁定中(用 `effectiveNow`,ADR-059)。供 UI 置灰这第二道防线使用。 */
   async isCurrentlyLocked(): Promise<boolean> {
-    return (await this.#readContext()).locked;
+    const ctx = await this.#readContext();
+    // 同 `read()`:这也是一条读路径,同样要回写单调下界(ADR-059 / INV-15)。
+    await this.#writeBackMaxSeenTime(ctx);
+    return ctx.locked;
   }
 
   // ───────────────── 列表侧连续操作的防抖(T3 gate F10) ─────────────────

@@ -113,6 +113,45 @@ npm run build          # 产物在 .output/chrome-mv3/(ADR-038:验收一律在 b
 
 ---
 
+## GATE-3 · 时钟倒退不缩短锁定,且只读会话不丢单调下界(INV-15 / ADR-059)
+
+> **背景(本轮修复的缺陷)**:`maxSeenTime` 此前只在**写**路径落盘。
+> 而锁定期间所有用户写入都按设计被拒绝,于是「只看不写」的正常使用
+> (打开 popup、content script 读取)会让持久化的单调下界**永远冻结在锁定开始那一刻**。
+> 把系统时钟倒拨回锁定开始时间再重启浏览器,剩余时长就恢复成完整时长,且可无限次重置。
+> 现在**读**路径也会回写下界(节流 60s),本门禁就是在真实 Chrome 中验这一点。
+
+1. 启动一个 **1 小时**的锁定,记下 `lockUntil` 与此刻的 `maxSeenTime`:
+
+   ```js
+   const r = () => chrome.storage.local.get('filterSettings').then(o => o.filterSettings);
+   console.log(await r());
+   ```
+
+2. **不做任何写入操作**,只打开 / 关闭 popup 若干次,并访问几个被规则命中的网页
+   (触发 content script 的读)。等待 **至少 5 分钟**(> 60s 的回写节流窗口)。
+
+3. 再次打印存储,确认 `maxSeenTime` **已经前进**到接近当前时刻:
+
+   ```js
+   const s = await r();
+   console.log('maxSeenTime =', s.maxSeenTime, '  now =', Date.now());
+   console.log('下界落后(秒) =', (Date.now() - s.maxSeenTime) / 1000);
+   ```
+
+4. **把系统时钟往回拨**到第 1 步锁定开始的时刻(macOS:系统设置 → 通用 → 日期与时间,
+   关闭自动设置后手动改),**完全退出并重启 Chrome**,再打印存储与锁定状态。
+
+**通过判据(全部满足):**
+
+- 第 3 步的「下界落后(秒)」**≤ 60** —— 证明读路径确实在回写,而不是冻结在锁定开始
+- 倒拨 + 重启后,**仍在锁定中**为 `true`
+- 剩余时长 = `lockUntil - max(Date.now(), maxSeenTime)`,**≤ 第 1 步设定的 1 小时减去已过去的真实时长**。
+  **若剩余变回完整的 1 小时,即为 INV-15 失败** —— 倒拨时钟成了一键重置锁定
+- 反复「倒拨 → 重启」多次,剩余时长**单调递减**,绝不回涨
+
+---
+
 ## 记录
 
 执行者须在交付中附上三者的实际输出(GATE-1 的规则顺序、GATE-2 的 `lockUntil`
