@@ -154,6 +154,127 @@ describe('ADR-008 / INV-6 · 拖拽重排 → 持久化 → 优先级随之改�
   });
 });
 
+/**
+ * 🔴 **防抖窗口内 popup 被关掉 —— 重排不得丢失**(ADR-008 / INV-6)。
+ *
+ * 这一组**刻意不用 `immediate` 调度器**。上面那两个用例把 300ms 防抖换成了
+ * 「立即执行」,于是「落盘」在断言时已经发生,`gate` 条款
+ * 「拖拽重排后顺序立即生效并持久化」被**替身证明为真**,而真实时序下它是假的:
+ * Chrome 工具栏 popup 焦点一离开就销毁,拖完 300ms 内点一下页面,
+ * 挂起的 `setTimeout` 随文档一起消失,重排静默丢失。
+ *
+ * 这里用 `deferred` 调度器把计时器的触发权**收到测试手里**并且**永不触发**,
+ * 等价于「窗口尚未到点,popup 先被拆了」—— 唯一的出路是拆除路径主动
+ * `repository.flush()`。
+ */
+describe('ADR-008 / INV-6 · 防抖窗口内关闭 popup,重排仍须落盘', () => {
+  /** 真·延迟调度器:登记回调但**永不执行**,模拟「窗口还没到点」。 */
+  function deferredScheduler() {
+    const queued: (() => void)[] = [];
+    return {
+      scheduler: (fn: () => void) => {
+        queued.push(fn);
+        return 0;
+      },
+      /** 窗口确实到点时才会跑到的那条路 —— 本组用例刻意不调用。 */
+      get pendingCount() {
+        return queued.length;
+      },
+    };
+  }
+
+  it('拖拽后在 300ms 窗口内关闭 popup(pagehide),新顺序已落盘', async () => {
+    const area = new MemoryStorageArea(
+      seeded([
+        { pattern: '*.com', mode: 'BlueYellow', intensity: 60 },
+        { pattern: '*.weibo.*' },
+      ]),
+    );
+    const timers = deferredScheduler();
+    const repository = new SettingsRepository({ area, scheduler: timers.scheduler });
+    render(<PopupUnderTest repository={repository} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rule-pattern-0').textContent).toBe('*.com');
+    });
+
+    await act(async () => {
+      fireEvent.dragStart(screen.getByTestId('rule-grip-1'));
+      fireEvent.dragOver(screen.getByTestId('rule-row-0'));
+      fireEvent.drop(screen.getByTestId('rule-row-0'));
+    });
+
+    // 乐观草稿已经画出新顺序……
+    expect(screen.getByTestId('rule-pattern-0').textContent).toBe('*.weibo.*');
+    // ……但防抖窗口还没到点,存储里仍是旧顺序。这正是危险窗口。
+    expect(timers.pendingCount).toBeGreaterThan(0);
+    expect(persisted(area).rules.map((r) => r.pattern)).toEqual(['*.com', '*.weibo.*']);
+
+    // popup 被关掉:焦点离开 → 文档拆除。计时器**不会**再触发。
+    await act(async () => {
+      window.dispatchEvent(new Event('pagehide'));
+      await Promise.resolve();
+    });
+
+    // 重排必须已经落盘,且优先级随之改变(INV-6)。
+    await waitFor(() => {
+      expect(persisted(area).rules.map((r) => r.pattern)).toEqual([
+        '*.weibo.*',
+        '*.com',
+      ]);
+    });
+    const after = persisted(area);
+    expect(resolveActiveRule(after, 'https://news.weibo.com/')?.rule.pattern).toBe(
+      '*.weibo.*',
+    );
+  });
+
+  it('焦点移开(visibilitychange → hidden)同样强制落盘', async () => {
+    const area = new MemoryStorageArea(
+      seeded([{ pattern: 'a.com' }, { pattern: 'b.com' }, { pattern: 'c.com' }]),
+    );
+    const timers = deferredScheduler();
+    const repository = new SettingsRepository({ area, scheduler: timers.scheduler });
+    render(<PopupUnderTest repository={repository} />);
+    await waitFor(() => screen.getByTestId('rule-grip-2'));
+
+    await act(async () => {
+      fireEvent.keyDown(screen.getByTestId('rule-grip-2'), { key: 'ArrowUp' });
+    });
+    expect(persisted(area).rules.map((r) => r.pattern)).toEqual([
+      'a.com',
+      'b.com',
+      'c.com',
+    ]);
+
+    const descriptor = Object.getOwnPropertyDescriptor(
+      Document.prototype,
+      'visibilityState',
+    );
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    });
+    try {
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(persisted(area).rules.map((r) => r.pattern)).toEqual([
+          'a.com',
+          'c.com',
+          'b.com',
+        ]);
+      });
+    } finally {
+      delete (document as unknown as Record<string, unknown>).visibilityState;
+      if (descriptor) Object.defineProperty(Document.prototype, 'visibilityState', descriptor);
+    }
+  });
+});
+
 describe('删除 · 规则从列表消失且不再生效', () => {
   it('删除首个命中者后,该 pattern 不再出现在列表中,也不再被解析为生效规则', async () => {
     const area = new MemoryStorageArea(
