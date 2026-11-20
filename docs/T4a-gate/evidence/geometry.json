@@ -5,13 +5,13 @@
     "onlyOff": 1,
     "diffs": [],
     "filteredAttr": true,
-    "spreadOff": 194,
+    "spreadOff": 178,
     "spreadOn": 0
   },
   "wikipedia": {
     "compared": 3,
-    "onlyOn": 4,
-    "onlyOff": 3,
+    "onlyOn": 3,
+    "onlyOff": 4,
     "diffs": [],
     "filteredAttr": true,
     "spreadOff": 200,
