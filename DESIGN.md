@@ -140,7 +140,8 @@ x.com         仅匹配 x.com
 | **ADR-035** | **严禁手写从零搭建脚手架** | 未经 CLI 生成的交付直接驳回。构建配置、打包、manifest 处理不是本项目要解决的问题 |
 | **ADR-036** | `src/domain` 为**纯 TypeScript**,零 React、零 `chrome.*`、零 WXT API | 领域逻辑(通配符匹配、色彩矩阵、规则解析)必须可在 Node 下单测,不依赖浏览器或框架。由自动化静态检查强制 |
 | **ADR-037** | **WXT 版本精确锁定(pin),不用 `^`** | WXT 仍是 0.x,次版本号(0.20→0.21)可能含破坏性变更。升级须人工读 release notes |
-| **ADR-038** | **所有零闪烁(INV-3)验收一律在 `wxt build` 产物上进行**,dev 模式下的结果不作数 | 已核实 WXT 源码:dev 模式下 manifest **完全不含 `content_scripts`**,改由 service worker 运行时 `registerContentScripts()` 注册 —— 运行时注册不可能赶在已开始加载页面的 `document_start` 之前。生产构建才输出静态 `content_scripts` 并原样传递 `run_at` |
+| **ADR-038** | **所有零闪烁(INV-3)验收一律在 `wxt build` 产物上进行**,dev 模式下的结果不作数。**⚠️ 本条在 ADR-062 下更强、不更弱** | 已核实 WXT 源码:dev 模式下 manifest **完全不含 `content_scripts`**,改由 service worker 运行时 `registerContentScripts()` 注册 —— 运行时注册不可能赶在已开始加载页面的 `document_start` 之前。生产构建才输出静态 `content_scripts` 并原样传递 `run_at`。
+**⚠️ 与 ADR-062 的区分(必读,否则会误判架构失败):** 本条观察到的失败是「**冷启动的 SW 在运行时注册 JS、且无持久化**」—— 与 ADR-062 的「**从磁盘恢复的持久化 CSS 注册**」是两件不同的事。CSS 不受 `runAt` 约束,持久化注册不依赖 SW 启动。**但 dev 模式仍会表现为闪烁**,所以改用 ADR-062 后若在 dev 模式验证,会错误地得出「新架构也失败」的结论 |
 | **ADR-039** | **关闭 WXT 的 auto-imports**(`imports: false`) | 自动全局注入会让 ADR-036 的纯度静态检查难以实施与阅读。显式 import 使分层约束可验证 |
 | **ADR-040** | **不使用 CRXJS** | 已核实:CRXJS 把 content script 包进异步 loader,实测增加 136–223ms 延迟(直接注入约 50ms),**生产构建同样如此**。相关 issue 开启三年后于 2025-03 被标记「不计划修复」。与 INV-3 根本冲突 |
 | **ADR-051** | **锁定期冻结一切,含主开关** —— 关闭滤镜也算设置变更,不可以 | 用户诉求是「防止自己忍不住把滤镜关掉」。若主开关可关,整个功能形同虚设 —— 关掉滤镜正是最想被阻止的那个动作 |
@@ -153,7 +154,11 @@ x.com         仅匹配 x.com
 | **ADR-058** | 锁定时长**不设任何上限**;但 UI **只提供预设按钮 + 带单位的自定义输入**(数字 + 分/时/天),**不接受裸时间戳** | 不设上限是产品决定(ADR-054)。带单位的输入让「秒/毫秒弄错」在界面层不可能发生,同时完全保留任意时长的能力 —— 零成本,不限制意图 |
 | **ADR-059** | 额外持久化 `maxSeenTime`(已观测到的最大时间戳);**时钟倒退时不缩短锁定**。**该字段不受锁定约束 —— 锁定期间必须继续推进**(INV-11 例外 b) | 改系统时钟可绕过锁定,这是已记录的局限(§4.1)。但时钟**倒退**会意外**延长**锁定(夏令时、NTP 校时),违反 INV-12 的反方向。单调下界只防意外延长,**不限制用户主动设置的任何时长** |
 | **ADR-050** | 不可注入页面上**全局主开关仍可用**,仅禁用规则编辑类控件。**🔒 锁定期间本条不适用 —— ADR-051 优先,主开关一并锁死** | 主开关是**全局**的,与当前页是什么无关,这是唯一的全局止血开关(ADR-027)。**但锁定期间该理由不成立** —— ADR-051 的全部前提就是「关滤镜是最需要被阻止的动作」,若锁定中仍可关,整个锁定功能形同虚设。两条 ADR 的交集(锁定 + 不可注入页)在首次打开 popup 时即可达,必须明确判定 |
-| **ADR-060** | **允许在宿主页面 origin 的 `localStorage` 下存一条「快路径」记录**(仅 `mode`+`intensity`),供首帧之前同步读取。这是对「永不拥有宿主页面」的**窄口例外** | MV3 **没有任何同步的扩展存储 API**。content script 虽在 `document_start` 执行,但它发起异步读取后本轮即结束,浏览器继续解析并**首次绘制** —— 回调到达时原色帧已经画出去了。唯一能在首帧前同步读到**且跨浏览器重启存活**的只有 `localStorage`(`sessionStorage` 活不过标签页,正是实测闪烁的根因)。**已知代价(产品负责人已接受):站点的 JS 能读到这条记录**,从而得知用户在本站开了什么滤镜。记录**只含滤镜参数,不含任何页面内容,绝不外传** |
+| **ADR-062** | **首帧滤镜改为声明式注册**:service worker 用 `chrome.scripting.registerContentScripts()` 为每组 `(mode, intensity)` 注册一条带预生成 CSS 文件的 content script(`persistAcrossSessions: true`),**取代「content script 运行时查询该用什么滤镜」** | **这是零闪烁的根本解法,取代 ADR-060 的缓存思路。** 原架构内含「必须查询」,而查询必然异步 —— 闪烁是架构的必然结果而非实现缺陷(五次独立测量,失败位置从未移动)。声明式方案把异步工作**挪到规则创建时**(此刻 SW 必然活着、延迟免费),页面加载路径上**不再有任何查询**。关键机制(已核实 Chromium 源码 `extension_user_script_loader.cc`):持久化注册在**扩展加载时从磁盘 StateStore 恢复**,**不依赖 SW 先启动**。API 文档原文:`css` 文件「在页面的任何 DOM 被构建**或显示**之前」注入,且 **CSS 不受 `runAt` 约束** —— 比 `document_start` 的 JS 更早。**冷缓存失败因此消失:不再有缓存需要填充** |
+| **ADR-063** | CSS **构建时预生成** `public/filters/{mode}-{intensity}.css`,共 4 模式 × 101 档 = **404 个文件**;必须复用 `toColorMatrix` 而非另写一份公式 | `registerContentScripts` 的 `css` **只接受文件路径,不接受内联字符串**(w3c/webextensions#615 已立项但未实现)。预生成是唯一可行路径。取 101 档而非 5 的倍数,是为了**保留强度无级可调**(每文件仅一行,总计几 KB)。复用 `toColorMatrix` 以免 CSS 与 JS 两条路径漂移 |
+| **ADR-064** | 注册**按 `(mode, intensity)` 分组**,而非按 host;`reconcile()` 必须**幂等且基于 diff** | 相同滤镜设置的站点合并进同一条注册的 `matches` 数组,最坏 20 条、通常远少于此。注册的 match pattern 会对每次导航求值,少量注册携带多个 pattern 优于大量单 pattern 注册。幂等是因为 `reconcile()` 有四个触发点(`onInstalled`/`onStartup`/规则变更/`storage.onChanged`),可能并发 |
+| **ADR-065** | **扩展更新会清除动态注册**,因此必须在 `chrome.runtime.onInstalled` 中重新注册(该事件 install 与 update 都触发) | 已核实:注册能存活浏览器重启、SW 终止、扩展禁用再启用,但**扩展更新时被清除**(Chrome 工程师确认,原因是注册引用的文件可能在更新中变化)。这是**强制项**,漏了会导致每次扩展更新后滤镜静默失效 |
+| **ADR-060** | **(已被 ADR-062 取代为主路径,保留为双重保险)** 允许在宿主页面 origin 的 `localStorage` 下存一条「快路径」记录(仅 `mode`+`intensity`),供首帧之前同步读取。这是对「永不拥有宿主页面」的**窄口例外** | MV3 **没有任何同步的扩展存储 API**。content script 虽在 `document_start` 执行,但它发起异步读取后本轮即结束,浏览器继续解析并**首次绘制** —— 回调到达时原色帧已经画出去了。唯一能在首帧前同步读到**且跨浏览器重启存活**的只有 `localStorage`(`sessionStorage` 活不过标签页,正是实测闪烁的根因)。**已知代价(产品负责人已接受):站点的 JS 能读到这条记录**,从而得知用户在本站开了什么滤镜。记录**只含滤镜参数,不含任何页面内容,绝不外传**。**⚠️ 本方案已实测无法解决冷缓存场景**(缓存必须先被填充才能被读到,而「冷缓存」的定义就是还没有记录)—— 15 个冷缓存场景 5 次失败,但 newTab/restart/hot 三态全部通过。首帧保证现由 ADR-062 承担;本条降级为**过渡期的双重保险**,可在一个版本周期后移除 |
 | **ADR-061** | **拖拽重排不走防抖,松手即写入** | 防抖是为**连续高频事件**设计的,那是滑块的特征 —— 但滑块已改走 ADR-049 预览通道、根本不写存储,防抖因此失去了服务对象。**拖拽松手是一次性动作**,不需要防抖。实测:重排后 300ms 内 popup 关闭(Chrome 弹窗一失焦即销毁)会**静默丢失顺序**,而顺序即优先级(ADR-008),等于静默改变实际生效的滤镜(违反 INV-6),3/3 次复现。上一轮的「关闭时强制 flush」已被证伪 —— popup 销毁时异步写入来不及完成。**消除那 300ms,而不是抢救它** |
 | **ADR-049** | **实时预览走独立消息通道 `PREVIEW_FILTER`**,popup→content script 直推,**不经存储、不受防抖影响** | 预览必须每次拖动都渲染,而存储写入应当合并 —— 两者目标相反,不能共用路径。此契约与 ADR-044 同等重要:T4 与 T6b 是两个独立 Dev agent,不定死就会发明两套不兼容的设计 |
 | **ADR-041** | `FilterSettings` 带 `version: 1` 字段;读到未知/损坏/缺字段数据时**回退默认值且不抛异常** | 关掉一个真实崩溃路径,成本近零 |
@@ -593,7 +598,7 @@ wxt.config.ts
 
 **3. `wxt.config.ts`**
 - `host_permissions: ['<all_urls>']`(ADR-004)
-- `permissions: ['storage']`(用 `storage.local`,非 `sync` —— ADR-010)
+- `permissions: ['storage', 'scripting']` —— **`scripting` 是 ADR-062 的前提,漏了所有注册调用都会失败**。它**不增加任何用户可见的权限警告**
 - popup、background、content script 入口注册
 
 **4. content script 入口**
@@ -636,7 +641,16 @@ export default defineContentScript({
 > 另注:dev 模式下 WXT 会**从 `matches` 推导并追加 host permissions**,导致 dev manifest 的权限集
 > 与生产不同。核对权限时须看 `.output/chrome-mv3/manifest.json`,不看 dev。
 
-**9. 领域层(原 T2 的全部内容)**
+**9. 预生成滤镜 CSS 文件(ADR-063)**
+构建时生成 `public/filters/{mode}-{intensity}.css`,4 模式 × 101 档强度 = **404 个文件**,每个形如:
+```css
+html { filter: <toColorMatrix(mode, intensity) 的结果> !important; }
+```
+**必须复用领域层的 `toColorMatrix`**,不得另写一份公式 —— 否则 CSS 与 JS 两条路径会漂移。
+这些文件**不需要**放进 `web_accessible_resources`(由浏览器自己读取,不经页面 fetch),
+放进去反而增加指纹暴露面。
+
+**10. 领域层(原 T2 的全部内容)**
 
 实现纯领域层,零 Chrome API 依赖。
 - 值对象:`FilterMode`(四个)、`Intensity`、`GlobPattern`(含 253 字符上限与语法校验)
@@ -666,6 +680,9 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 - **`package.json` 中不含任何 `@crxjs/*` 依赖(ADR-040)** —— 一条 grep。CRXJS 会给 content script 包异步 loader,与 INV-3 根本冲突,且故障表现为「零闪烁做不到」,是本项目最昂贵的误诊
 - **权限核对须针对 `.output/chrome-mv3/manifest.json`**,不得以 dev manifest 为准
 - **图标资源存在(ADR-045)**:两态各 4 个尺寸共 8 个 PNG 已提交,manifest 已注册,且**两态的文件内容不相同**(断言 hash 不等)
+- **`manifest` 含 `scripting` 权限**(ADR-062 前提)
+- **`public/filters/` 下存在 404 个 CSS 文件**(4 模式 × 101 档),且抽查若干个的 `filter` 值
+  与 `toColorMatrix(mode, intensity)` 的输出**逐位一致**(ADR-063,防止两条路径漂移)
 - **无 i18n 依赖(ADR-047)**:`package.json` 不含 `react-i18next` / `i18next` / `react-intl`,
   且无 `_locales/` 目录 —— 一条 grep。否则 Dev 引入 i18n 层能通过全部门禁
 
@@ -799,17 +816,36 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 必须满足 **INV-3(零闪烁)**:`document_start` 同步注入,用户不可见任何未滤镜帧。注意 `chrome.storage` 是异步的,此处需要设计。
 必须满足 **INV-8/ADR-027**:`masterEnabled == false` 时 content script **立即退出**,不读规则、不匹配、不注入。
 
-> **🔴 零闪烁的快路径(ADR-060)—— 必须实现,这是 INV-3 唯一可行的解法:**
+> **🔴 首帧滤镜走声明式注册(ADR-062)—— 这是 INV-3 的主路径,取代原缓存方案:**
 >
-> content script 在 `document_start` **同步**读取宿主 origin 的
-> `localStorage['__ccf_fp_<host>']`(仅含 `mode`+`intensity`),命中则**立即**套用滤镜,
-> 再异步读 `chrome.storage.local` 校对并刷新缓存。
+> **service worker** 维护一个幂等、基于 diff 的 `reconcile()`:
+> ```js
+> chrome.scripting.registerContentScripts([{
+>   id: 'ccf-gray-100',                    // 按 (mode,intensity) 分组,非按 host
+>   matches: ['*://*.weibo.com/*', ...],   // 共享同一设置的站点合并
+>   css: ['filters/gray-100.css'],         // 预生成文件(ADR-063)
+>   runAt: 'document_start',
+>   allFrames: false,                      // 根元素滤镜已覆盖 iframe(ADR-016)
+>   persistAcrossSessions: true
+> }])
+> ```
 >
-> **不要用 `sessionStorage`** —— 它活不过标签页,导致「浏览器重启后首次访问」
-> 与「新标签页首次访问」必然闪烁。实测 6 次闪 3 次,非确定性失败。
+> **为什么这解决了冷缓存:** 规则是用户在 popup 里创建的,此刻 SW **必然活着**,
+> 注册在用户还看着 popup 时就完成并写入浏览器的 StateStore。
+> 之后首次访问该站,浏览器**从磁盘恢复注册**(已核实 Chromium 源码,
+> **不依赖 SW 先启动**),CSS 在首帧前注入。**不再有缓存需要填充,所以不再有「第一次」。**
 >
-> 该记录**只含滤镜参数,绝不含页面内容,绝不外传**(ADR-060 窄口例外,
-> 隐私代价已记录在 §4.1 并由产品负责人接受)。
+> **`reconcile()` 的四个触发点**(全部必需,且必须幂等因为可能并发):
+> - `chrome.runtime.onInstalled` —— **强制**,这是扩展更新后的恢复路径(ADR-065)
+> - `chrome.runtime.onStartup` —— 廉价的双重保险,持久化正常时是 no-op
+> - 规则增删改
+> - `chrome.storage.onChanged` —— 安全网
+>
+> **已打开的标签页不受注册变更影响**(「取消注册不会移除已注入的样式」),
+> 所以**仍需保留 JS content script** 来给已打开的页面做实时更新 —— 那条路径时序无关紧要,
+> 因为页面已经画完了。注册管的是**下一次导航**,那才是 INV-3 的路径。
+>
+> **ADR-060 的 localStorage 快路径保留为双重保险**,但不再是首帧保证的承担者。
 
 > **💡 线索(非强制):** 考虑把滤镜样式放进 content script 入口的 **`css` 数组**而非 JS 注入 ——
 > CSS 在 `document_start` 不等待 DOM,能落在首帧之前。JS 只负责匹配判断。
@@ -826,8 +862,16 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
   > 因为旧断言用 `toMatch(/html\[data-ccf-on\]/)`,而残留的 top-layer 规则里仍含该字符串。
   > 只有 10 分钟的真实 Chrome 门禁抓到了它。T0 实测 `body{filter}` 会让固定头部跳到 `y=-1000`。
   > 必须用精确匹配把这个回归挡在单元层,不依赖昂贵的真实栈跑。
-- **快路径正确性(ADR-060)**:`localStorage` 命中时首帧即已滤镜;
-  异步校对发现配置已变时更新渲染并刷新缓存;记录内容**只含** `mode`+`intensity`
+- **🔴 声明式注册正确性(ADR-062/064)**:
+  - `reconcile()` 是**幂等**的 —— 连续调用两次,注册集合不变(断言 `getRegisteredContentScripts()` 结果相同)
+  - 基于 **diff**:只对变化部分调 register/unregister/update,未变的不动
+  - 按 `(mode, intensity)` **分组**:两个共享同一设置的站点合并进同一条注册的 `matches`
+  - 每条注册含 `persistAcrossSessions: true`、`runAt: 'document_start'`、`allFrames: false`
+  - 规则删除后对应注册被 unregister;规则改强度后 `css` 路径被 update 到新文件
+- **🔴 扩展更新恢复(ADR-065)**:模拟 `onInstalled` 触发(reason: 'update')→ 注册被完整重建。
+  > 这是强制项 —— 动态注册在扩展更新时被 Chrome 清除,漏了会导致每次更新后滤镜静默失效
+- **已打开标签页的实时更新**:注册变更**不影响**已打开页面(这是 Chrome 的既定行为),
+  故 JS content script 仍须能对已打开页面即时生效
 - **`masterEnabled == false` 的可观察断言(INV-8)** —— 三项须同时满足:
   - 页面中**不存在**扩展注入的 `<style>` / `<svg>` 节点
   - 除读取 `masterEnabled` 本身外,**无任何其他 storage 读取**(spy 断言)
@@ -838,8 +882,16 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
      - **冷缓存**(清空该 origin 的 `localStorage` 后首次访问)—— 上一轮失败的正是这个场景
      - **新标签页**访问同一站点
      - **浏览器重启后**首次访问
-     ⚠️ 该门禁此前是**非确定性失败**(6 次闪 3 次),取决于缓存是否命中。
-     **必须连续跑 5 次全部通过**才算过 —— 单次通过不作数
+     - **🔴 冷启动 + 会话恢复 + 多标签页** —— **这是 ADR-062 唯一可能被推翻的场景,必测:**
+       配置规则 → 在多个已配置站点上开约 10 个重标签页 → 完全退出 Chrome →
+       冷启动并恢复会话 → 逐帧录屏全部标签页。
+       > 理论风险:某个导航在扩展系统读完磁盘 StateStore 之前就提交了。
+       > 该窗口与静态 `content_scripts` 面临的**完全相同**(T0 spike 实测 0/1055 帧有色),
+       > 但源码层面未能完全核实,**只能靠实测定论**
+     ⚠️ 该门禁此前是**非确定性失败**,取决于缓存是否命中。
+     **必须连续跑 5 次全部通过**才算过 —— 单次通过不作数。
+     ⚠️ **必须在 `npm run build` 产物上跑(ADR-038)** —— dev 模式下即使新架构正确也会表现为闪烁,
+     在 dev 模式验证会错误地得出「新架构失败」的结论
 - **blindSpots 必须显式申报**
 
 ### T4b — 存活性、预览与隐私审计

@@ -61,7 +61,18 @@ describe('ADR-004 / ADR-010 · 权限声明', () => {
   });
 
   it('wxt.config.ts 声明 permissions: storage(非 sync)', () => {
-    expect(wxtConfigSource).toMatch(/permissions:\s*\['storage'\]/);
+    expect(wxtConfigSource).toMatch(/permissions:\s*\[[^\]]*'storage'/);
+  });
+
+  it("🔴 ADR-062 前提 · wxt.config.ts 声明 permissions 含 'scripting'", () => {
+    // `scripting` 是声明式注册(ADR-062)的前提 —— 漏了所有
+    // registerContentScripts 调用都会失败,且失败表现是「滤镜静默不生效」,
+    // 排障成本极高。它**不增加任何用户可见的权限警告**(DESIGN.md §6 第 3 条)。
+    expect(wxtConfigSource).toMatch(/permissions:\s*\[[^\]]*'scripting'/);
+  });
+
+  it('🔴 ADR-010 · 未声明任何 sync 相关权限', () => {
+    expect(wxtConfigSource).not.toContain('storage.sync');
   });
 });
 

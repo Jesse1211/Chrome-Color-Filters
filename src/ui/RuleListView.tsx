@@ -30,11 +30,20 @@
  * - **ADR-044** 当前页信息一律来自 `TabState`,**本视图不自己算匹配**
  * - **ADR-046** 存储失败 → 顶部红色报错条
  *
+ * ## 锁定(T6c 接入)
+ *
+ * 本组件通过 `locked` / `lockBanner` / `lockEntry` 三个**可选**接缝接入 T6c 的
+ * 锁定界面,自身**不构造**任何锁定 UI,也**绝不**提供解除/缩短入口(ADR-052/INV-12)。
+ *
+ * - **ADR-051** `locked` 为 true 时**全部设置控件禁用** —— 含主开关、规则行、
+ *   添加、删除、拖拽。
+ * - **🔴 ADR-051 优先于 ADR-050** —— 见下方 `masterDisabled`:
+ *   不可注入页面上主开关本可用,但**锁定期间一并锁死**。
+ * - 锁定拒绝(`kind: 'locked'`)**不弹红色报错条** —— `toSaveErrorBanner` 返回
+ *   `null`,倒计时条已经表达了状态(T3 gate I1)。
+ *
  * ## 不在本任务范围
  *
- * - **锁定 UI 已拆出为 T6c**(§6 T6a spec)。本组件通过 `lockBanner` /
- *   `locked` 两个**可选**接缝为 T6c 预留位置,自身不渲染任何锁定界面,
- *   也不提供任何解除/缩短入口(ADR-052/INV-12)。
  * - 编辑视图是 T6b(ADR-022)。
  */
 
@@ -85,6 +94,14 @@ export interface RuleListViewProps {
   readonly locked?: boolean;
   /** T6c 注入的锁定条(倒计时)。T6a 原样渲染在顶部,自身不构造内容。 */
   readonly lockBanner?: React.ReactNode;
+  /**
+   * T6c 注入的**未锁定**时的计时器入口(ADR-058)。渲染在列表之下、底部栏之上。
+   *
+   * 与 `lockBanner` 一样是**纯插槽** —— 本组件不构造其内容,也不判断该不该显示:
+   * 调用方只在未锁定时传入它、只在锁定中传 `lockBanner`,
+   * 两者互斥由调用方保证(锁定中渲染一个「启动锁定」入口是 INV-12 的违反)。
+   */
+  readonly lockEntry?: React.ReactNode;
 }
 
 export function RuleListView({
@@ -97,6 +114,7 @@ export function RuleListView({
   onOpenRule,
   locked = false,
   lockBanner,
+  lockEntry,
 }: RuleListViewProps) {
   /** ADR-046:最近一次写入失败。成功写入后清空。 */
   const [saveError, setSaveError] = useState<SaveErrorBanner | null>(null);
@@ -139,8 +157,23 @@ export function RuleListView({
   /**
    * 主开关是否禁用。
    *
-   * 🔒 **锁定期间 ADR-050 不适用 —— ADR-051 优先,主开关一并锁死。**
-   * (该交集的 UI 由 T6c 完成;T6a 这里先把判定写对,免得 T6c 要回头改 T6a。)
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   * 🔴 **两条 ADR 的交集,§6.1 冲突第 7 条 / §6 T6c gate 的 D2 条款:**
+   *
+   * > **不可注入页面 + 锁定中**时,主开关**仍然禁用**(ADR-051 优先)。
+   * > 这是两条 ADR 的交集,**首次打开 popup 即可达**。
+   *
+   * 读法:
+   * - 不可注入页 **且未锁定** → 主开关**可用**(ADR-050:它是全局的,
+   *   与当前页是什么无关,是唯一的全局止血开关)。
+   *   故 `notInjectable` **刻意不在**本表达式里。
+   * - **锁定中** → 主开关**禁用**,不管当前页可不可注入(ADR-051 优先)。
+   *   ADR-050 的理由在锁定期间不成立 —— ADR-051 的全部前提就是
+   *   「关滤镜是最需要被阻止的动作」,若锁定中仍可关,整个锁定功能形同虚设。
+   *
+   * UI 置灰只是第二道防线;真正的强制在仓储层的 `setMasterEnabled`
+   * (INV-14 / ADR-055),它在锁定中返回 `kind: 'locked'`。
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    */
   const masterDisabled = isSkeleton || locked;
 
@@ -237,10 +270,20 @@ export function RuleListView({
       ? tabState.activeRuleIndex
       : null;
 
+  /**
+   * §5.4 **第六种状态变体:锁定中**(ADR-051)。
+   *
+   * `popup--locked` 只负责视觉(列表淡化但**照常可见可滚动**)。
+   * 真正的禁用靠各控件的 `disabled` 属性,最终防线在仓储层(INV-14 / ADR-055)。
+   *
+   * ⚠️ 锁定中**不加** `popup--dimmed`:那一条带 `pointer-events:none`,
+   * 会让列表连滚动都做不到,而 §5.4 明确要求「规则列表照常**可见可滚动**但不可编辑」。
+   */
   const popupClass = [
     'popup',
     masterOff ? 'popup--dimmed' : '',
     isSkeleton ? 'popup--skeleton' : '',
+    locked ? 'popup--locked' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -251,6 +294,7 @@ export function RuleListView({
       data-testid="popup"
       data-view="list"
       data-skeleton={isSkeleton ? 'true' : 'false'}
+      data-locked={locked ? 'true' : 'false'}
     >
       {/* ── 顶部:主开关,固定顶部(§5.3) ── */}
       <header className="popup__head">
@@ -364,6 +408,13 @@ export function RuleListView({
           ))}
         </ul>
       )}
+
+      {/*
+        T6c:**未锁定**时的计时器入口(ADR-058)。锁定中由调用方改传 `lockBanner`,
+        二者互斥 —— 锁定中出现「启动锁定」入口是无意义的,出现任何
+        「解除/缩短」入口则直接违反 ADR-052 / INV-12。
+      */}
+      {lockEntry}
 
       {/*
         ── 底部:添加按钮 + 计数 ──

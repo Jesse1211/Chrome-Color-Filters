@@ -13,3 +13,14 @@ export * from './components/FilterSwatch.js';
 export * from './components/RuleRow.js';
 export * from './RuleListView.js';
 export * from './usePopupSettings.js';
+
+/* ── 锁定 UI(T6c · §5.4 第六种状态变体)── */
+export * from './lock-duration.js';
+export * from './lock-format.js';
+export * from './lock-strings.js';
+export * from './useLockClock.js';
+export * from './useLockState.js';
+export * from './components/LockDurationPicker.js';
+export * from './components/LockConfirmDialog.js';
+export * from './LockTimerEntry.js';
+export * from './LockCountdownBanner.js';

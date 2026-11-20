@@ -1,0 +1,6 @@
+/* 预生成滤镜 Grayscale @ 24%(ADR-062/063)。由 scripts/generate-filter-css.mjs 生成,勿手改。 */
+html { filter: grayscale(0.24) !important; }
+html :modal,
+html [popover]:popover-open,
+html :fullscreen,
+html ::backdrop { filter: grayscale(0.24) !important; }

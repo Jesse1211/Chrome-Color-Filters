@@ -1,0 +1,44 @@
+{
+  "initial": {
+    "filter": "grayscale(1)",
+    "on": true,
+    "off": false,
+    "varValue": "grayscale(1)"
+  },
+  "intensityChange": {
+    "filter": "grayscale(0.3)",
+    "on": true,
+    "off": false,
+    "varValue": "grayscale(0.3)"
+  },
+  "modeChange": {
+    "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.478897%200.476911%200.044192%200%200%200.597282%20-0.688692%201.09141%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+    "on": true,
+    "off": false,
+    "varValue": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.478897%200.476911%200.044192%200%200%200.597282%20-0.688692%201.09141%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+  },
+  "ruleDeleted": {
+    "filter": "none",
+    "on": false,
+    "off": true,
+    "varValue": ""
+  },
+  "ruleAdded": {
+    "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.818811%20-0.285046%200.466234%200%200%200.052569%200.709664%200.237768%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+    "on": true,
+    "off": false,
+    "varValue": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.818811%20-0.285046%200.466234%200%200%200.052569%200.709664%200.237768%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+  },
+  "masterOff": {
+    "filter": "none",
+    "on": false,
+    "off": true,
+    "varValue": ""
+  },
+  "masterBackOn": {
+    "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.818811%20-0.285046%200.466234%200%200%200.052569%200.709664%200.237768%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+    "on": true,
+    "off": false,
+    "varValue": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.818811%20-0.285046%200.466234%200%200%200.052569%200.709664%200.237768%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+  }
+}

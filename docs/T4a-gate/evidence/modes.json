@@ -1,0 +1,117 @@
+{
+  "OFF": {
+    "attr": false,
+    "v": "",
+    "computed": "none",
+    "maxSpread": 255,
+    "px": [
+      [
+        255,
+        0,
+        0
+      ],
+      [
+        0,
+        255,
+        0
+      ],
+      [
+        0,
+        0,
+        255
+      ]
+    ]
+  },
+  "Grayscale": {
+    "attr": true,
+    "v": "grayscale(1)",
+    "computed": "grayscale(1)",
+    "maxSpread": 0,
+    "px": [
+      [
+        54,
+        54,
+        54
+      ],
+      [
+        182,
+        182,
+        182
+      ],
+      [
+        18,
+        18,
+        18
+      ]
+    ]
+  },
+  "RedGreen": {
+    "attr": true,
+    "v": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.478897%200.476911%200.044192%200%200%200.597282%20-0.688692%201.09141%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+    "computed": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.478897%200.476911%200.044192%200%200%200.597282%20-0.688692%201.09141%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+    "maxSpread": 255,
+    "px": [
+      [
+        255,
+        122,
+        152
+      ],
+      [
+        0,
+        122,
+        0
+      ],
+      [
+        0,
+        11,
+        255
+      ]
+    ]
+  },
+  "GreenRed": {
+    "attr": true,
+    "v": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1.436619%20-0.631397%200.194779%200%200%200%201%200%200%200%20-0.184239%200.186309%200.99793%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+    "computed": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1.436619%20-0.631397%200.194779%200%200%200%201%200%200%200%20-0.184239%200.186309%200.99793%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+    "maxSpread": 255,
+    "px": [
+      [
+        255,
+        0,
+        0
+      ],
+      [
+        0,
+        255,
+        48
+      ],
+      [
+        50,
+        0,
+        254
+      ]
+    ]
+  },
+  "BlueYellow": {
+    "attr": true,
+    "v": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.741159%20-0.407208%200.666049%200%200%200.075098%200.585234%200.339668%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+    "computed": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.741159%20-0.407208%200.666049%200%200%200.075098%200.585234%200.339668%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+    "maxSpread": 189,
+    "px": [
+      [
+        189,
+        19,
+        0
+      ],
+      [
+        0,
+        149,
+        0
+      ],
+      [
+        170,
+        87,
+        255
+      ]
+    ]
+  }
+}

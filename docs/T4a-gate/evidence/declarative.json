@@ -1,0 +1,116 @@
+{
+  "afterSeed": [
+    {
+      "allFrames": false,
+      "css": [
+        "filters/gray-100.css"
+      ],
+      "id": "ccf-gray-100",
+      "matchOriginAsFallback": false,
+      "matches": [
+        "*://weibo.com/*",
+        "*://zhihu.com/*"
+      ],
+      "persistAcrossSessions": true,
+      "runAt": "document_start",
+      "world": "ISOLATED"
+    },
+    {
+      "allFrames": false,
+      "css": [
+        "filters/redgreen-60.css"
+      ],
+      "id": "ccf-redgreen-60",
+      "matchOriginAsFallback": false,
+      "matches": [
+        "*://a.com/*"
+      ],
+      "persistAcrossSessions": true,
+      "runAt": "document_start",
+      "world": "ISOLATED"
+    }
+  ],
+  "afterIntensityChange": [
+    {
+      "allFrames": false,
+      "css": [
+        "filters/gray-100.css"
+      ],
+      "id": "ccf-gray-100",
+      "matchOriginAsFallback": false,
+      "matches": [
+        "*://weibo.com/*",
+        "*://zhihu.com/*"
+      ],
+      "persistAcrossSessions": true,
+      "runAt": "document_start",
+      "world": "ISOLATED"
+    },
+    {
+      "allFrames": false,
+      "css": [
+        "filters/redgreen-25.css"
+      ],
+      "id": "ccf-redgreen-25",
+      "matchOriginAsFallback": false,
+      "matches": [
+        "*://a.com/*"
+      ],
+      "persistAcrossSessions": true,
+      "runAt": "document_start",
+      "world": "ISOLATED"
+    }
+  ],
+  "masterOff": [],
+  "afterRestart": [
+    {
+      "allFrames": false,
+      "css": [
+        "filters/gray-100.css"
+      ],
+      "id": "ccf-gray-100",
+      "matchOriginAsFallback": false,
+      "matches": [
+        "*://weibo.com/*",
+        "*://zhihu.com/*"
+      ],
+      "persistAcrossSessions": true,
+      "runAt": "document_start",
+      "world": "ISOLATED"
+    }
+  ],
+  "afterUpdate": [
+    {
+      "allFrames": false,
+      "css": [
+        "filters/gray-100.css"
+      ],
+      "id": "ccf-gray-100",
+      "matchOriginAsFallback": false,
+      "matches": [
+        "*://weibo.com/*",
+        "*://zhihu.com/*"
+      ],
+      "persistAcrossSessions": true,
+      "runAt": "document_start",
+      "world": "ISOLATED"
+    }
+  ],
+  "inexpressibleGlobs": [],
+  "intentionalAllUrls": [
+    {
+      "allFrames": false,
+      "css": [
+        "filters/gray-100.css"
+      ],
+      "id": "ccf-gray-100",
+      "matchOriginAsFallback": false,
+      "matches": [
+        "*://*/*"
+      ],
+      "persistAcrossSessions": true,
+      "runAt": "document_start",
+      "world": "ISOLATED"
+    }
+  ]
+}
