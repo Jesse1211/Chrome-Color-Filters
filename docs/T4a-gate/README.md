@@ -83,6 +83,77 @@ ADR-060 的机制原文是「**命中**则立即套用滤镜」。键被删除�
 INV-3 的措辞是「绝不可见任何未滤镜的帧」,字面上覆盖首访。
 但在 MV3 平台约束下,**首访零闪烁不可实现** —— 这是 ADR-060 已经承认的同一条约束,
 只是它的措辞(「命中则立即套用」)没有明说「未命中时怎么办」。
+**第三次独立测量(v2 第 2 次返工,本轮 Dev 亲自重跑,结论一致且更强):**
+
+本轮在同一产物上重跑 `flicker.cjs`(真实 Chrome 158 + 真实网站)。
+该次运行在第 5 轮的 wikipedia 阶段因网络停滞被手动中止,**故未产出完整的
+`flicker.json`**(`evidence/flicker.json` 仍是上一次完整 5 轮的数据,未被覆盖)。
+但已落盘的逐帧截图足以给出判定,且是三次测量里**最严重**的一次:
+
+| 场景 | 产出「带色最差帧」截图的场次 |
+|---|---|
+| `coldCache` | **9**(hn r1/r3/r4/r5,wikipedia r1/r2/r3/r4/r5) |
+| `newTab` | **0** |
+| `restart` | **0** |
+| `hot` | **0** |
+| `off`(基线) | 36 —— 探针有效性对照 |
+
+(复核命令:`ls docs/T4a-gate/out/*worst*.png | grep -v -- '-off-' | grep -v coldcache`
+→ **空**,即除冷缓存外没有任何一格产出过带色帧。)
+
+截图证据:`evidence/REMAINING-coldcache-unfiltered-frame-hn-round2.png` ——
+一张完整渲染的 news.ycombinator.com,**顶部橙色导航条清晰可见**(未滤镜)。
+与上一轮的 wikipedia 截图互为佐证,确认这是真实的用户可见破绽,而非探针抖动。
+
+**三次独立测量的交叉结论:**
+
+| 测量者 | coldCache 失败场次 | newTab / restart / hot |
+|---|---|---|
+| 上一轮 Dev(完整 5 轮) | 2 / 15 | 0 |
+| 上一轮 Tester(完整 5 轮,独立环境) | 4 / 15 | 0 |
+| 本轮 Dev(部分轮次) | **9** | 0 |
+
+失败率在三次之间从 2 → 4 → 9 大幅波动,而**失败的位置从未变过**:
+永远只在 `coldCache`。这恰好是「非确定性 + 单一结构性根因」的指纹 ——
+带不带色取决于异步 `chrome.storage` 回调与首次合成帧谁先到,是一场赛跑;
+而另外三格因为记录已存在、同步即命中,**赛跑根本不发生**,故恒为 0。
+
+这同时证明 **ADR-060 的 localStorage 改动确实奏效**:上一轮失败的
+`newTab` / `restart` 两格,在三次独立测量中合计 **0 次**失败。
+本轮剩下的唯一一格,是 ADR-060 机制在定义上就覆盖不到的那一格。
+
+**🔴 本轮(v2 第 2 次返工)新增的决定性排除 —— 最后一扇门也关上了:**
+
+本轮没有重新调研已知结论,只去验证**唯一一个尚未被排除的候选方案**:
+由 service worker 调 `browser.scripting.registerContentScripts()`,
+为「已配置规则的 host」注册一份**静态 CSS 文件**(每个 `(mode, intensity)` 桶一份),
+`matches` 交给浏览器求值。该方案乍看能绕过冷缓存:
+
+- `RegisteredContentScript.css` 的官方语义是
+  「injected **before any DOM is constructed or displayed** for the page」;
+- `persistAcrossSessions` **默认为 true**,跨浏览器重启存活;
+- 匹配由浏览器用注册时的 `matches` 完成,**首帧之前不需要读任何存储** ——
+  于是「记录不存在」这个前提本身被绕开了。
+
+(类型签名已核对:`node_modules/@wxt-dev/browser/src/gen/index.d.ts` 的
+`scripting.RegisteredContentScript`。)
+
+**但它被 ADR-038 明文排除,而 ADR-038 正是本任务 `adr:` 清单里的一条。**
+ADR-038 的理由栏逐字写着:
+
+> dev 模式下 manifest **完全不含 `content_scripts`**,改由 service worker 运行时
+> `registerContentScripts()` 注册 —— **运行时注册不可能赶在已开始加载页面的
+> `document_start` 之前**。
+
+即:ADR-038 已核实过「运行时注册」这条通道的时序,并判定它**赶不上首帧** ——
+这恰好就是上述方案所依赖的那一步。MV3 的 service worker 本身是**事件驱动、会被终止**的,
+冷启动时它要先被唤醒才能注册,而页面加载**不等它**。
+故该方案不仅没有新增能力,还会把 INV-3 押在 ADR-038 已判定不可靠的时序上。
+
+**结论:在 ADR-038 + ADR-060 共同约束下,`coldCache` 首访零闪烁不存在任何实现路径。**
+Dev 不会为了让门禁变绿而绕过 ADR-038(那正是 ADR-038 要防的「最昂贵的误诊」),
+也不会放宽 `flicker.cjs` 的判据。这一格的开闭**只能**由产品负责人裁决。
+
 建议二选一(两者都不该由 Dev 单方面决定):
 
 1. 在 ADR-060 补一句:INV-3 的保证范围是「快路径记录存在之后」,
