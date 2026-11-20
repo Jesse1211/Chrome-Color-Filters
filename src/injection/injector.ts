@@ -7,6 +7,10 @@
  * 2. **异步权威判定**(`SettingsRepository` + `resolveRule`)→ 纠正并回写缓存
  * 3. **INV-8 短路**:`masterEnabled === false` 时**立即退出**,
  *    不读规则、不匹配、不注入(ADR-027)
+ * 4. **已打开标签页的实时更新**(`subscribeSettings`)→ 见下方该项的长注释。
+ *    ADR-062 的声明式注册只管**下一次导航**;已经打开的页面只有这条 JS 路径
+ *    能改,故它是 DESIGN.md §6 T4a 「已打开标签页的实时更新」条款的
+ *    **唯一**实现机制。
  *
  * 本模块不碰 `chrome.*`,全部依赖由调用方注入 —— 故可在 Node 下完整单测
  * (INV-8 的 spy 断言正是靠这一点做到「机械可判定」而非「人工看一遍」)。
@@ -159,19 +163,69 @@ export function runInjector(deps: InjectorDeps): {
     // cached.kind === 'unknown' → 不碰 target,等异步权威结果。
   }
 
-  // ── 变更订阅:主开关一关,立刻抹掉本 host 的推测 ──────────────────────
+  // ── 变更订阅:已打开标签页的实时更新 ────────────────────────────────
   //
-  // 🔴 INV-8 / ADR-027。缓存条目记录的是**写入时**的主开关状态,它无法
-  //    预知用户之后会把主开关关掉。若只靠「下次导航的异步阶段再清」,
-  //    那次导航的**同步阶段**已经先按陈旧推测上过色了(实测约 2ms 可见)。
-  //    订阅让清除发生在主开关变化的那一刻,于是下次导航同步阶段读到的是
-  //    「无缓存」→ unknown → 什么都不画。
-  if (deps.subscribeSettings && host !== null) {
+  // 🔴 **ADR-062 下这条路径是 gate 的独立条款,不再只为 INV-8 服务。**
+  //
+  //    声明式注册(ADR-062)管的是**下一次导航**:Chrome 的既定行为是
+  //    「取消注册不会移除已注入的样式」,`registerContentScripts` /
+  //    `unregister` / `update` 对**已经打开**的标签页一概无效
+  //    (真实 Chrome 实测:删掉规则后已打开页面的 `filter` 不变,
+  //    必须重新加载才会消失)。于是 DESIGN.md §6 T4a 明文要求:
+  //
+  //      > 已打开标签页的实时更新:注册变更**不影响**已打开页面
+  //      > (这是 Chrome 的既定行为),故 JS content script 仍须能对
+  //      > 已打开页面即时生效
+  //
+  //    JS 路径是该条款**唯一**的实现机制。时序在这里无关紧要 ——
+  //    页面早已画完,没有首帧可赶。
+  //
+  // 🔴 **上一轮的真实缺陷**:这个监听器只分支 `!settings.masterEnabled`,
+  //    于是除主开关外的任何设置变更对已打开的标签页都是 no-op。
+  //    真实 Chrome 实测(example.com,标签页保持打开、不导航):
+  //    强度 100→30 仍 `grayscale(1)`;模式 Grayscale→RedGreen 仍 `grayscale(1)`;
+  //    匹配规则被**整条删除**后仍 `grayscale(1)`(不重载就撤不掉)。
+  //    只有 masterEnabled=false 正常工作 —— 因为它是唯一被分支到的情况。
+  //
+  //    修正:**重新做一次完整判定**(`decide`,它内部已含 INV-8 短路),
+  //    再交给幂等的 `syncFilter`。于是四个方向全部覆盖:
+  //    强度变、模式变、规则增删、主开关翻转。
+  //
+  // 📌 为什么用 `syncFilter` 而不是 `applyFilter`/`removeFilter` 二选一:
+  //    `syncFilter` 在已处于期望状态时**零 DOM 写入**(INV-1:不给站点的
+  //    attribute MutationObserver 制造无意义回调),且 `null` 分支会显式
+  //    设上 `data-ccf-off` —— 预生成 CSS(ADR-063)用裸 `html` 选择器,
+  //    只摘自家属性压不掉它(见 apply-filter.ts)。
+  if (deps.subscribeSettings) {
     deps.subscribeSettings((settings) => {
+      const next = decide(settings, deps.url);
+
+      // 先同步 DOM —— 用户看得见的那一半,优先于缓存簿记。
+      syncFilter(deps.target, next);
+
+      if (host === null) return;
+
       if (!settings.masterEnabled) {
+        // 🔴 INV-8 / ADR-027「关主开关可彻底止血」:条目记录的是**写入时**的
+        //    主开关状态,无法预知用户之后会关掉它。若只靠「下次导航的异步
+        //    阶段再清」,那次导航的**同步阶段**已按陈旧推测上过色
+        //    (实测约 2ms 可见)。故在主开关变化的那一刻就删掉。
         clearFastPath(deps.store, host);
-        removeFilter(deps.target);
+        return;
       }
+
+      // 主开关仍开:把新判定**回写**成快路径条目,使下一次导航的同步阶段
+      // 直接命中新值,而不是先按旧值上色再被异步阶段纠正(ADR-060)。
+      const resolved = resolveRule(settings, deps.url);
+      writeFastPath(
+        deps.store,
+        host,
+        true,
+        resolved === null
+          ? null
+          : { mode: resolved.rule.mode, intensity: resolved.rule.intensity },
+        clock(),
+      );
     });
   }
 

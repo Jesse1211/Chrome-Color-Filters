@@ -248,6 +248,161 @@ describe('🔴 INV-8 · 主开关一关立刻抹掉推测（ADR-027「彻底止�
   });
 });
 
+// ──────────────── 已打开标签页的实时更新(gate 逐条) ────────────────
+//
+// 🔴 DESIGN.md §6 T4a 的独立 gate 条款:
+//
+//   > 已打开标签页的实时更新:注册变更**不影响**已打开页面(这是 Chrome 的
+//   > 既定行为),故 JS content script 仍须能对已打开页面即时生效
+//
+// 为什么必须有这一组:上一轮 `subscribeSettings` 的监听器**只**分支
+// `!settings.masterEnabled`,于是强度变、模式变、规则删除对已打开的标签页
+// 全是 no-op —— 真实 Chrome 上一条都不生效,却**单元测试全绿**,因为当时
+// 全文只有两处 `fire!()` 调用:一处 `masterEnabled:false`、一处
+// `masterEnabled:true` 的 no-op。**这个测试洞正是那个产品缺陷能带绿上线的原因。**
+//
+// 判别器设计:每条都断言 target 上**实际的 filter 值**(而非只看 `fastPathHit`
+// 或终态布尔),因为缺陷的表现恰恰是「值停在旧的那个」—— 只断言
+// `isFilterApplied(target) === true` 会对「强度 100→30 后仍是 100」完全失明。
+describe('🔴 已打开标签页的实时更新(ADR-062:注册变更不影响已打开页面)', () => {
+  /** 建立「页面已打开且异步阶段已结算」的初始态,返回推送变更的把手。 */
+  async function openedTab(initial: FilterSettings, url = 'https://a.example.com/') {
+    const target = makeTarget();
+    const store = makeStore();
+    let fire: ((s: FilterSettings) => void) | null = null;
+    const { settled } = runInjector({
+      target,
+      store,
+      url,
+      readSettings: async () => initial,
+      subscribeSettings: (l) => { fire = l; return () => {}; },
+    });
+    await settled;
+    return { target, store, push: (s: FilterSettings) => fire!(s) };
+  }
+
+  it('(a) 强度变化 → 已打开页面立即换成新的 filter 值', async () => {
+    const { target, push } = await openedTab(settingsWith({ rules: [GRAY_RULE] }));
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 100));
+
+    // 用户把滑块从 100 拖到 30 —— 标签页保持打开,不导航。
+    push(settingsWith({
+      rules: [{ pattern: '*.example.com', mode: 'Grayscale', intensity: 30 }],
+    }));
+
+    expect(isFilterApplied(target)).toBe(true);
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 30));
+    // 实测缺陷态下这里仍是 intensity 100 的那个值。
+    expect(currentFilterValue(target)).not.toBe(filterCssValue('Grayscale', 100));
+  });
+
+  it('(b) 模式变化 → 已打开页面立即换成新模式的 filter 值', async () => {
+    const { target, push } = await openedTab(settingsWith({ rules: [GRAY_RULE] }));
+
+    push(settingsWith({
+      rules: [{ pattern: '*.example.com', mode: 'RedGreen', intensity: 100 }],
+    }));
+
+    expect(isFilterApplied(target)).toBe(true);
+    expect(currentFilterValue(target)).toBe(filterCssValue('RedGreen', 100));
+    expect(currentFilterValue(target)).not.toBe(filterCssValue('Grayscale', 100));
+  });
+
+  it('(c) 匹配规则被删除 → 已打开页面转为无滤镜,且显式设上压制属性', async () => {
+    const { target, push } = await openedTab(settingsWith({ rules: [GRAY_RULE] }));
+    expect(isFilterApplied(target)).toBe(true);
+
+    push(settingsWith({ rules: [] })); // 整条规则被删
+
+    expect(isFilterApplied(target)).toBe(false);
+    expect(currentFilterValue(target)).toBe('');
+    // 🔴 仅摘 data-ccf-on 不够:预生成 CSS(ADR-063)用裸 `html` 无条件生效,
+    //    它**不看**我们的属性。必须显式压制,否则页面仍是滤镜态。
+    expect(isFilterSuppressed(target)).toBe(true);
+  });
+
+  it('(c2) 规则改成不再匹配本页 → 同样转为无滤镜(删除之外的另一条等价路径)', async () => {
+    const { target, push } = await openedTab(settingsWith({ rules: [GRAY_RULE] }));
+
+    push(settingsWith({
+      rules: [{ pattern: '*.other.test', mode: 'Grayscale', intensity: 100 }],
+    }));
+
+    expect(isFilterApplied(target)).toBe(false);
+    expect(isFilterSuppressed(target)).toBe(true);
+  });
+
+  it('(d) 新增一条匹配本页的规则 → 原本未滤镜的已打开页面立即上色', async () => {
+    const { target, push } = await openedTab(settingsWith({ rules: [] }));
+    expect(isFilterApplied(target)).toBe(false);
+
+    push(settingsWith({ rules: [GRAY_RULE] }));
+
+    expect(isFilterApplied(target)).toBe(true);
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 100));
+  });
+
+  it('主开关仍是最高优先级:规则匹配但主开关 OFF → 不上色(INV-8 在本路径同样成立)', async () => {
+    const { target, push } = await openedTab(settingsWith({ rules: [] }));
+
+    push(settingsWith({ masterEnabled: false, rules: [GRAY_RULE] }));
+
+    expect(isFilterApplied(target)).toBe(false);
+    expect(isFilterSuppressed(target)).toBe(true);
+  });
+
+  it('实时更新把新判定回写进快路径,使下一次导航同步命中**新**值(ADR-060)', async () => {
+    const { store, push } = await openedTab(settingsWith({ rules: [GRAY_RULE] }));
+
+    const next = settingsWith({
+      rules: [{ pattern: '*.example.com', mode: 'RedGreen', intensity: 40 }],
+    });
+    push(next);
+
+    // 下一次导航的同步阶段:必须直接命中**新**值,而不是先按旧值上色
+    // 再被异步阶段纠正(那会是一次可见的错色闪动)。
+    const t2 = makeTarget();
+    const { fastPathHit, settled } = runInjector({
+      target: t2,
+      store,
+      url: 'https://a.example.com/',
+      readSettings: async () => next,
+    });
+    expect(fastPathHit).toBe(true);
+    expect(currentFilterValue(t2)).toBe(filterCssValue('RedGreen', 40));
+    settled.catch(() => {});
+  });
+
+  it('幂等:推送一条毫无变化的设置 → 对 DOM 零写入(INV-1 不惊动站点的 observer)', async () => {
+    const writes: string[] = [];
+    const attrs = new Map<string, string>();
+    const props = new Map<string, string>();
+    const target: FilterTarget = {
+      setAttribute: (n, v) => { writes.push(`setAttribute:${n}`); attrs.set(n, v); },
+      removeAttribute: (n) => { writes.push(`removeAttribute:${n}`); attrs.delete(n); },
+      hasAttribute: (n) => attrs.has(n),
+      style: {
+        setProperty: (n, v) => { writes.push(`setProperty:${n}`); props.set(n, v); },
+        removeProperty: (n) => { writes.push(`removeProperty:${n}`); props.delete(n); },
+        getPropertyValue: (n) => props.get(n) ?? '',
+      },
+    };
+    let fire: ((s: FilterSettings) => void) | null = null;
+    const { settled } = runInjector({
+      target,
+      store: makeStore(),
+      url: 'https://a.example.com/',
+      readSettings: async () => settingsWith({ rules: [GRAY_RULE] }),
+      subscribeSettings: (l) => { fire = l; return () => {}; },
+    });
+    await settled;
+
+    writes.length = 0;
+    fire!(settingsWith({ rules: [GRAY_RULE] })); // 值完全相同的另一个对象
+    expect(writes).toEqual([]);
+  });
+});
+
 // ─────────────────────────── INV-3 快路径 ───────────────────────────
 
 describe('🔴 INV-3 · 同步快路径（chrome.storage 异步性的解法）', () => {
