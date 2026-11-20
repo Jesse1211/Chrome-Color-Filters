@@ -1,0 +1,660 @@
+<title>Color Filters Popup</title>
+<style>
+:root{
+  --ground:#F2F3F5;
+  --surface:#FFFFFF;
+  --surface-2:#FAFAFB;
+  --ink:#16181D;
+  --ink-2:#4B5563;
+  --muted:#8B919C;
+  --line:#E4E6EA;
+  --line-2:#EFF1F4;
+  --accent:#2563EB;
+  --accent-soft:#EFF4FF;
+  --warn:#B45309;
+  --warn-soft:#FEF6E7;
+  --bad:#B42318;
+  --bad-soft:#FEF3F2;
+  --ok:#15803D;
+  --shadow:0 1px 2px rgba(16,18,24,.06), 0 4px 16px rgba(16,18,24,.07);
+  --radius:9px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#101216;
+    --surface:#1A1D23;
+    --surface-2:#15181D;
+    --ink:#E8EAEE;
+    --ink-2:#AFB6C0;
+    --muted:#737A86;
+    --line:#2A2E36;
+    --line-2:#23272E;
+    --accent:#6195F5;
+    --accent-soft:#1B2740;
+    --warn:#E0A33E;
+    --warn-soft:#2E2412;
+    --bad:#F07167;
+    --bad-soft:#2E1817;
+    --ok:#4ADE80;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#101216;
+  --surface:#1A1D23;
+  --surface-2:#15181D;
+  --ink:#E8EAEE;
+  --ink-2:#AFB6C0;
+  --muted:#737A86;
+  --line:#2A2E36;
+  --line-2:#23272E;
+  --accent:#6195F5;
+  --accent-soft:#1B2740;
+  --warn:#E0A33E;
+  --warn-soft:#2E2412;
+  --bad:#F07167;
+  --bad-soft:#2E1817;
+  --ok:#4ADE80;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  margin:0;
+  padding-block:32px 72px;
+  padding-left:16px;padding-right:16px;
+}
+.page{max-width:1120px;margin:0 auto}
+
+h1{font-size:19px;font-weight:650;letter-spacing:-.01em;margin:0 0 4px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 28px;max-width:62ch}
+h2{font-size:12px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.secnote{color:var(--muted);font-size:12.5px;margin:0 0 14px;max-width:70ch}
+section{margin-bottom:40px}
+
+.rail{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+
+/* ---------- popup frame ---------- */
+.popup{
+  width:360px;flex:0 0 auto;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+  display:flex;flex-direction:column;
+  position:relative;
+}
+.popup.tall{height:452px}
+.cap{
+  font-size:11.5px;color:var(--muted);margin:0 0 7px;
+  letter-spacing:.02em;
+}
+.frame{flex:0 0 auto;max-width:100%}
+
+/* header */
+.phead{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 15px;border-bottom:1px solid var(--line);
+  background:var(--surface);
+  flex:0 0 auto;
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px}
+.dot{width:16px;height:16px;border-radius:5px;background:linear-gradient(135deg,#4B5563 0%,#4B5563 50%,#9CA3AF 50%,#9CA3AF 100%);flex:0 0 auto}
+.dot.off{background:var(--line);}
+
+/* switch */
+.sw{width:40px;height:23px;border-radius:999px;background:var(--accent);position:relative;cursor:pointer;border:none;padding:0;transition:background .16s}
+.sw::after{content:"";position:absolute;top:2.5px;left:2.5px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .16s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.sw[aria-checked="false"]{background:#C3C7CE}
+.sw[aria-checked="false"]::after{transform:translateX(17px);transform:translateX(0)}
+.sw[aria-checked="true"]::after{transform:translateX(17px)}
+.sw:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* list */
+.plist{flex:1 1 auto;overflow-y:auto;overflow-x:hidden}
+.rule{
+  display:grid;grid-template-columns:20px 1fr auto 22px;
+  align-items:center;gap:9px;
+  padding:10px 15px 10px 10px;
+  border-bottom:1px solid var(--line-2);
+  cursor:pointer;
+}
+.rule:hover{background:var(--surface-2)}
+.grip{color:#C3C7CE;cursor:grab;text-align:center;font-size:13px;user-select:none;line-height:1}
+.rule:hover .grip{color:var(--muted)}
+.pat{
+  font:12.5px/1.4 ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.meta{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.pct{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:30px;text-align:right}
+.x{color:#C3C7CE;font-size:15px;text-align:center;line-height:1;background:none;border:none;cursor:pointer;padding:2px;border-radius:4px}
+.x:hover{color:var(--bad);background:var(--bad-soft)}
+
+/* swatch — the filter identity chip */
+.sw2{width:26px;height:16px;border-radius:4px;flex:0 0 auto;border:1px solid rgba(0,0,0,.09);display:block}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sw2{border-color:rgba(255,255,255,.12)}}
+:root[data-theme="dark"] .sw2{border-color:rgba(255,255,255,.12)}
+
+/* footer */
+.pfoot{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:11px 15px;border-top:1px solid var(--line);background:var(--surface);
+  flex:0 0 auto;
+}
+.add{
+  flex:1 1 auto;background:var(--accent-soft);color:var(--accent);border:none;
+  padding:8px 12px;border-radius:7px;font-size:13px;font-weight:550;cursor:pointer;
+  font-family:inherit;text-align:center;
+}
+.add:hover{filter:brightness(.97)}
+.add[disabled]{background:var(--line-2);color:var(--muted);cursor:not-allowed}
+.count{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.count.full{color:var(--warn);font-weight:600}
+
+/* empty */
+.empty{
+  flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:7px;color:var(--muted);text-align:center;padding:24px;
+}
+.empty .big{font-size:13.5px;color:var(--ink-2)}
+.empty .hint{font-size:12px;line-height:1.6;max-width:25ch}
+
+/* edit view */
+.ehead{
+  display:flex;align-items:center;gap:8px;padding:11px 15px;
+  border-bottom:1px solid var(--line);flex:0 0 auto;
+}
+.back{background:none;border:none;color:var(--accent);font-size:13px;cursor:pointer;padding:3px 5px;margin-left:-5px;border-radius:5px;font-family:inherit}
+.back:hover{background:var(--accent-soft)}
+.ebody{flex:1 1 auto;overflow-y:auto;padding:15px}
+.field{margin-bottom:17px}
+.lab{font-size:11.5px;font-weight:600;color:var(--ink-2);margin-bottom:6px;display:block;letter-spacing:.01em}
+.inp{
+  width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;
+  font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+  background:var(--surface-2);color:var(--ink);
+}
+.inp:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent;background:var(--surface)}
+.inp.err{border-color:var(--bad);background:var(--bad-soft)}
+
+/* status line — the two-dimensional state */
+.status{margin-top:7px;font-size:12px;line-height:1.5;display:flex;gap:6px;align-items:flex-start}
+.status .ic{flex:0 0 auto;font-size:11px;line-height:1.45}
+.st-ok{color:var(--ok)}
+.st-shadow{color:var(--warn)}
+.st-none{color:var(--muted)}
+.st-err{color:var(--bad)}
+.shadowbox{
+  margin-top:7px;padding:8px 10px;background:var(--warn-soft);
+  border-radius:6px;font-size:12px;line-height:1.55;color:var(--warn);
+}
+.shadowbox b{font-weight:600}
+.shadowbox .fix{color:var(--warn);text-decoration:underline;cursor:pointer;font-weight:600}
+
+/* filter options */
+.opts{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.opt{
+  display:flex;align-items:center;gap:10px;padding:9px 11px;cursor:pointer;
+  border-bottom:1px solid var(--line-2);background:var(--surface);
+}
+.opt:last-child{border-bottom:none}
+.opt:hover{background:var(--surface-2)}
+.opt.on{background:var(--accent-soft)}
+.radio{
+  width:15px;height:15px;border-radius:50%;border:1.5px solid #C3C7CE;flex:0 0 auto;
+  display:grid;place-items:center;
+}
+.opt.on .radio{border-color:var(--accent);border-width:4.5px}
+.oname{font-size:13px;flex:1 1 auto}
+.opt.on .oname{font-weight:550}
+.odesc{font-size:11px;color:var(--muted);margin-top:1px}
+
+/* slider */
+.srow{display:flex;align-items:center;gap:11px}
+input[type=range]{
+  flex:1 1 auto;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;
+  background:var(--line);outline:none;margin:0;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:#fff;
+  border:1px solid rgba(0,0,0,.14);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:pointer;
+}
+input[type=range]::-moz-range-thumb{
+  width:17px;height:17px;border-radius:50%;background:#fff;
+  border:1px solid rgba(0,0,0,.14);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:pointer;
+}
+input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.sval{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums;min-width:36px;text-align:right;flex:0 0 auto}
+
+.livehint{
+  margin-top:8px;font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:5px;
+}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:0 0 auto;animation:p 2s ease-in-out infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+
+.erow{display:flex;gap:9px;padding:12px 15px;border-top:1px solid var(--line);flex:0 0 auto}
+.btn{
+  flex:1 1 auto;padding:9px;border-radius:7px;font-size:13px;font-weight:550;
+  cursor:pointer;border:none;font-family:inherit;
+}
+.btn.pri{background:var(--accent);color:#fff}
+.btn.pri:hover{filter:brightness(1.07)}
+.btn.pri[disabled]{background:var(--line);color:var(--muted);cursor:not-allowed;filter:none}
+.btn.ghost{flex:0 0 auto;background:none;color:var(--bad);padding:9px 14px}
+.btn.ghost:hover{background:var(--bad-soft)}
+
+/* disabled / blocked state */
+.blocked{
+  padding:9px 15px;background:var(--warn-soft);color:var(--warn);
+  font-size:12px;line-height:1.5;border-bottom:1px solid var(--line);flex:0 0 auto;
+  display:flex;gap:7px;align-items:flex-start;
+}
+.off .plist,.off .pfoot{opacity:.42;pointer-events:none;filter:saturate(.3)}
+
+/* priority explainer overlay in list */
+.prio{
+  padding:8px 15px;background:var(--surface-2);border-bottom:1px solid var(--line-2);
+  font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;flex:0 0 auto;
+}
+.prio b{color:var(--ink-2);font-weight:600}
+.rule.shadowed .pat{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+.rule.shadowed .sw2{opacity:.4}
+.badge{
+  font-size:10px;padding:1.5px 5px;border-radius:4px;background:var(--warn-soft);
+  color:var(--warn);font-weight:600;letter-spacing:.02em;flex:0 0 auto;
+}
+.badge.live{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+
+/* swatch comparison table */
+.swtest{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:360px;background:var(--surface)}
+.swrow{display:flex;align-items:center;gap:13px;padding:11px 14px;border-bottom:1px solid var(--line-2)}
+.swrow:last-child{border-bottom:none}
+.swrow .nm{font-size:13px;flex:1 1 auto}
+.swrow .nm small{display:block;color:var(--muted);font-size:11px;margin-top:1px}
+
+.optA{width:26px;height:16px;border-radius:4px;border:1px solid rgba(0,0,0,.09)}
+.optB{display:flex;gap:2px}
+.optB i{width:11px;height:16px;border-radius:2px;display:block}
+.optC{font:11px/16px ui-monospace,Menlo,monospace;color:var(--muted);letter-spacing:.02em}
+
+.note{
+  margin-top:13px;padding:11px 13px;background:var(--surface);border:1px solid var(--line);
+  border-left:2.5px solid var(--accent);border-radius:0 7px 7px 0;font-size:12.5px;line-height:1.65;color:var(--ink-2);max-width:58ch;
+}
+.note b{color:var(--ink);font-weight:600}
+.note code{font:11.5px ui-monospace,Menlo,monospace;background:var(--surface-2);padding:1px 4px;border-radius:3px;border:1px solid var(--line-2)}
+
+.q{
+  display:inline-block;margin-top:5px;font-size:12px;color:var(--accent);
+  background:var(--accent-soft);padding:3px 9px;border-radius:999px;font-weight:550;
+}
+</style>
+
+<div class="page">
+
+<h1>Color Filters — Popup 设计</h1>
+<p class="sub">360px 宽。下面每个 popup 都可以点击操作:切换主开关、点规则进编辑、拖滑块、改滤镜。</p>
+
+<!-- ============ 1. 主要状态 ============ -->
+<section>
+  <h2>一 · 列表视图</h2>
+  <p class="secnote">默认视图。顶部主开关固定,中间规则列表可滚动,底部添加按钮 + 计数。</p>
+  <div class="rail">
+
+    <div class="frame">
+      <p class="cap">常规 · 3 条规则</p>
+      <div class="popup tall" id="p1">
+        <div class="phead">
+          <div class="brand"><span class="dot"></span>Color Filters</div>
+          <button class="sw" role="switch" aria-checked="true" onclick="tog(this,'p1')"></button>
+        </div>
+        <div class="prio">↓ 从上往下匹配,<b>首个命中的规则生效</b></div>
+        <div class="plist">
+          <div class="rule" onclick="show('p2')">
+            <span class="grip">⠿</span>
+            <span class="pat">*.weibo.*</span>
+            <span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span><span class="pct">100%</span></span>
+            <button class="x" onclick="event.stopPropagation()">✕</button>
+          </div>
+          <div class="rule" onclick="show('p2')">
+            <span class="grip">⠿</span>
+            <span class="pat">x.com</span>
+            <span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#A8ACB1,#DADDE1)"></span><span class="pct">80%</span></span>
+            <button class="x" onclick="event.stopPropagation()">✕</button>
+          </div>
+          <div class="rule" onclick="show('p2')">
+            <span class="grip">⠿</span>
+            <span class="pat">*.zhihu.*</span>
+            <span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#4C6FD4,#D9C25A)"></span><span class="pct">60%</span></span>
+            <button class="x" onclick="event.stopPropagation()">✕</button>
+          </div>
+        </div>
+        <div class="pfoot">
+          <button class="add" onclick="show('p2')">+ 添加规则</button>
+          <span class="count">3/20</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <p class="cap">空状态 · 首次打开</p>
+      <div class="popup tall">
+        <div class="phead">
+          <div class="brand"><span class="dot"></span>Color Filters</div>
+          <button class="sw" role="switch" aria-checked="true" onclick="tog(this)"></button>
+        </div>
+        <div class="empty">
+          <div class="big">尚未添加任何规则</div>
+          <div class="hint">添加一条规则,指定哪些网址需要套用滤镜</div>
+        </div>
+        <div class="pfoot">
+          <button class="add">+ 添加规则</button>
+          <span class="count">0/20</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <p class="cap">主开关 OFF · 规则保留但全部不生效</p>
+      <div class="popup tall off">
+        <div class="phead">
+          <div class="brand"><span class="dot off"></span>Color Filters</div>
+          <button class="sw" role="switch" aria-checked="false" onclick="tog(this)"></button>
+        </div>
+        <div class="prio" style="background:var(--warn-soft);color:var(--warn);border-color:transparent;opacity:1">已全局关闭,所有规则暂不生效</div>
+        <div class="plist">
+          <div class="rule"><span class="grip">⠿</span><span class="pat">*.weibo.*</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span><span class="pct">100%</span></span><button class="x">✕</button></div>
+          <div class="rule"><span class="grip">⠿</span><span class="pat">x.com</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#A8ACB1,#DADDE1)"></span><span class="pct">80%</span></span><button class="x">✕</button></div>
+          <div class="rule"><span class="grip">⠿</span><span class="pat">*.zhihu.*</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#4C6FD4,#D9C25A)"></span><span class="pct">60%</span></span><button class="x">✕</button></div>
+        </div>
+        <div class="pfoot"><button class="add">+ 添加规则</button><span class="count">3/20</span></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="note">
+    <b>关于优先级提示条。</b>「↓ 从上往下匹配,首个命中的规则生效」这一行常驻在列表顶部。拖拽会改变行为,用户必须先知道顺序有意义 —— 否则他们不会想到去拖。
+    <span class="q">这行要不要?还是太啰嗦</span>
+  </div>
+</section>
+
+<!-- ============ 2. 编辑视图 ============ -->
+<section>
+  <h2>二 · 编辑视图 · 三种状态</h2>
+  <p class="secnote">状态行是两个独立维度:<b>是否匹配当前网站</b> × <b>是否真的生效</b>。被前面的规则抢先时最容易困惑,所以单独给了解释框。</p>
+  <div class="rail">
+
+    <div class="frame">
+      <p class="cap">生效中 · 可编辑,滑块实时预览</p>
+      <div class="popup tall" id="p2">
+        <div class="ehead">
+          <button class="back" onclick="show('p1')">‹ 返回</button>
+          <span style="font-size:13px;font-weight:550">编辑规则</span>
+        </div>
+        <div class="ebody">
+          <div class="field">
+            <label class="lab" for="pat2">网址模式</label>
+            <input class="inp" id="pat2" value="*.weibo.*" oninput="chk(this)">
+            <div class="status st-ok" id="stat2"><span class="ic">●</span><span>匹配当前网站 <b>weibo.com</b> · 生效中</span></div>
+          </div>
+          <div class="field">
+            <span class="lab">滤镜</span>
+            <div class="opts" id="opts2">
+              <label class="opt on" onclick="pick(this,'opts2')"><span class="radio"></span><span class="oname">灰阶<span class="odesc">完全去除色彩</span></span><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span></label>
+              <label class="opt" onclick="pick(this,'opts2')"><span class="radio"></span><span class="oname">红绿<span class="odesc">红色弱 · 红绿色觉辅助</span></span><span class="sw2" style="background:linear-gradient(90deg,#C25B4E,#5B9E55)"></span></label>
+              <label class="opt" onclick="pick(this,'opts2')"><span class="radio"></span><span class="oname">绿红<span class="odesc">绿色弱 · 红绿色觉辅助</span></span><span class="sw2" style="background:linear-gradient(90deg,#5B9E55,#C25B4E)"></span></label>
+              <label class="opt" onclick="pick(this,'opts2')"><span class="radio"></span><span class="oname">蓝黄<span class="odesc">蓝黄色觉辅助</span></span><span class="sw2" style="background:linear-gradient(90deg,#4C6FD4,#D9C25A)"></span></label>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:4px">
+            <span class="lab">强度</span>
+            <div class="srow">
+              <input type="range" id="r2" min="0" max="100" value="100" oninput="document.getElementById('v2').textContent=this.value+'%'">
+              <span class="sval" id="v2">100%</span>
+            </div>
+            <div class="livehint"><span class="pulse"></span>拖动时当前页面实时预览</div>
+          </div>
+        </div>
+        <div class="erow">
+          <button class="btn pri" onclick="show('p1')">保存</button>
+          <button class="btn ghost">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <p class="cap">被遮蔽 · 匹配了但不生效</p>
+      <div class="popup tall">
+        <div class="ehead">
+          <button class="back">‹ 返回</button>
+          <span style="font-size:13px;font-weight:550">编辑规则</span>
+        </div>
+        <div class="ebody">
+          <div class="field">
+            <span class="lab">网址模式</span>
+            <input class="inp" value="*.com" readonly>
+            <div class="status st-shadow"><span class="ic">◐</span><span>匹配当前网站,但<b>不生效</b></span></div>
+            <div class="shadowbox">
+              第 <b>1</b> 条规则 <code style="font-family:ui-monospace,Menlo,monospace">*.weibo.*</code> 排在前面,已先命中。<br>
+              <span class="fix">把这条移到最上面 ↑</span>
+            </div>
+          </div>
+          <div class="field">
+            <span class="lab">滤镜</span>
+            <div class="opts" style="opacity:.55">
+              <label class="opt"><span class="radio"></span><span class="oname">灰阶</span><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span></label>
+              <label class="opt on"><span class="radio"></span><span class="oname">蓝黄</span><span class="sw2" style="background:linear-gradient(90deg,#4C6FD4,#D9C25A)"></span></label>
+            </div>
+          </div>
+        </div>
+        <div class="erow"><button class="btn pri">保存</button><button class="btn ghost">删除</button></div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <p class="cap">语法错误 · 保存禁用</p>
+      <div class="popup tall">
+        <div class="ehead">
+          <button class="back">‹ 返回</button>
+          <span style="font-size:13px;font-weight:550">添加规则</span>
+        </div>
+        <div class="ebody">
+          <div class="field">
+            <span class="lab">网址模式</span>
+            <input class="inp err" value="*.weibo.[*" readonly>
+            <div class="status st-err"><span class="ic">✕</span><span>不能使用 <code style="font-family:ui-monospace,Menlo,monospace">[</code> —— 只支持 <code style="font-family:ui-monospace,Menlo,monospace">*</code> 和普通字符</span></div>
+          </div>
+          <div class="field">
+            <span class="lab">滤镜</span>
+            <div class="opts">
+              <label class="opt on"><span class="radio"></span><span class="oname">灰阶<span class="odesc">完全去除色彩</span></span><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span></label>
+              <label class="opt"><span class="radio"></span><span class="oname">红绿<span class="odesc">红色弱 · 红绿色觉辅助</span></span><span class="sw2" style="background:linear-gradient(90deg,#C25B4E,#5B9E55)"></span></label>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:4px">
+            <span class="lab">强度</span>
+            <div class="srow"><input type="range" min="0" max="100" value="100" disabled><span class="sval">100%</span></div>
+          </div>
+        </div>
+        <div class="erow"><button class="btn pri" disabled>保存</button></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 3. 边界状态 ============ -->
+<section>
+  <h2>三 · 边界状态</h2>
+  <div class="rail">
+
+    <div class="frame">
+      <p class="cap">不可注入页面 · chrome:// 等</p>
+      <div class="popup tall off">
+        <div class="phead">
+          <div class="brand"><span class="dot off"></span>Color Filters</div>
+          <button class="sw" role="switch" aria-checked="true" disabled style="opacity:.4"></button>
+        </div>
+        <div class="blocked" style="opacity:1"><span>⚠</span><span>此页面不支持滤镜。Chrome 不允许扩展修改内部页面、应用商店和 PDF 查看器。</span></div>
+        <div class="plist">
+          <div class="rule"><span class="grip">⠿</span><span class="pat">*.weibo.*</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span><span class="pct">100%</span></span><button class="x">✕</button></div>
+          <div class="rule"><span class="grip">⠿</span><span class="pat">x.com</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#A8ACB1,#DADDE1)"></span><span class="pct">80%</span></span><button class="x">✕</button></div>
+        </div>
+        <div class="pfoot"><button class="add" disabled>+ 添加规则</button><span class="count">2/20</span></div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <p class="cap">已满 20/20</p>
+      <div class="popup tall">
+        <div class="phead">
+          <div class="brand"><span class="dot"></span>Color Filters</div>
+          <button class="sw" role="switch" aria-checked="true" onclick="tog(this)"></button>
+        </div>
+        <div class="prio" style="background:var(--warn-soft);color:var(--warn)">已达 20 条上限,请先删除一条再添加</div>
+        <div class="plist">
+          <div class="rule"><span class="grip">⠿</span><span class="pat">*.weibo.*</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span><span class="pct">100%</span></span><button class="x">✕</button></div>
+          <div class="rule"><span class="grip">⠿</span><span class="pat">x.com</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#A8ACB1,#DADDE1)"></span><span class="pct">80%</span></span><button class="x">✕</button></div>
+          <div class="rule"><span class="grip">⠿</span><span class="pat">*.zhihu.*</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#4C6FD4,#D9C25A)"></span><span class="pct">60%</span></span><button class="x">✕</button></div>
+          <div class="rule"><span class="grip">⠿</span><span class="pat">*.douyin.*</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span><span class="pct">90%</span></span><button class="x">✕</button></div>
+          <div class="rule"><span class="grip">⠿</span><span class="pat">*.bilibili.*</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#C25B4E,#5B9E55)"></span><span class="pct">70%</span></span><button class="x">✕</button></div>
+          <div class="rule"><span class="grip">⠿</span><span class="pat">*.xiaohongshu.*</span><span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span><span class="pct">100%</span></span><button class="x">✕</button></div>
+        </div>
+        <div class="pfoot"><button class="add" disabled>+ 添加规则</button><span class="count full">20/20</span></div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <p class="cap">被遮蔽的规则在列表里的样子</p>
+      <div class="popup tall">
+        <div class="phead">
+          <div class="brand"><span class="dot"></span>Color Filters</div>
+          <button class="sw" role="switch" aria-checked="true" onclick="tog(this)"></button>
+        </div>
+        <div class="prio">↓ 从上往下匹配,<b>首个命中的规则生效</b></div>
+        <div class="plist">
+          <div class="rule">
+            <span class="grip">⠿</span><span class="pat">*.weibo.*</span>
+            <span class="meta"><span class="badge live">生效</span><span class="sw2" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span><span class="pct">100%</span></span>
+            <button class="x">✕</button>
+          </div>
+          <div class="rule shadowed">
+            <span class="grip">⠿</span><span class="pat">*.com</span>
+            <span class="meta"><span class="badge">被遮蔽</span><span class="sw2" style="background:linear-gradient(90deg,#4C6FD4,#D9C25A)"></span><span class="pct">60%</span></span>
+            <button class="x">✕</button>
+          </div>
+          <div class="rule">
+            <span class="grip">⠿</span><span class="pat">x.com</span>
+            <span class="meta"><span class="sw2" style="background:linear-gradient(90deg,#A8ACB1,#DADDE1)"></span><span class="pct">80%</span></span>
+            <button class="x">✕</button>
+          </div>
+        </div>
+        <div class="pfoot"><button class="add">+ 添加规则</button><span class="count">3/20</span></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="note">
+    <b>列表里标不标「被遮蔽」?</b> 只有当前网站同时命中两条规则时才会出现。标了能解释「为什么这条没起作用」,但平时不出现,属于低频信息。
+    <span class="q">要在列表里标,还是只在编辑页说?</span>
+  </div>
+</section>
+
+<!-- ============ 4. 滤镜怎么表达 ============ -->
+<section>
+  <h2>四 · 四个滤镜怎么让人看懂</h2>
+  <p class="secnote">「红绿」和「绿红」对没接触过色觉辅助的人是完全抽象的。三种表达方式:</p>
+  <div class="rail">
+
+    <div class="frame">
+      <p class="cap">A · 双色渐变条(当前采用)</p>
+      <div class="swtest">
+        <div class="swrow"><span class="optA" style="background:linear-gradient(90deg,#9AA0A6,#D5D8DC)"></span><span class="nm">灰阶<small>完全去除色彩</small></span></div>
+        <div class="swrow"><span class="optA" style="background:linear-gradient(90deg,#C25B4E,#5B9E55)"></span><span class="nm">红绿<small>红色弱 · 红绿色觉辅助</small></span></div>
+        <div class="swrow"><span class="optA" style="background:linear-gradient(90deg,#5B9E55,#C25B4E)"></span><span class="nm">绿红<small>绿色弱 · 红绿色觉辅助</small></span></div>
+        <div class="swrow"><span class="optA" style="background:linear-gradient(90deg,#4C6FD4,#D9C25A)"></span><span class="nm">蓝黄<small>蓝黄色觉辅助</small></span></div>
+      </div>
+      <div class="note" style="max-width:360px">渐变方向区分红绿/绿红。但两者在列表小图标里<b>几乎看不出差别</b>。</div>
+    </div>
+
+    <div class="frame">
+      <p class="cap">B · 双色块(方向更明确)</p>
+      <div class="swtest">
+        <div class="swrow"><span class="optB"><i style="background:#9AA0A6"></i><i style="background:#D5D8DC"></i></span><span class="nm">灰阶<small>完全去除色彩</small></span></div>
+        <div class="swrow"><span class="optB"><i style="background:#C25B4E"></i><i style="background:#5B9E55"></i></span><span class="nm">红绿<small>红色弱 · 红绿色觉辅助</small></span></div>
+        <div class="swrow"><span class="optB"><i style="background:#5B9E55"></i><i style="background:#C25B4E"></i></span><span class="nm">绿红<small>绿色弱 · 红绿色觉辅助</small></span></div>
+        <div class="swrow"><span class="optB"><i style="background:#4C6FD4"></i><i style="background:#D9C25A"></i></span><span class="nm">蓝黄<small>蓝黄色觉辅助</small></span></div>
+      </div>
+      <div class="note" style="max-width:360px">硬边界,左右顺序一眼可辨。但色块本身<b>不表示滤镜效果</b>,只是个标签。</div>
+    </div>
+
+    <div class="frame">
+      <p class="cap">C · 只用文字,不用色块</p>
+      <div class="swtest">
+        <div class="swrow"><span class="optC">GRAY</span><span class="nm">灰阶<small>完全去除色彩</small></span></div>
+        <div class="swrow"><span class="optC">R→G</span><span class="nm">红绿<small>红色弱 · 红绿色觉辅助</small></span></div>
+        <div class="swrow"><span class="optC">G→R</span><span class="nm">绿红<small>绿色弱 · 红绿色觉辅助</small></span></div>
+        <div class="swrow"><span class="optC">B→Y</span><span class="nm">蓝黄<small>蓝黄色觉辅助</small></span></div>
+      </div>
+      <div class="note" style="max-width:360px">对<b>色觉异常用户最友好</b> —— 他们恰恰是看不清色块区别的人。这是个真实的讽刺:用颜色区分色觉辅助选项。</div>
+    </div>
+
+  </div>
+  <div class="note" style="margin-top:18px">
+    <b>这里有个根本矛盾。</b> R/G、G/R、B/Y 三个滤镜的目标用户<b>就是色觉异常的人</b>。用红绿色块去区分「红绿」和「绿红」两个选项,对红绿色盲用户来说两个色块长得一模一样。
+    <span class="q">要不要混用:列表用文字标签,编辑页用色块 + 文字?</span>
+  </div>
+</section>
+
+<!-- ============ 5. 待定 ============ -->
+<section>
+  <h2>五 · 还没定的</h2>
+  <div class="note" style="max-width:62ch">
+    <b>1 · popup 高度。</b> 上面用的是固定 452px。规则少时底部会空;也可以随内容伸缩,但列表从 3 条拖到 10 条时窗口会跳动。<br><br>
+    <b>2 · 拖拽时要不要显示序号。</b> 拖动中临时显示 1/2/3,松手后消失 —— 强化「顺序=优先级」,但平时不占空间。<br><br>
+    <b>3 · 实时预览的边界。</b> 当前页面不匹配正在编辑的规则时(在 A 站编辑 B 站规则),滑块拖了没任何反馈。要提示「当前页面不匹配,无法预览」吗?<br><br>
+    <b>4 · 删除要不要二次确认。</b> 现在是点 ✕ 直接删。20 条上限下重建成本不高,但误删仍然烦。
+  </div>
+</section>
+
+</div>
+
+<script>
+function tog(b,id){
+  const on=b.getAttribute('aria-checked')==='true';
+  b.setAttribute('aria-checked',String(!on));
+  const pop=b.closest('.popup');
+  if(pop){pop.classList.toggle('off',on);
+    const d=pop.querySelector('.dot'); if(d)d.classList.toggle('off',on);}
+}
+function pick(el,group){
+  document.getElementById(group).querySelectorAll('.opt').forEach(o=>o.classList.remove('on'));
+  el.classList.add('on');
+}
+function show(id){
+  const t=document.getElementById(id);
+  if(t) t.scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
+}
+function chk(inp){
+  const bad=/[\[\]\(\)\{\}\\+?^$|]/.test(inp.value);
+  inp.classList.toggle('err',bad);
+  const s=document.getElementById('stat2');
+  if(!s) return;
+  if(bad){
+    s.className='status st-err';
+    s.innerHTML='<span class="ic">✕</span><span>只支持 <code style="font-family:ui-monospace,Menlo,monospace">*</code> 和普通字符</span>';
+  } else if(/weibo/.test(inp.value)){
+    s.className='status st-ok';
+    s.innerHTML='<span class="ic">●</span><span>匹配当前网站 <b>weibo.com</b> · 生效中</span>';
+  } else {
+    s.className='status st-none';
+    s.innerHTML='<span class="ic">○</span><span>不匹配当前网站 <b>weibo.com</b></span>';
+  }
+}
+</script>
