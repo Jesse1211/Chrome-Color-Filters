@@ -1,0 +1,29 @@
+{
+  "github": {
+    "compared": 1,
+    "onlyOn": 1,
+    "onlyOff": 1,
+    "diffs": [],
+    "filteredAttr": true,
+    "spreadOff": 169,
+    "spreadOn": 0
+  },
+  "wikipedia": {
+    "compared": 3,
+    "onlyOn": 3,
+    "onlyOff": 3,
+    "diffs": [],
+    "filteredAttr": true,
+    "spreadOff": 200,
+    "spreadOn": 0
+  },
+  "hn": {
+    "compared": 0,
+    "onlyOn": 0,
+    "onlyOff": 0,
+    "diffs": [],
+    "filteredAttr": true,
+    "spreadOff": 255,
+    "spreadOn": 0
+  }
+}

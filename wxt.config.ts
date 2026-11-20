@@ -16,7 +16,13 @@ export default defineConfig({
     host_permissions: ['<all_urls>'],
 
     // ADR-010:规则存于 chrome.storage.local(仅本机,不跨设备同步)。
-    permissions: ['storage'],
+    //
+    // 🔴 `scripting` 是 ADR-062 的**前提** —— 声明式注册
+    // (`chrome.scripting.registerContentScripts`)是 INV-3 零闪烁的主路径,
+    // 漏了这条权限所有注册调用都会失败,且失败表现是「滤镜静默不生效」。
+    // 它**不增加任何用户可见的权限警告**(DESIGN.md §6 第 3 条),
+    // 故没有产品侧理由省它。
+    permissions: ['storage', 'scripting'],
 
     // ADR-045 / ADR-019:图标两态,必须是不同的图片资源。
     // 这里注册的是「未生效态」作为静态默认值;T5 在运行时按 tab 切到
