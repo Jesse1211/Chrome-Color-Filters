@@ -1,0 +1,44 @@
+{
+  "initial": {
+    "filter": "grayscale(1)",
+    "on": true,
+    "off": false,
+    "varValue": "grayscale(1)"
+  },
+  "intensityChange": {
+    "filter": "grayscale(1)",
+    "on": true,
+    "off": false,
+    "varValue": "grayscale(1)"
+  },
+  "modeChange": {
+    "filter": "grayscale(1)",
+    "on": true,
+    "off": false,
+    "varValue": "grayscale(1)"
+  },
+  "ruleDeleted": {
+    "filter": "grayscale(1)",
+    "on": true,
+    "off": false,
+    "varValue": "grayscale(1)"
+  },
+  "ruleAdded": {
+    "filter": "grayscale(1)",
+    "on": true,
+    "off": false,
+    "varValue": "grayscale(1)"
+  },
+  "masterOff": {
+    "filter": "none",
+    "on": false,
+    "off": true,
+    "varValue": ""
+  },
+  "masterBackOn": {
+    "filter": "none",
+    "on": false,
+    "off": true,
+    "varValue": ""
+  }
+}
