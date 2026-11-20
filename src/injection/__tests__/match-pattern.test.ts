@@ -6,15 +6,28 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
  * Chrome match pattern 的表达力窄于本项目的 glob(ADR-005/006),转换
- * **不可能等价**。两种偏差方向的后果完全不对称:
+ * **不可能等价**。两个偏差方向的后果都是真实的,但不对称:
  *
- * - 漏匹配 → 该站首帧未滤镜 → **直接违反 INV-3**(本任务要根治的那个缺陷);
- * - 多匹配 → 注入一张不选中任何元素的样式表 → 零可观察影响(INV-1 保持)。
+ * - 漏匹配 → 该站首帧未滤镜 → INV-3 在该站未被声明式路径兑现;
+ * - 多匹配 → 🔴 **该站会得到一个已上色的首帧**。预生成 CSS 是**裸 `html`**、
+ *   无条件生效(ADR-063 / DESIGN.md §6 第 9 条),所以多匹配**不是**
+ *   「注入一张不选中任何元素的样式表」。本文件早先的注释如此声称,
+ *   **那个前提是错的,本轮已更正**(见 `match-pattern.ts` 文件头)。
  *
- * 故转换必须恒为超集。下面用一个**跨 host 全集**的性质测试把它钉死:
- * 对每个 glob × 每个 host,只要 `matchGlob` 判定命中,
- * 转换出的 match pattern 就**必须**也命中。
- * 这比逐个举例更强 —— 它能抓住未来有人「优化」转换器时引入的漏匹配。
+ * ## 于是超集不变式的**适用范围**必须被精确声明
+ *
+ * 超集只在**放宽有界**时成立。当 glob 的后缀集合无界(`*.baidu.*`、
+ * `*weibo*`)时,唯一的 match pattern 超集是全网 —— 与裸 `html` 组合
+ * 就是「一条规则给整个互联网上色」,违反 DESIGN.md §1 匹配语义第 4 条
+ * (「无规则命中 → 不套滤镜」)与 INV-1。那种情况返回 `inexpressible`,
+ * **不注册**。
+ *
+ * 故本文件钉死**两条**性质,而不是一条:
+ *
+ * 1. **`exact` / `widened`(即真的会注册的那些)恒为超集** ——
+ *    跨 host 全集的性质测试,抓未来「优化」转换器时引入的漏匹配;
+ * 2. **`inexpressible` 恒不产出任何 pattern** —— 抓「顺手加个全网兜底」
+ *    这个本轮刚修掉的缺陷的回归。
  */
 import { describe, expect, it } from 'vitest';
 import { matchGlob } from '../../domain/index.js';
@@ -22,6 +35,7 @@ import {
   ALL_URLS_PATTERN,
   globToMatchPatterns,
   globsToMatchPatterns,
+  isIntentionallyAllUrls,
 } from '../match-pattern.js';
 
 /**
@@ -89,21 +103,39 @@ const HOSTS = [
   'a.b.c.d.com',
 ];
 
-describe('globToMatchPatterns · 🔴 超集不变式(INV-3 的前提)', () => {
+/** 组合式构造的 host 全集,供两条性质测试共用。 */
+function generatedHosts(): readonly string[] {
+  // {'', 'www.', 'news.', 'a.b.'} × {baidu, google, sina, weibo, x}
+  //                               × {.com, .com.cn, .co.uk, .org}
+  const generated: string[] = [];
+  for (const prefix of ['', 'www.', 'news.', 'a.b.']) {
+    for (const label of ['baidu', 'google', 'sina', 'weibo', 'x']) {
+      for (const tld of ['.com', '.com.cn', '.co.uk', '.org']) {
+        generated.push(`${prefix}${label}${tld}`);
+      }
+    }
+  }
+  return generated;
+}
+
+describe('globToMatchPatterns · 🔴 超集不变式(范围限定于会注册的那些)', () => {
   it.each(GLOBS)(
-    'glob %s:凡 matchGlob 命中的 host,match pattern 必须也命中',
+    'glob %s:若它会注册,则凡 matchGlob 命中的 host,match pattern 必须也命中',
     (glob) => {
       const conversion = globToMatchPatterns(glob);
       expect(conversion.kind).not.toBe('invalid');
-      const patterns =
-        conversion.kind === 'invalid' ? [] : conversion.patterns;
+
+      // 🔴 `inexpressible` 刻意**不注册**,故不适用超集不变式。
+      //    它由下一个 describe 单独钉死(恒不产出 pattern)。
+      if (conversion.kind === 'inexpressible') return;
+      const patterns = conversion.patterns;
 
       const missed: string[] = [];
       for (const host of HOSTS) {
         if (!matchGlob(glob, host)) continue;
         if (!anyPatternMatches(patterns, host)) missed.push(host);
       }
-      // 漏匹配 = 该站首帧未滤镜 = 违反 INV-3。一个都不许有。
+      // 会注册却漏匹配 = 该站首帧未滤镜。一个都不许有。
       expect(
         missed,
         `glob "${glob}" → ${JSON.stringify(patterns)} 漏掉了这些 host`,
@@ -112,27 +144,74 @@ describe('globToMatchPatterns · 🔴 超集不变式(INV-3 的前提)', () => {
   );
 
   it('🔴 对一个随机生成的 host 全集同样成立(不只是手挑的样例)', () => {
-    // 组合式构造:{'', 'www.', 'news.', 'a.b.'} × {baidu, google, sina, weibo, x}
-    //            × {.com, .com.cn, .co.uk, .org}
-    const generated: string[] = [];
-    for (const prefix of ['', 'www.', 'news.', 'a.b.']) {
-      for (const label of ['baidu', 'google', 'sina', 'weibo', 'x']) {
-        for (const tld of ['.com', '.com.cn', '.co.uk', '.org']) {
-          generated.push(`${prefix}${label}${tld}`);
-        }
-      }
-    }
     for (const glob of GLOBS) {
       const conversion = globToMatchPatterns(glob);
-      const patterns =
-        conversion.kind === 'invalid' ? [] : conversion.patterns;
-      for (const host of generated) {
+      if (conversion.kind === 'invalid') continue;
+      if (conversion.kind === 'inexpressible') continue;
+      const patterns = conversion.patterns;
+      for (const host of generatedHosts()) {
         if (!matchGlob(glob, host)) continue;
         expect(
           anyPatternMatches(patterns, host),
           `glob "${glob}" → ${JSON.stringify(patterns)} 漏掉 host "${host}"`,
         ).toBe(true);
       }
+    }
+  });
+});
+
+describe('globToMatchPatterns · 🔴 放宽必须有界 —— 不得兜底成全网', () => {
+  it.each(GLOBS)(
+    'glob %s:只有「本身匹配任意 host」的 glob 才允许产出全网 pattern',
+    (glob) => {
+      const conversion = globToMatchPatterns(glob);
+      if (conversion.kind === 'invalid') return;
+      if (conversion.kind === 'inexpressible') return;
+      if (!conversion.patterns.includes(ALL_URLS_PATTERN)) return;
+      // 产出了全网 pattern → 必须是用户的原意(`*` / `*.*` / `**`),
+      // 而**不是**转换失败的兜底。
+      expect(
+        isIntentionallyAllUrls([glob]),
+        `glob "${glob}" 产出了全网 pattern,但它本身并不匹配任意 host —— ` +
+          '这会让一条规则给全网首帧上色(INV-1 / DESIGN.md §1 第 4 条)',
+      ).toBe(true);
+    },
+  );
+
+  it('🔴 ADR-006 的旗舰例子 *.baidu.* 绝不产出全网 pattern', () => {
+    // DESIGN.md:61-64 与 ADR-006 都用 `*.baidu.*` 当标准示例,
+    // 所以这不是一个奇异输入 —— 它是最可能被真实用户写出的形态之一。
+    const conversion = globToMatchPatterns('*.baidu.*');
+    expect(conversion.kind).toBe('inexpressible');
+    expect(conversion).not.toHaveProperty('patterns');
+  });
+
+  it('🔴 尾部 .* 与无字面后缀的中缀 * 一律 inexpressible', () => {
+    for (const glob of ['*.baidu.*', '*weibo*', '*.sina.*', '*x*']) {
+      expect(globToMatchPatterns(glob), glob).toEqual({
+        kind: 'inexpressible',
+      });
+    }
+  });
+
+  it('🔴 inexpressible 在类型层面就拿不出 pattern(防兜底回归)', () => {
+    // `inexpressible` 没有 `patterns` 字段 —— 这是刻意的类型设计:
+    // 「不小心把它兜底成全网」在类型层面写不出来。
+    const conversion = globToMatchPatterns('*weibo*');
+    expect(Object.keys(conversion)).toEqual(['kind']);
+  });
+
+  it('全网 pattern 仍为「原意即全网」的 glob 保留(未过度收紧)', () => {
+    for (const glob of ['*', '**', '*.*']) {
+      expect(globToMatchPatterns(glob)).toEqual({
+        kind: 'exact',
+        patterns: [ALL_URLS_PATTERN],
+      });
+      expect(isIntentionallyAllUrls([glob])).toBe(true);
+    }
+    // 反面:这些都不是「原意即全网」。
+    for (const glob of ['x.com', '*.google.com', '*.baidu.*', '*weibo*']) {
+      expect(isIntentionallyAllUrls([glob]), glob).toBe(false);
     }
   });
 });
@@ -174,10 +253,12 @@ describe('globToMatchPatterns · 精确可表达的那些保持精确', () => {
   });
 });
 
-describe('globToMatchPatterns · 表达不出来的那些被放宽,且标记 widened', () => {
-  it('尾部 .* (如 *.baidu.*) 被放宽', () => {
+describe('globToMatchPatterns · 表达不出来的那些:有界则放宽,无界则不注册', () => {
+  it('尾部 .* (如 *.baidu.*) → inexpressible(不注册,不兜底成全网)', () => {
+    // 本轮修复:此前这里断言 `widened`,而 `widened` 的 patterns 是全网
+    // → 一条 `*.baidu.*` 规则让全网首帧上色。断言随产品行为一同更正。
     const conversion = globToMatchPatterns('*.baidu.*');
-    expect(conversion.kind).toBe('widened');
+    expect(conversion.kind).toBe('inexpressible');
   });
 
   it('中缀 * 但有可用的字面后缀 → 保留该后缀,不放宽到全网', () => {
@@ -192,10 +273,10 @@ describe('globToMatchPatterns · 表达不出来的那些被放宽,且标记 wid
     );
   });
 
-  it('字面段不在末尾(如 *weibo*)→ 只能放宽到全网', () => {
+  it('字面段不在末尾(如 *weibo*)→ inexpressible,不注册', () => {
+    // 同上:全网兜底已被移除。无界放宽的代价是无界的,不可接受。
     expect(globToMatchPatterns('*weibo*')).toEqual({
-      kind: 'widened',
-      patterns: [ALL_URLS_PATTERN],
+      kind: 'inexpressible',
     });
   });
 

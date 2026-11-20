@@ -31,6 +31,7 @@ import {
   type RegisteredScriptLike,
   type Registration,
   type ScriptingPort,
+  assertNoUnintendedAllUrls,
   desiredRegistrations,
   isNoOpPlan,
   planReconcile,
@@ -38,6 +39,7 @@ import {
   registrationId,
 } from '../reconcile.js';
 import { filterCssFilePath } from '../filter-file-css.js';
+import { ALL_URLS_PATTERN } from '../match-pattern.js';
 
 /**
  * 记录全部调用的假端口,并**真的维护注册状态** ——
@@ -98,6 +100,141 @@ function settingsWith(
 let port: FakeScriptingPort;
 beforeEach(() => {
   port = new FakeScriptingPort();
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+describe('🔴 组合门禁:converter × reconcile —— 放宽的 glob 绝不注册成全网', () => {
+  /**
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   * 这个 describe 存在的理由:**上一轮的缺陷恰好活在两层的接缝上。**
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   *
+   * 当时的状态:
+   * - `match-pattern.test.ts` 只在**转换器层**验转换(并且断言
+   *   `*weibo*` → 全网 **是对的**);
+   * - 本文件历来只喂**精确** glob(`weibo.com` / `zhihu.com` / `a.com`);
+   * - 真实栈门禁(`declarative.cjs` / `flicker.cjs`)也只用字面 host 或 `rule('*')`。
+   *
+   * 于是「一个表达不出来的 glob 穿过 reconcile 变成
+   * `matches: ['*://* / *']` + 一张裸 `html` 滤镜表」这个状态
+   * **没有任何一条门禁驱动过** —— 两层各自都绿,缺陷只在组合处可见。
+   *
+   * 本 describe 专门驱动那个接缝。
+   */
+  const INEXPRESSIBLE_GLOBS = ['*.baidu.*', '*weibo*', '*.sina.*', '*x*'];
+
+  it.each(INEXPRESSIBLE_GLOBS)(
+    '🔴 单条 %s 规则:不得产出任何带全网 matches 的滤镜注册',
+    (glob) => {
+      const desired = desiredRegistrations(
+        settingsWith([{ pattern: glob, mode: 'Grayscale', intensity: 100 }]),
+      );
+      for (const reg of desired) {
+        expect(
+          reg.matches,
+          `glob "${glob}" 注册成了全网 —— 全网首帧都会上色(INV-1)`,
+        ).not.toContain(ALL_URLS_PATTERN);
+      }
+    },
+  );
+
+  it('🔴 ADR-006 旗舰例子 *.baidu.* → 不产出注册(而非产出全网注册)', () => {
+    // DESIGN.md:61-64 与 ADR-006 都拿 `*.baidu.*` 当标准示例。
+    const desired = desiredRegistrations(
+      settingsWith([{ pattern: '*.baidu.*', mode: 'Grayscale', intensity: 100 }]),
+    );
+    expect(desired).toEqual([]);
+  });
+
+  it('🔴 表达不出来的 glob 与精确 glob 同组时,只注册精确那条', () => {
+    // 这是最阴险的形态:同组内一个 glob 被跳过,**不得**把整组
+    // 拖成全网,也**不得**让精确那条跟着消失。
+    const desired = desiredRegistrations(
+      settingsWith([
+        { pattern: '*.baidu.*', mode: 'Grayscale', intensity: 100 },
+        { pattern: 'zhihu.com', mode: 'Grayscale', intensity: 100 },
+      ]),
+    );
+    expect(desired).toHaveLength(1);
+    expect(desired[0]!.matches).toEqual(['*://zhihu.com/*']);
+    expect(desired[0]!.matches).not.toContain(ALL_URLS_PATTERN);
+  });
+
+  it('有界放宽(news*.sina.com)仍然注册,且不是全网', () => {
+    // 反面对照:收紧**没有**把有界放宽一并误杀。
+    const desired = desiredRegistrations(
+      settingsWith([
+        { pattern: 'news*.sina.com', mode: 'Grayscale', intensity: 100 },
+      ]),
+    );
+    expect(desired).toHaveLength(1);
+    expect(desired[0]!.matches).toEqual(['*://*.sina.com/*']);
+  });
+
+  it('用户原意即全网(*)时,全网注册**仍然**产出 —— 未过度收紧', () => {
+    const desired = desiredRegistrations(
+      settingsWith([{ pattern: '*', mode: 'Grayscale', intensity: 100 }]),
+    );
+    expect(desired).toHaveLength(1);
+    expect(desired[0]!.matches).toEqual([ALL_URLS_PATTERN]);
+  });
+
+  it('🔴 穿过真实 reconcile() 落到端口上的注册同样不含全网', async () => {
+    // 前面几条验的是纯函数 `desiredRegistrations`。这一条把 glob
+    // **一路驱动到端口**,确保 reconcile 的 diff/plan 路径没有别的
+    // 地方把全网 pattern 重新引进来。
+    const settings = settingsWith([
+      { pattern: '*.baidu.*', mode: 'Grayscale', intensity: 100 },
+      { pattern: '*weibo*', mode: 'R-G', intensity: 70 },
+      { pattern: 'zhihu.com', mode: 'Grayscale', intensity: 100 },
+    ]);
+    const result = await reconcile(port, settings);
+    expect(result.ok).toBe(true);
+
+    for (const reg of port.registered.values()) {
+      expect(
+        reg.matches,
+        `注册 ${reg.id} 含全网 matches —— 一条规则给全网上色(INV-1)`,
+      ).not.toContain(ALL_URLS_PATTERN);
+      // 且每条注册都确实带着滤镜 CSS —— 否则上面的断言会因为
+      // 「根本没有注册」而空过(vacuous green)。
+      expect(reg.css).toHaveLength(1);
+    }
+    // 非空性:恰好注册了 zhihu 那一条,证明断言不是空集上成立的。
+    expect([...port.registered.keys()]).toEqual(['ccf-gray-100']);
+  });
+
+  it('🔴 assertNoUnintendedAllUrls 会对伪造的全网注册抛错(断言本身有效)', () => {
+    // 直接驱动不变式函数:若有人日后把兜底加回来,这是炸点。
+    expect(() =>
+      assertNoUnintendedAllUrls(
+        {
+          id: 'ccf-gray-100',
+          matches: [ALL_URLS_PATTERN],
+          css: ['filters/gray-100.css'],
+          runAt: 'document_start',
+          allFrames: false,
+          persistAcrossSessions: true,
+        },
+        ['*.baidu.*'],
+      ),
+    ).toThrow(/全网/);
+
+    // 原意即全网时不抛。
+    expect(() =>
+      assertNoUnintendedAllUrls(
+        {
+          id: 'ccf-gray-100',
+          matches: [ALL_URLS_PATTERN],
+          css: ['filters/gray-100.css'],
+          runAt: 'document_start',
+          allFrames: false,
+          persistAcrossSessions: true,
+        },
+        ['*'],
+      ),
+    ).not.toThrow();
+  });
 });
 
 // ───────────────────────────────────────────────────────────────────────────

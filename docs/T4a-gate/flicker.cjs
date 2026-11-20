@@ -159,8 +159,124 @@ async function oneRun(runIdx) {
   return results;
 }
 
+/**
+ * 🔴 反向探针:一条**表达不出来的** glob 绝不能给它匹配不到的站点套滤镜。
+ *
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 上一轮的缺陷与**此前全部门禁的盲区**
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *
+ * 当时 `*.baidu.*`(ADR-006 与 DESIGN.md:61-64 的旗舰示例)会被转换器
+ * 兜底成「全网 match pattern」,与**裸 html** 的预生成 CSS 组合 →
+ * **用户只配了 baidu,结果全网每个站点的首帧都被套上灰阶滤镜。**
+ *
+ * 本文件其余场景用的都是 `rule('*')`(原意即全网),
+ * 「每个站点都被套滤镜」在那里**正是正确行为**,
+ * 所以这个缺陷在本门禁里**不可能被看见**。方向是反的:
+ *
+ * - 其余场景问「该套滤镜的套上了吗」(漏匹配 → INV-3);
+ * - 本函数问「**不该**套的没套上吧」(多匹配 → INV-1)。
+ *
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔴 为什么本场景**不能**用逐帧截屏,而必须读 computed style
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *
+ * 这是本轮实测得出的结论,写下来以免后人又绕一遍:
+ *
+ * 把 bug 放回产品代码后,用**逐帧截屏**测 hn / github / wikipedia,
+ * 门禁照样 PASS。原因是 `filter.css` 的 `html[data-ccf-off]` 压制规则会
+ * 在 JS 跑完后把滤镜撤掉,而那个「已上色」的窗口实测只有 **约 11ms**:
+ *
+ * ```
+ * t=7ms   filter=grayscale(1)  data-ccf-off=false   ← 未配置的站点被上色
+ * t=14ms  filter=grayscale(1)  data-ccf-off=false
+ * t=18ms  filter=none          data-ccf-off=true    ← JS 判定不匹配,撤掉
+ * ```
+ *
+ * 11ms 常常落不进任何一个合成帧,于是像素探针**系统性漏报**。
+ * 而「页面根元素在某一刻确实是 grayscale(1)」是**确定性**事实,
+ * 读 computed style 就能稳定抓到 —— 判据因此落在这里。
+ *
+ * 📌 这**不是**降低标准:缺陷的本质就是「未配置的站点被套了滤镜」,
+ * computed style 直接测的就是这件事,比「碰运气看能不能截到那一帧」更强。
+ * 其余场景(正向的 INV-3)仍然用逐帧截屏 —— 那里要证明的是
+ * 「用户看不到未滤镜的帧」,那是关于**像素**的命题,必须用像素测。
+ *
+ * ## 假阴性防护
+ *
+ * 「全程 filter=none」在一个**扩展根本没加载**的环境里会自动成立。
+ * 故每个站点都配一条对照:同一 profile、同一探针,把规则换成 `*`
+ * (原意即全网)后必须测到 `grayscale(1)`。
+ * 两者一起才构成证据。
+ */
+async function filterTimeline(browser, url) {
+  const p = await browser.newPage();
+  try {
+    await p.evaluateOnNewDocument(() => {
+      window.__ccfSamples = [];
+      const t0 = performance.now();
+      const snap = () => {
+        try {
+          const de = document.documentElement;
+          if (!de) return;
+          window.__ccfSamples.push([
+            Math.round(performance.now() - t0),
+            getComputedStyle(de).filter,
+          ]);
+        } catch (e) { /* 页面尚未可查询 */ }
+      };
+      snap();
+      // 4ms 间隔密集采样 1 秒 —— 足以覆盖「JS 撤掉滤镜」之前的窗口
+      // (实测该窗口约 11ms,采样间隔必须远小于它)。
+      let n = 0;
+      const iv = setInterval(() => { snap(); if (++n > 250) clearInterval(iv); }, 4);
+      requestAnimationFrame(() => { snap(); requestAnimationFrame(snap); });
+    });
+    await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await new Promise((r) => setTimeout(r, 1200));
+    const samples = await p.evaluate(() => window.__ccfSamples || []);
+    const filtered = samples.filter(
+      (x) => x[1] && x[1] !== 'none' && x[1] !== 'nohtml',
+    );
+    return {
+      samples: samples.length,
+      filteredSamples: filtered.length,
+      firstFiltered: filtered.length ? filtered[0] : null,
+    };
+  } finally { await p.close(); }
+}
+
+async function unmatchedHostRun(runIdx) {
+  const results = {};
+  for (const [key, url] of Object.entries(SITES)) {
+    const udd = path.join(OUT, `fp-unmatched-${key}-r${runIdx}`);
+    fs.rmSync(udd, { recursive: true, force: true });
+
+    let unmatched, control;
+    const browser = await launch(udd, { headless: true });
+    try {
+      // (a) 只配表达不出来的 glob。github/wikipedia/hn 都**不**匹配它们。
+      //     正确行为:根元素的 filter **自始至终**是 none。
+      await seed(browser, settings([rule('*.baidu.*'), rule('*weibo*', 'RedGreen', 60)], true));
+      await new Promise((r) => setTimeout(r, 1200));
+      unmatched = await filterTimeline(browser, url);
+
+      // (b) 对照:换成原意即全网的 `*` —— 同站点必须测到非 none 的 filter。
+      await seed(browser, settings([rule('*')], true));
+      await new Promise((r) => setTimeout(r, 1200));
+      control = await filterTimeline(browser, url);
+    } finally { await browser.close(); }
+
+    results[key] = { unmatched, control };
+    console.log(`run${runIdx} unmatched ${key}`, JSON.stringify(results[key]));
+    fs.rmSync(udd, { recursive: true, force: true });
+  }
+  return results;
+}
+
 (async () => {
   const all = [];
+  const allUnmatched = [];
   let fail = false;
 
   for (let runIdx = 1; runIdx <= RUNS; runIdx++) {
@@ -182,10 +298,37 @@ async function oneRun(runIdx) {
       }
       console.log(`INFO run${runIdx} ${k}: coldCache ${r.coldCache.colorFrames}/${r.coldCache.frames}；newTab ${r.newTab.colorFrames}/${r.newTab.frames}；restart ${r.restart.colorFrames}/${r.restart.frames}；hot ${r.hot.colorFrames}/${r.hot.frames}；基线 ${r.off.colorFrames}/${r.off.frames}`);
     }
+
+    // ── 🔴 反向场景:表达不出来的 glob 不得给未匹配站点上色(INV-1) ──
+    const um = await unmatchedHostRun(runIdx);
+    allUnmatched.push(um);
+    for (const [k, r] of Object.entries(um)) {
+      // (i) 探针/扩展有效性:对照(规则 = `*`)必须测到滤镜。
+      //     否则扩展没加载,下面那条断言会在空环境里自动成立。
+      if (r.control.filteredSamples === 0) {
+        console.log(`FAIL run${runIdx} unmatched ${k}: 对照(规则=*)未测到任何滤镜 —— ` +
+          `扩展未生效(采样 ${r.control.samples} 次),本组断言失去意义`);
+        fail = true;
+      }
+      // (ii) 🔴 正题:只配了表达不出来的 glob 时,未匹配站点的根元素
+      //      **任何时刻**都不得带滤镜。
+      if (r.unmatched.samples === 0) {
+        console.log(`FAIL run${runIdx} unmatched ${k}: 未取到任何采样 —— 探针无效`);
+        fail = true;
+      } else if (r.unmatched.filteredSamples > 0) {
+        console.log(`FAIL run${runIdx} unmatched ${k}: 规则只配了 *.baidu.* / *weibo*,` +
+          `但 ${k} 有 ${r.unmatched.filteredSamples}/${r.unmatched.samples} 次采样测到滤镜 ` +
+          `(首次 ${JSON.stringify(r.unmatched.firstFiltered)}) —— ` +
+          '未配置的站点被套上滤镜(违反 INV-1 与 DESIGN.md §1 匹配语义第 4 条)');
+        fail = true;
+      }
+      console.log(`INFO run${runIdx} unmatched ${k}: unmatched 带滤镜采样 ${r.unmatched.filteredSamples}/${r.unmatched.samples}(应 0)；` +
+        `对照 * 带滤镜采样 ${r.control.filteredSamples}/${r.control.samples}(应 >0)`);
+    }
   }
 
   fs.writeFileSync(path.join(OUT, 'flicker.json'),
-    JSON.stringify({ runs: RUNS, all }, null, 2));
+    JSON.stringify({ runs: RUNS, all, unmatchedHost: allUnmatched }, null, 2));
 
   // 🔴 连续 RUNS 次**全部**通过才算过 —— 该门禁此前是非确定性失败,
   //    单次通过不能作为证据。
