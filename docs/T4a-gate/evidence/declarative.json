@@ -95,5 +95,22 @@
       "runAt": "document_start",
       "world": "ISOLATED"
     }
+  ],
+  "inexpressibleGlobs": [],
+  "intentionalAllUrls": [
+    {
+      "allFrames": false,
+      "css": [
+        "filters/gray-100.css"
+      ],
+      "id": "ccf-gray-100",
+      "matchOriginAsFallback": false,
+      "matches": [
+        "*://*/*"
+      ],
+      "persistAcrossSessions": true,
+      "runAt": "document_start",
+      "world": "ISOLATED"
+    }
   ]
 }

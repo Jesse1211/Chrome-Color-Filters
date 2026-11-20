@@ -104,6 +104,37 @@ async function regs(w) { return w.evaluate(() => chrome.scripting.getRegisteredC
   log(JSON.stringify(ids(r7)) === JSON.stringify(['ccf-gray-100']),
     `🔴 ADR-065 扩展更新后注册被完整重建 ${JSON.stringify(ids(r7))}`);
 
+  // ── 8. 🔴 表达不出来的 glob 绝不注册成全网(converter × reconcile 接缝) ──
+  //
+  //    上一轮的缺陷:`*.baidu.*`(ADR-006 与 DESIGN.md:61-64 的旗舰示例)
+  //    被转换器兜底成 `*://*/ *`,再被 reconcile 配上一张**裸 html** 的
+  //    滤镜表 → 一条规则让**整个互联网**的首帧变灰(违反 INV-1 与
+  //    DESIGN.md §1 匹配语义第 4 条「无规则命中 → 不套滤镜」)。
+  //
+  //    为什么此前的门禁看不见它:本脚本历来只播种字面 host(exact 路径),
+  //    flicker/multitab/geometry/modes 用的是 rule('*')(原意即全网)。
+  //    **没有任何一条门禁把一个放宽的 glob 送进过真实浏览器。**
+  //    这一节专门驱动那个状态。
+  await seed(b, settings([rule('*.baidu.*'), rule('*weibo*', 'RedGreen', 60)]));
+  await new Promise((r) => setTimeout(r, 1500));
+  const r8 = await regs(w);
+  results.inexpressibleGlobs = r8;
+
+  // 8a. 不得有任何注册带全网 matches。
+  const allUrlsRegs = r8.filter((r) => (r.matches || []).includes('*://*/*'));
+  log(allUrlsRegs.length === 0,
+    `🔴 表达不出来的 glob 未注册成全网(全网注册 ${allUrlsRegs.length} 条,` +
+    `实际注册 ${JSON.stringify(ids(r8))})`);
+
+  // 8b. 对照:原意即全网的 `*` **仍然**注册成全网 —— 证明没有过度收紧,
+  //     也证明上面的断言不是因为「reconcile 根本不工作」而空过。
+  await seed(b, settings([rule('*')]));
+  await new Promise((r) => setTimeout(r, 1500));
+  const r8b = await regs(w);
+  results.intentionalAllUrls = r8b;
+  log(r8b.length === 1 && (r8b[0].matches || []).includes('*://*/*'),
+    `对照:原意即全网的 * 仍注册为全网 ${JSON.stringify(r8b.map((r) => r.matches))}`);
+
   await b.close();
   fs.rmSync(udd, { recursive: true, force: true });
 

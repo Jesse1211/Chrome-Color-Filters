@@ -79,7 +79,11 @@ import {
   type Intensity,
 } from '../domain/index.js';
 import { filterCssFilePath } from './filter-file-css.js';
-import { globsToMatchPatterns } from './match-pattern.js';
+import {
+  ALL_URLS_PATTERN,
+  globsToMatchPatterns,
+  isIntentionallyAllUrls,
+} from './match-pattern.js';
 
 /** 本扩展注册的 content script id 统一前缀 —— 便于只清理自己的注册。 */
 export const REGISTRATION_ID_PREFIX = 'ccf-';
@@ -151,6 +155,58 @@ export function isOwnRegistrationId(id: string): boolean {
 }
 
 /**
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔴 组合不变式(converter × reconcile)—— 本轮缺陷的防回归锚点。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *
+ * **不变式:** 一条注册的 `matches` 为 `*://* / *`(全网)**当且仅当**
+ * 产生它的那组 glob 里**确实有一个本身就匹配任意 host 的 glob**
+ * (`*`、`*.*`)。
+ *
+ * ## 为什么这条断言必须在这里,而不只是在转换器的单测里
+ *
+ * 被发现的缺陷**不在转换器里,也不在 reconcile 里,而在两者的接缝上**:
+ *
+ * 1. `filter-file-css.ts` 产出**裸 `html`** 的滤镜表(ADR-063 的明文规格,
+ *    且真实 Chrome 实测证明门控版本会让 ADR-062 收益归零)——  本身正确;
+ * 2. 转换器把表达不出来的 glob **兜底成 `*://* / *`** —— 单独看「只是放宽」;
+ * 3. `desiredRegistrations()` 把两者**组合**起来 → `matches: ['*://* / *']`
+ *    + 一张无条件生效的滤镜表 = **用户配一条 `*.baidu.*`,全网首帧变灰。**
+ *
+ * 每一层单独测都是绿的;缺陷只在组合处可见。转换器单测只验转换,
+ * reconcile 单测历来只喂**精确** glob,于是这个状态
+ * **从未被任何门禁驱动到**。修掉第 2 步之后,必须留一条
+ * **跨越该接缝**的机械断言,否则下次有人「顺手给降级加个兜底」时,
+ * 同样的缺陷会以同样的方式重现 —— 而且同样不会被发现。
+ *
+ * ## 为什么是 throw 而不是静默过滤
+ *
+ * 静默过滤会把「转换器出了个不该出的 pattern」变成一条**无声的**
+ * INV-3 缺口(该组规则悄悄不注册了)。而 throw 会在单测里当场炸 ——
+ * 本函数是纯函数且全部输入来自本地设置,生产环境走到这里意味着
+ * 代码被改坏了,不是用户输入异常。`reconcile()` 的调用点有 try/catch
+ * (见下方),所以即使在生产炸了,也只是记一条 error、本轮 reconcile
+ * 失败,而**不会**让 service worker 崩溃。
+ *
+ * DESIGN.md §1 匹配语义第 4 条(「无规则命中 → 不套滤镜」)与 INV-1 是
+ * 这条不变式的依据。
+ */
+export function assertNoUnintendedAllUrls(
+  registration: Registration,
+  sourceGlobs: readonly string[],
+): void {
+  if (!registration.matches.includes(ALL_URLS_PATTERN)) return;
+  if (isIntentionallyAllUrls(sourceGlobs)) return;
+  throw new Error(
+    `[ccf] 注册 ${registration.id} 的 matches 含 ${ALL_URLS_PATTERN},` +
+      `但源 glob ${JSON.stringify(sourceGlobs)} 中没有任何一个本身匹配任意 host。` +
+      '这会让一条规则给全网的首帧上色(违反 DESIGN.md §1 匹配语义第 4 条与 INV-1)。' +
+      '表达不出来的 glob 必须返回 inexpressible 而不是兜底成全网 —— ' +
+      '见 match-pattern.ts 的 MatchPatternConversion.inexpressible。',
+  );
+}
+
+/**
  * **期望注册集** —— 当前 settings 的纯函数(幂等性的来源)。
  *
  * 1. INV-8 / ADR-027:主开关 OFF → 空集(见文件头)。
@@ -163,8 +219,13 @@ export function isOwnRegistrationId(id: string): boolean {
  * ⚠️ **被遮蔽的规则(ADR-032 / INV-6)仍然参与注册。**
  * 原因:遮蔽是**按 host** 判定的(`shadowedFlags`),而注册是**按组**的;
  * 一条规则对某个 host 被遮蔽,对另一个 host 可能正是赢家。
- * 注册多一点是安全的(超集,见 `match-pattern.ts`),少一点会破 INV-3。
  * 真正的「谁赢」由 JS 路径的 `resolveRule` 判定 —— 它才是权威(INV-6)。
+ *
+ * 📌 这里「注册多一点」的代价**不是零**(本轮更正):预生成 CSS 是裸 `html`、
+ * 无条件生效,所以多匹配进来的站点**会有一个已上色的首帧**。
+ * 但本条的多匹配是**同一组内的 glob 合并**,每个 glob 仍只匹配它自己该匹配的
+ * host —— 合并不扩大任何单条 glob 的匹配集,故这里确实无额外代价。
+ * 会扩大匹配集的是 `match-pattern.ts` 的放宽,那里已被限定为**有界**放宽。
  *
  * ⚠️ **`intensity === 0` 的规则同样注册。** 它在视觉上等价于恒等变换,
  * 看似可以省掉,但省掉会让「用户把强度从 0 调到 50」变成
@@ -201,17 +262,25 @@ export function desiredRegistrations(
   const result: Registration[] = [];
   for (const [id, group] of groups) {
     const matches = globsToMatchPatterns(group.globs);
-    // 全部 glob 都非法 → 无可注册的 pattern。Chrome 会拒绝 matches 为空的
-    // 注册(抛错),而抛错会让整批 register 失败、连带好的那些也装不上。
+    // 全部 glob 都非法(`invalid`)或都没有有界超集(`inexpressible`)
+    // → 无可注册的 pattern。Chrome 会拒绝 matches 为空的注册(抛错),
+    // 而抛错会让整批 register 失败、连带好的那些也装不上。
+    //
+    // ⚠️ `inexpressible` 落到这里是**刻意的**:该组规则不走声明式首帧路径,
+    // 由 JS 路径 + ADR-060 快路径承接。替代方案(兜底成全网)会给整个
+    // 互联网的首帧上色 —— 见 match-pattern.ts 的 inexpressible 论证。
     if (matches.length === 0) continue;
-    result.push({
+    const registration: Registration = {
       id,
       matches,
       css: [filterCssFilePath(group.mode, group.intensity)],
       runAt: 'document_start',
       allFrames: false,
       persistAcrossSessions: true,
-    });
+    };
+    // 🔴 跨越 converter × reconcile 接缝的组合不变式(见该函数的注释)。
+    assertNoUnintendedAllUrls(registration, group.globs);
+    result.push(registration);
   }
 
   return result.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -338,8 +407,14 @@ export interface ReconcileResult {
  * **顺序是有意的**:先 `register`/`update`(把该有的装上),
  * 再 `unregister`(把不该有的拆掉)。反过来会在两者之间留一个
  * 「旧的已拆、新的未装」的窗口。按此顺序,窗口期内最坏情况是
- * **多**一条注册(安全,见 `match-pattern.ts` 的超集论证),
- * 而不是**少**一条(破 INV-3)。
+ * **多**一条注册,而不是**少**一条(后者破 INV-3)。
+ *
+ * 📌 「多一条」在这里为何可接受(本轮更正了旧表述):多出来的那条是
+ * **上一版的同组注册**(同一批用户已配置的站点,只是 mode/intensity 旧),
+ * 窗口期为两次 await 之间。代价是该窗口内导航到这些站点可能拿到旧强度的
+ * 首帧 —— 一个颜色值的短暂偏差,**不是**给未配置站点上色。
+ * (旧注释引用 `match-pattern.ts` 的「超集无可观察影响」论证,
+ * 那个论证的前提已被证伪并更正,见该文件头。)
  *
  * 📌 `forceRebuild` 下只能先拆后装(id 相同,不拆无法装),
  * 那是 ADR-065 的更新恢复路径 —— 此时磁盘上的注册**本就已被 Chrome 清除**,
