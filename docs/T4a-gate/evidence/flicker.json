@@ -4,105 +4,22 @@
     {
       "github": {
         "off": {
-          "frames": 366,
-          "colorFrames": 364,
+          "frames": 259,
+          "colorFrames": 257,
           "worst": 0.0277
         },
         "coldCache": {
-          "frames": 195,
+          "frames": 180,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 178,
+          "frames": 152,
           "colorFrames": 0,
           "worst": 0
         },
         "restart": {
-          "frames": 208,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 185,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      },
-      "wikipedia": {
-        "off": {
-          "frames": 112,
-          "colorFrames": 111,
-          "worst": 0.0378
-        },
-        "coldCache": {
-          "frames": 86,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 74,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 37,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 105,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      },
-      "hn": {
-        "off": {
-          "frames": 3,
-          "colorFrames": 2,
-          "worst": 0.0228
-        },
-        "coldCache": {
-          "frames": 2,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 3,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 3,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 2,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      }
-    },
-    {
-      "github": {
-        "off": {
-          "frames": 494,
-          "colorFrames": 492,
-          "worst": 0.0208
-        },
-        "coldCache": {
-          "frames": 103,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 174,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 209,
+          "frames": 197,
           "colorFrames": 0,
           "worst": 0
         },
@@ -114,39 +31,39 @@
       },
       "wikipedia": {
         "off": {
-          "frames": 101,
-          "colorFrames": 100,
-          "worst": 0.0376
+          "frames": 146,
+          "colorFrames": 145,
+          "worst": 0.3323
         },
         "coldCache": {
-          "frames": 86,
+          "frames": 92,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 78,
+          "frames": 88,
           "colorFrames": 0,
           "worst": 0
         },
         "restart": {
-          "frames": 32,
+          "frames": 25,
           "colorFrames": 0,
           "worst": 0
         },
         "hot": {
-          "frames": 99,
+          "frames": 103,
           "colorFrames": 0,
           "worst": 0
         }
       },
       "hn": {
         "off": {
-          "frames": 5,
+          "frames": 4,
           "colorFrames": 3,
           "worst": 0.0228
         },
         "coldCache": {
-          "frames": 4,
+          "frames": 3,
           "colorFrames": 0,
           "worst": 0
         },
@@ -170,44 +87,44 @@
     {
       "github": {
         "off": {
-          "frames": 363,
-          "colorFrames": 361,
-          "worst": 0.0273
+          "frames": 395,
+          "colorFrames": 393,
+          "worst": 0.0276
         },
         "coldCache": {
-          "frames": 174,
+          "frames": 188,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 146,
+          "frames": 180,
           "colorFrames": 0,
           "worst": 0
         },
         "restart": {
-          "frames": 225,
+          "frames": 215,
           "colorFrames": 0,
           "worst": 0
         },
         "hot": {
-          "frames": 184,
+          "frames": 182,
           "colorFrames": 0,
           "worst": 0
         }
       },
       "wikipedia": {
         "off": {
-          "frames": 114,
-          "colorFrames": 112,
+          "frames": 117,
+          "colorFrames": 115,
           "worst": 0.0379
         },
         "coldCache": {
-          "frames": 86,
+          "frames": 84,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 96,
+          "frames": 80,
           "colorFrames": 0,
           "worst": 0
         },
@@ -217,7 +134,7 @@
           "worst": 0
         },
         "hot": {
-          "frames": 107,
+          "frames": 93,
           "colorFrames": 0,
           "worst": 0
         }
@@ -229,7 +146,7 @@
           "worst": 0.0228
         },
         "coldCache": {
-          "frames": 4,
+          "frames": 3,
           "colorFrames": 0,
           "worst": 0
         },
@@ -239,7 +156,7 @@
           "worst": 0
         },
         "restart": {
-          "frames": 2,
+          "frames": 3,
           "colorFrames": 0,
           "worst": 0
         },
@@ -253,95 +170,12 @@
     {
       "github": {
         "off": {
-          "frames": 513,
-          "colorFrames": 510,
-          "worst": 0.0277
+          "frames": 339,
+          "colorFrames": 338,
+          "worst": 0.0276
         },
         "coldCache": {
-          "frames": 179,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 163,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 200,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 184,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      },
-      "wikipedia": {
-        "off": {
-          "frames": 97,
-          "colorFrames": 96,
-          "worst": 0.0376
-        },
-        "coldCache": {
-          "frames": 21,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 82,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 33,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 88,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      },
-      "hn": {
-        "off": {
-          "frames": 4,
-          "colorFrames": 2,
-          "worst": 0.0228
-        },
-        "coldCache": {
-          "frames": 2,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 3,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 3,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 3,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      }
-    },
-    {
-      "github": {
-        "off": {
-          "frames": 322,
-          "colorFrames": 319,
-          "worst": 0.0277
-        },
-        "coldCache": {
-          "frames": 189,
+          "frames": 192,
           "colorFrames": 0,
           "worst": 0
         },
@@ -351,7 +185,90 @@
           "worst": 0
         },
         "restart": {
-          "frames": 209,
+          "frames": 205,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "hot": {
+          "frames": 191,
+          "colorFrames": 0,
+          "worst": 0
+        }
+      },
+      "wikipedia": {
+        "off": {
+          "frames": 94,
+          "colorFrames": 92,
+          "worst": 0.0376
+        },
+        "coldCache": {
+          "frames": 87,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "newTab": {
+          "frames": 98,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "restart": {
+          "frames": 31,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "hot": {
+          "frames": 106,
+          "colorFrames": 0,
+          "worst": 0
+        }
+      },
+      "hn": {
+        "off": {
+          "frames": 4,
+          "colorFrames": 3,
+          "worst": 0.0228
+        },
+        "coldCache": {
+          "frames": 2,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "newTab": {
+          "frames": 2,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "restart": {
+          "frames": 3,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "hot": {
+          "frames": 2,
+          "colorFrames": 0,
+          "worst": 0
+        }
+      }
+    },
+    {
+      "github": {
+        "off": {
+          "frames": 473,
+          "colorFrames": 471,
+          "worst": 0.0276
+        },
+        "coldCache": {
+          "frames": 179,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "newTab": {
+          "frames": 172,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "restart": {
+          "frames": 204,
           "colorFrames": 0,
           "worst": 0
         },
@@ -363,35 +280,118 @@
       },
       "wikipedia": {
         "off": {
-          "frames": 104,
-          "colorFrames": 101,
-          "worst": 0.0376
+          "frames": 115,
+          "colorFrames": 114,
+          "worst": 0.0378
         },
         "coldCache": {
-          "frames": 87,
+          "frames": 102,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 94,
+          "frames": 84,
           "colorFrames": 0,
           "worst": 0
         },
         "restart": {
-          "frames": 36,
+          "frames": 34,
           "colorFrames": 0,
           "worst": 0
         },
         "hot": {
-          "frames": 87,
+          "frames": 103,
           "colorFrames": 0,
           "worst": 0
         }
       },
       "hn": {
         "off": {
-          "frames": 5,
+          "frames": 4,
           "colorFrames": 3,
+          "worst": 0.0228
+        },
+        "coldCache": {
+          "frames": 3,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "newTab": {
+          "frames": 4,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "restart": {
+          "frames": 3,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "hot": {
+          "frames": 2,
+          "colorFrames": 0,
+          "worst": 0
+        }
+      }
+    },
+    {
+      "github": {
+        "off": {
+          "frames": 290,
+          "colorFrames": 288,
+          "worst": 0.0276
+        },
+        "coldCache": {
+          "frames": 186,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "newTab": {
+          "frames": 172,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "restart": {
+          "frames": 207,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "hot": {
+          "frames": 183,
+          "colorFrames": 0,
+          "worst": 0
+        }
+      },
+      "wikipedia": {
+        "off": {
+          "frames": 115,
+          "colorFrames": 114,
+          "worst": 0.0378
+        },
+        "coldCache": {
+          "frames": 101,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "newTab": {
+          "frames": 82,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "restart": {
+          "frames": 32,
+          "colorFrames": 0,
+          "worst": 0
+        },
+        "hot": {
+          "frames": 101,
+          "colorFrames": 0,
+          "worst": 0
+        }
+      },
+      "hn": {
+        "off": {
+          "frames": 3,
+          "colorFrames": 2,
           "worst": 0.0228
         },
         "coldCache": {
@@ -405,7 +405,7 @@
           "worst": 0
         },
         "restart": {
-          "frames": 4,
+          "frames": 2,
           "colorFrames": 0,
           "worst": 0
         },
