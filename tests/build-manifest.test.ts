@@ -21,6 +21,18 @@ const MANIFEST = resolve(OUT_DIR, 'manifest.json');
 
 const built = existsSync(MANIFEST);
 
+/**
+ * 读产物 manifest。
+ *
+ * 独立于下面 describe 块内的那个 `manifest` 常量:那个在 `built === false`
+ * 时是空对象,而新增的 T4a 门禁块需要在自己的作用域里拿到它。
+ */
+function manifestOf(): Manifest {
+  return built
+    ? (JSON.parse(readFileSync(MANIFEST, 'utf8')) as Manifest)
+    : ({} as Manifest);
+}
+
 interface Manifest {
   manifest_version: number;
   host_permissions?: string[];
@@ -33,7 +45,9 @@ interface Manifest {
     run_at?: string;
     all_frames?: boolean;
     js?: string[];
+    css?: string[];
   }>;
+  web_accessible_resources?: unknown[];
 }
 
 describe.skipIf(!built)(
@@ -53,6 +67,13 @@ describe.skipIf(!built)(
 
     it('permissions 含 storage,且**不含** 任何 sync 相关权限(ADR-010)', () => {
       expect(manifest.permissions).toContain('storage');
+    });
+
+    it("🔴 ADR-062 前提 · permissions 含 'scripting'", () => {
+      // 漏了这条,声明式注册的所有调用都失败 —— 而失败表现是
+      // 「滤镜静默不生效」,不是一条报错。必须在产物上核对(ADR-038:
+      // dev manifest 的权限集与生产不同,不作数)。
+      expect(manifest.permissions).toContain('scripting');
     });
 
     it('🔴 content script 的 run_at 为 document_start(INV-3 的前提)', () => {
@@ -99,6 +120,100 @@ describe.skipIf(!built)(
     });
   },
 );
+
+// ───────────────────────────────────────────────────────────────────────────
+// T4a:声明式注册所需的产物门禁(ADR-062 / ADR-063)。
+//
+// 为什么必须在**产物**上验:注册的 `css` 字段是扩展包内的相对路径。
+// 源码里 `public/filters/gray-100.css` 存在,不等于产物里
+// `.output/chrome-mv3/filters/gray-100.css` 存在 —— 中间隔着 WXT 的
+// public 目录拷贝。拷贝链路一断,注册会在运行时静默失败
+// (Chrome 对不存在的 css 路径报 "Could not load file"),
+// 而源码侧的单测照样全绿。这正是 §8 第 8 条所警告的那类风险。
+// ───────────────────────────────────────────────────────────────────────────
+describe.skipIf(!built)('T4a · 预生成滤镜 CSS 进了产物(ADR-062/063)', () => {
+  const filtersDir = resolve(OUT_DIR, 'filters');
+
+  it('🔴 产物内存在 filters/ 目录', () => {
+    expect(
+      existsSync(filtersDir),
+      '产物缺少 filters/ —— registerContentScripts 的 css 路径会在运行时失败',
+    ).toBe(true);
+  });
+
+  it('🔴 产物内恰好 404 个滤镜 CSS(4 模式 × 101 档)', () => {
+    const files = readdirSync(filtersDir).filter((f) => f.endsWith('.css'));
+    expect(files).toHaveLength(404);
+  });
+
+  it('🔴 DESIGN.md §6 T4a 示例路径在产物内可解析(filters/gray-100.css)', () => {
+    expect(existsSync(resolve(filtersDir, 'gray-100.css'))).toBe(true);
+  });
+
+  it('🔴 产物里的滤镜 CSS 与源码逐字节一致(public 拷贝链路没改内容)', () => {
+    for (const name of ['gray-100.css', 'redgreen-50.css', 'blueyellow-0.css']) {
+      const built = readFileSync(resolve(filtersDir, name), 'utf8');
+      const source = readFileSync(
+        resolve(ROOT, 'public/filters', name),
+        'utf8',
+      );
+      expect(built, `产物 filters/${name} 与源码不一致`).toBe(source);
+    }
+  });
+
+  it('🔴 ADR-063 · 滤镜 CSS **不在** web_accessible_resources(减少指纹暴露面)', () => {
+    // 这些文件由浏览器自己读取并注入,不经页面 fetch。放进去反而给站点
+    // 一个探测扩展存在与用户滤镜偏好的接口。
+    const war = JSON.stringify(manifestOf().web_accessible_resources ?? []);
+    expect(war).not.toContain('filters/');
+  });
+
+  it('🔴 产物里的滤镜 CSS 选择器锁定在 html[data-ccf-on](INV-1 最脆弱点)', () => {
+    const offenders: string[] = [];
+    for (const name of readdirSync(filtersDir)) {
+      const text = readFileSync(resolve(filtersDir, name), 'utf8');
+      if (text.includes('body[data-ccf-on]')) offenders.push(name);
+      // 首帧时 CSS 变量尚未被 JS 赋值 → filter 解析为无效值 → 等于没有滤镜。
+      if (text.includes('var(--ccf-filter)')) offenders.push(`${name}(用了变量)`);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe.skipIf(!built)('T4a · service worker 含声明式注册逻辑(ADR-062/065)', () => {
+  const swSource = (): string => {
+    const sw = manifestOf().background?.service_worker;
+    if (sw === undefined) return '';
+    const path = resolve(OUT_DIR, sw);
+    if (!existsSync(path)) return '';
+    let text = readFileSync(path, 'utf8');
+    // WXT 的 SW 可能是一个 import 真实 chunk 的壳;把被 import 的本地
+    // chunk 内容一并拼上,否则断言会在壳上落空(假绿)。
+    for (const m of text.matchAll(/from\s*["'](\.[^"']+)["']/g)) {
+      const dep = resolve(dirname(path), m[1] as string);
+      if (existsSync(dep)) text += readFileSync(dep, 'utf8');
+    }
+    return text;
+  };
+
+  it('🔴 产物的 SW 调用 registerContentScripts(ADR-062 的主路径)', () => {
+    expect(swSource()).toContain('registerContentScripts');
+  });
+
+  it('🔴 产物的 SW 注册 onInstalled 监听(ADR-065 强制项)', () => {
+    // 扩展更新会清除动态注册,漏了 onInstalled 会导致每次更新后
+    // 滤镜静默失效 —— 这是 ADR-065 把重建列为强制项的理由。
+    expect(swSource()).toContain('onInstalled');
+  });
+
+  it('产物的 SW 注册 onStartup 监听(廉价的双重保险)', () => {
+    expect(swSource()).toContain('onStartup');
+  });
+
+  it('🔴 产物的 SW 写入 persistAcrossSessions 语义(拼写以源码为准)', () => {
+    expect(swSource()).toContain('persistAcrossSessions');
+  });
+});
 
 describe('构建产物目录约定', () => {
   it('WXT 的产物目录是 .output/chrome-mv3/,不是 dist/', () => {

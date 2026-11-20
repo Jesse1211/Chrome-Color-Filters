@@ -1,0 +1,315 @@
+{
+  "runs": 5,
+  "all": [
+    {
+      "tab0": {
+        "url": "https://en.wikipedia.org/wiki/CSS",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab1": {
+        "url": "https://github.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab2": {
+        "url": "https://news.ycombinator.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab3": {
+        "url": "https://en.wikipedia.org/wiki/HTML",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab4": {
+        "url": "https://en.wikipedia.org/wiki/JavaScript",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab5": {
+        "url": "https://github.com/features",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab6": {
+        "url": "https://news.ycombinator.com/newest",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab7": {
+        "url": "https://en.wikipedia.org/wiki/Web_browser",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab8": {
+        "url": "https://en.wikipedia.org/wiki/Cascading_Style_Sheets",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab9": {
+        "url": "https://github.com/about",
+        "frames": 163,
+        "colorFrames": 0,
+        "worst": 0
+      }
+    },
+    {
+      "tab0": {
+        "url": "https://en.wikipedia.org/wiki/CSS",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab1": {
+        "url": "https://github.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab2": {
+        "url": "https://news.ycombinator.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab3": {
+        "url": "https://en.wikipedia.org/wiki/HTML",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab4": {
+        "url": "https://en.wikipedia.org/wiki/JavaScript",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab5": {
+        "url": "https://github.com/features",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab6": {
+        "url": "https://news.ycombinator.com/newest",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab7": {
+        "url": "https://en.wikipedia.org/wiki/Web_browser",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab8": {
+        "url": "https://en.wikipedia.org/wiki/Cascading_Style_Sheets",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab9": {
+        "url": "https://github.com/about",
+        "frames": 187,
+        "colorFrames": 0,
+        "worst": 0
+      }
+    },
+    {
+      "tab0": {
+        "url": "https://en.wikipedia.org/wiki/CSS",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab1": {
+        "url": "https://github.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab2": {
+        "url": "https://news.ycombinator.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab3": {
+        "url": "https://en.wikipedia.org/wiki/HTML",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab4": {
+        "url": "https://en.wikipedia.org/wiki/JavaScript",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab5": {
+        "url": "https://github.com/features",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab6": {
+        "url": "https://news.ycombinator.com/newest",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab7": {
+        "url": "https://en.wikipedia.org/wiki/Web_browser",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab8": {
+        "url": "https://en.wikipedia.org/wiki/Cascading_Style_Sheets",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab9": {
+        "url": "https://github.com/about",
+        "frames": 171,
+        "colorFrames": 0,
+        "worst": 0
+      }
+    },
+    {
+      "tab0": {
+        "url": "https://en.wikipedia.org/wiki/CSS",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab1": {
+        "url": "https://github.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab2": {
+        "url": "https://news.ycombinator.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab3": {
+        "url": "https://en.wikipedia.org/wiki/HTML",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab4": {
+        "url": "https://en.wikipedia.org/wiki/JavaScript",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab5": {
+        "url": "https://github.com/features",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab6": {
+        "url": "https://news.ycombinator.com/newest",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab7": {
+        "url": "https://en.wikipedia.org/wiki/Web_browser",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab8": {
+        "url": "https://en.wikipedia.org/wiki/Cascading_Style_Sheets",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab9": {
+        "url": "https://github.com/about",
+        "frames": 160,
+        "colorFrames": 0,
+        "worst": 0
+      }
+    },
+    {
+      "tab0": {
+        "url": "https://en.wikipedia.org/wiki/CSS",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab1": {
+        "url": "https://github.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab2": {
+        "url": "https://news.ycombinator.com/",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab3": {
+        "url": "https://en.wikipedia.org/wiki/HTML",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab4": {
+        "url": "https://en.wikipedia.org/wiki/JavaScript",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab5": {
+        "url": "https://github.com/features",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab6": {
+        "url": "https://news.ycombinator.com/newest",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab7": {
+        "url": "https://en.wikipedia.org/wiki/Web_browser",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab8": {
+        "url": "https://en.wikipedia.org/wiki/Cascading_Style_Sheets",
+        "frames": 0,
+        "colorFrames": 0,
+        "worst": 0
+      },
+      "tab9": {
+        "url": "https://github.com/about",
+        "frames": 211,
+        "colorFrames": 0,
+        "worst": 0
+      }
+    }
+  ]
+}
