@@ -84,45 +84,19 @@ export function usePopupSettings({
   }, [repository]);
 
   /**
-   * 🔴 **popup 拆除前把防抖队列强制落盘**(ADR-008 / INV-6 的真实保障)。
+   * 🔴 **这里曾经有一个「popup 拆除前 flush 防抖队列」的 effect —— 已删除。**
    *
-   * `reorderRulesDebounced` 有 300ms 防抖窗口(`MIN_DEBOUNCE_MS`)。
-   * 而 Chrome 工具栏 popup 的生命周期极短 —— **焦点一离开就被销毁**:
-   * 拖完一条规则后立刻点击页面或按 Esc,文档在 300ms 内被拆掉,
-   * 待执行的 `setTimeout` 随之消失,重排**静默丢失**。
-   * 彼时乐观草稿已经把新顺序画出来了,用户不会收到任何提示 ——
-   * 正是 ADR-046 立论时点名的那种最糟情况(「改了但没存上还不知道」);
-   * 而 ADR-008 让列表顺序**就是**优先级,丢一次重排即改变实际生效的滤镜(INV-6)。
+   * ADR-061:
+   * > 上一轮的「关闭时强制 flush」**已被证伪** —— popup 销毁时异步存储调用
+   * > 来不及完成。**消除那 300ms,而不是抢救它。**
    *
-   * 故在 `pagehide` / `visibilitychange(hidden)` 上调用 T3 为此专门留出的
-   * `repository.flush()`。两个事件都挂:`pagehide` 覆盖文档拆除,
-   * `visibilitychange` 覆盖「焦点移开但尚未拆除」的更早时机 ——
-   * `flush()` 在队列为空时是 no-op,重复触发无副作用。
+   * `chrome.storage.local` 是**跨进程 IPC**:`pagehide` 里发出的写请求在
+   * 文档被拆掉时还在飞,浏览器进程那一侧的回调永远不会回到一个已经不存在的
+   * JS 上下文。拆除时补写在原理上就救不回来。
    *
-   * 🔴 走**仓储层**而非直接写 `chrome.storage.*`(INV-14 / ADR-055):
-   * 锁定强制点在仓储层,`flush()` 内部仍然经 `replaceRules` 做锁定检查,
-   * 绕过去就会把锁变成假锁。
+   * 真正的解法在下面的 `reorderRules` —— **松手即写,根本不存在待落盘的队列**。
+   * 回归测试见 `__tests__/reorder-immediate.test.tsx`(异步 IPC + 文档销毁)。
    */
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-
-    const flush = () => {
-      void repository.flush();
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') flush();
-    };
-
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      // 组件卸载本身也是一次拆除(测试中的 cleanup、React 重挂载)。
-      flush();
-    };
-  }, [repository]);
 
   const apply = useCallback(
     async (
@@ -151,12 +125,27 @@ export function usePopupSettings({
   );
 
   /**
-   * 重排走**防抖**版本(T3 的 `reorderRulesDebounced`)——
-   * 拖拽是「列表侧的连续操作」,正是该方法的适用范围。
+   * 🔴 **重排:松手即写入,不走防抖**(ADR-061 / ADR-008 / INV-6)。
+   *
+   * 走 `replaceRules`(**无延迟**),不是 `reorderRulesDebounced`(300ms 窗口)。
+   *
+   * > ADR-061:防抖是为**连续高频事件**设计的,那是滑块的特征 —— 但滑块已改走
+   * > ADR-049 预览通道、根本不写存储,防抖因此**失去了服务对象**。
+   * > 拖拽松手是**一次性动作**,不需要防抖。
+   *
+   * 真机实测(3/3 复现):重排后 300ms 内 popup 关闭(Chrome 弹窗一失焦即销毁)
+   * 会**静默丢失顺序**。而 ADR-008 让列表顺序**就是**优先级,
+   * 丢一次重排即静默改变实际生效的滤镜(违反 INV-6),且用户不会收到任何提示。
+   *
+   * ⚠️ **仍然全程经仓储层**(INV-14 / ADR-055):`replaceRules` 内部照常做锁定
+   * 检查与规则校验。消除的只是**防抖延迟**,不是任何一层守卫 ——
+   * 绕过仓储层直接写 `chrome.storage.*` 会把锁变成假锁。
+   *
+   * ⚠️ 仓储层的 `reorderRulesDebounced` / `flush()` **保留不动**(向后兼容):
+   * 本次改的是**调用方的选择**,不是 T3 的 API。
    */
   const reorderRules = useCallback(
-    (rules: readonly FilterRule[]) =>
-      apply(() => repository.reorderRulesDebounced(rules)),
+    (rules: readonly FilterRule[]) => apply(() => repository.replaceRules(rules)),
     [apply, repository],
   );
 

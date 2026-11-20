@@ -73,14 +73,17 @@ const seeded = (rules: { pattern: string; mode?: string; intensity?: number }[])
   },
 });
 
-/** 防抖落盘用的假调度器:立即执行,免得测试等 300ms。 */
-const immediate = (fn: () => void) => {
-  fn();
-  return 0;
-};
-
+/**
+ * 本文件统一用**真实默认调度器**的仓储。
+ *
+ * 🔴 上一轮这里注入过一个 `immediate` 调度器「免得测试等 300ms」——
+ * 那恰恰把 ADR-061 的缺陷替身化掉了:重排在替身下立即落盘,
+ * 于是 gate 条款「拖拽重排后顺序立即生效并持久化」被**替身证明为真**,
+ * 而真实时序下它是假的。ADR-061 消除防抖后,重排**本就不经调度器**,
+ * 这个替身既无必要、又只会继续掩盖问题,故删除。
+ */
 function makeRepo(area: MemoryStorageArea) {
-  return new SettingsRepository({ area, scheduler: immediate });
+  return new SettingsRepository({ area });
 }
 
 const persisted = (area: MemoryStorageArea) =>
@@ -155,20 +158,33 @@ describe('ADR-008 / INV-6 · 拖拽重排 → 持久化 → 优先级随之改�
 });
 
 /**
- * 🔴 **防抖窗口内 popup 被关掉 —— 重排不得丢失**(ADR-008 / INV-6)。
+ * 🔴 **重排后立刻关闭 popup —— 顺序不得丢失**(ADR-008 / ADR-061 / INV-6)。
  *
- * 这一组**刻意不用 `immediate` 调度器**。上面那两个用例把 300ms 防抖换成了
- * 「立即执行」,于是「落盘」在断言时已经发生,`gate` 条款
- * 「拖拽重排后顺序立即生效并持久化」被**替身证明为真**,而真实时序下它是假的:
- * Chrome 工具栏 popup 焦点一离开就销毁,拖完 300ms 内点一下页面,
- * 挂起的 `setTimeout` 随文档一起消失,重排静默丢失。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * ## 本组的历史与现状
  *
- * 这里用 `deferred` 调度器把计时器的触发权**收到测试手里**并且**永不触发**,
- * 等价于「窗口尚未到点,popup 先被拆了」—— 唯一的出路是拆除路径主动
- * `repository.flush()`。
+ * **上一轮**这组用例的前提是「重排走 300ms 防抖」,于是它先断言
+ * 「刚松手时存储里还是旧顺序、且有一个挂起的计时器」,再验证拆除路径
+ * (`pagehide` / `visibilitychange`)主动 `flush()` 能把它救回来。
+ *
+ * **那个方案已被 ADR-061 证伪** —— 真机上 popup 销毁时异步存储调用来不及完成,
+ * 「拆除时再补写」在原理上救不回来。产品负责人拍板的解法是
+ * **消除那 300ms,而不是抢救它**:重排松手即写入。
+ *
+ * 因此本组的**前提**随之反转(断言的**保障**一字未弱,只增不减):
+ * - 旧前提「松手时存储仍是旧顺序 + 有挂起计时器」→ 新前提
+ *   **「松手后存储已是新顺序 + 没有任何挂起计时器」**(更强)。
+ * - 旧目标「拆除事件后新顺序已落盘」→ **原样保留**,且不再依赖任何拆除事件。
+ *
+ * ⚠️ 注意:本组用的 `MemoryStorageArea` 在**微任务**就 resolve,
+ * 它**抓不到** ADR-061 那个真实缺陷(这正是上一轮的教训)。
+ * 真正有牙的销毁场景回归测试在 `reorder-immediate.test.tsx` ——
+ * 那里的存储在**后续宏任务**才 resolve,且文档可被真正「销毁」。
+ * 本组只负责守住「拆除事件不会反过来破坏已落盘的顺序」。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
-describe('ADR-008 / INV-6 · 防抖窗口内关闭 popup,重排仍须落盘', () => {
-  /** 真·延迟调度器:登记回调但**永不执行**,模拟「窗口还没到点」。 */
+describe('ADR-061 / INV-6 · 重排后立刻关闭 popup,新顺序必须已落盘', () => {
+  /** 真·延迟调度器:登记回调但**永不执行**。ADR-061 下它应当一次都不被调用。 */
   function deferredScheduler() {
     const queued: (() => void)[] = [];
     return {
@@ -176,14 +192,13 @@ describe('ADR-008 / INV-6 · 防抖窗口内关闭 popup,重排仍须落盘', ()
         queued.push(fn);
         return 0;
       },
-      /** 窗口确实到点时才会跑到的那条路 —— 本组用例刻意不调用。 */
       get pendingCount() {
         return queued.length;
       },
     };
   }
 
-  it('拖拽后在 300ms 窗口内关闭 popup(pagehide),新顺序已落盘', async () => {
+  it('拖拽松手即落盘 —— 随后 pagehide 关闭 popup,存储仍是新顺序', async () => {
     const area = new MemoryStorageArea(
       seeded([
         { pattern: '*.com', mode: 'BlueYellow', intensity: 60 },
@@ -206,30 +221,31 @@ describe('ADR-008 / INV-6 · 防抖窗口内关闭 popup,重排仍须落盘', ()
 
     // 乐观草稿已经画出新顺序……
     expect(screen.getByTestId('rule-pattern-0').textContent).toBe('*.weibo.*');
-    // ……但防抖窗口还没到点,存储里仍是旧顺序。这正是危险窗口。
-    expect(timers.pendingCount).toBeGreaterThan(0);
-    expect(persisted(area).rules.map((r) => r.pattern)).toEqual(['*.com', '*.weibo.*']);
-
-    // popup 被关掉:焦点离开 → 文档拆除。计时器**不会**再触发。
-    await act(async () => {
-      window.dispatchEvent(new Event('pagehide'));
-      await Promise.resolve();
-    });
-
-    // 重排必须已经落盘,且优先级随之改变(INV-6)。
+    // 🔴 ……而且**存储里已经是新顺序了**(ADR-061:松手即写入),
+    //    并且**没有任何挂起的计时器** —— 那 300ms 的危险窗口已被消除。
     await waitFor(() => {
       expect(persisted(area).rules.map((r) => r.pattern)).toEqual([
         '*.weibo.*',
         '*.com',
       ]);
     });
+    expect(timers.pendingCount).toBe(0);
+
+    // popup 被关掉:焦点离开 → 文档拆除。不应改变任何已落盘的事实。
+    await act(async () => {
+      window.dispatchEvent(new Event('pagehide'));
+      await Promise.resolve();
+    });
+
+    // 顺序即优先级,首个命中者随之改变(INV-6)。
     const after = persisted(area);
+    expect(after.rules.map((r) => r.pattern)).toEqual(['*.weibo.*', '*.com']);
     expect(resolveActiveRule(after, 'https://news.weibo.com/')?.rule.pattern).toBe(
       '*.weibo.*',
     );
   });
 
-  it('焦点移开(visibilitychange → hidden)同样强制落盘', async () => {
+  it('键盘重排同样立即落盘 —— 随后 visibilitychange→hidden 不改变结果', async () => {
     const area = new MemoryStorageArea(
       seeded([{ pattern: 'a.com' }, { pattern: 'b.com' }, { pattern: 'c.com' }]),
     );
@@ -241,11 +257,16 @@ describe('ADR-008 / INV-6 · 防抖窗口内关闭 popup,重排仍须落盘', ()
     await act(async () => {
       fireEvent.keyDown(screen.getByTestId('rule-grip-2'), { key: 'ArrowUp' });
     });
-    expect(persisted(area).rules.map((r) => r.pattern)).toEqual([
-      'a.com',
-      'b.com',
-      'c.com',
-    ]);
+
+    // 🔴 ADR-061:无需任何拆除事件,键盘重排松手即已落盘。
+    await waitFor(() => {
+      expect(persisted(area).rules.map((r) => r.pattern)).toEqual([
+        'a.com',
+        'c.com',
+        'b.com',
+      ]);
+    });
+    expect(timers.pendingCount).toBe(0);
 
     const descriptor = Object.getOwnPropertyDescriptor(
       Document.prototype,
@@ -261,13 +282,12 @@ describe('ADR-008 / INV-6 · 防抖窗口内关闭 popup,重排仍须落盘', ()
         await Promise.resolve();
       });
 
-      await waitFor(() => {
-        expect(persisted(area).rules.map((r) => r.pattern)).toEqual([
-          'a.com',
-          'c.com',
-          'b.com',
-        ]);
-      });
+      // 拆除事件不得破坏已落盘的顺序。
+      expect(persisted(area).rules.map((r) => r.pattern)).toEqual([
+        'a.com',
+        'c.com',
+        'b.com',
+      ]);
     } finally {
       delete (document as unknown as Record<string, unknown>).visibilityState;
       if (descriptor) Object.defineProperty(Document.prototype, 'visibilityState', descriptor);

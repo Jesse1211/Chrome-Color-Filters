@@ -1,0 +1,153 @@
+/**
+ * `StorageArea` 的**异步** IPC 替身 —— 专为 ADR-061 的「销毁场景」回归测试而建。
+ *
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔴 **为什么必须有这个替身(上一轮的真实教训)。**
+ *
+ * `MemoryStorageArea` 的 `get`/`set` 返回**已 resolve 的 Promise** —— 回调在
+ * **微任务**就跑完。而 `chrome.storage.local` 是**跨进程 IPC**:调用返回后
+ * 要等浏览器进程回话,最快也落在**后续宏任务**。
+ *
+ * 这个差别正是上一轮「测试绿、真机红」的根因:上一轮的回归测试在 jsdom 里派发
+ * `pagehide`,但**文档仍存活、事件循环仍在转、内存存储在微任务即 resolve**,
+ * 于是「拆除时才补写」的方案在测试里总能跑完 —— 真机上 popup 销毁后那一串
+ * 微任务/宏任务根本不会被执行,写入永远到不了存储。
+ *
+ * 本替身因此做两件 `MemoryStorageArea` 做不到的事:
+ *
+ * 1. **`get`/`set` 在后续宏任务才 resolve**(默认经 `setTimeout(…, 0)`),
+ *    逼近真实 IPC 的时序。
+ * 2. **可被「销毁」**(`destroy()`)—— 销毁后任务队列停止推进,
+ *    所有**尚未发出**的调用永远不会 resolve、永远不会落盘。
+ *    这就是「popup 文档被拆、JS 上下文消失」在测试里的等价物。
+ *
+ * 判定「是否已落盘」用 `snapshot()`:它读的是**已完成**的 set 的结果,
+ * 不受挂起调用影响。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+import type {
+  StorageArea,
+  StorageChange,
+  StorageChangeListener,
+} from '../../storage/storage-area.js';
+import { STORAGE_AREA_NAME } from '../../storage/storage-area.js';
+
+function clone<T>(value: T): T {
+  if (value === undefined) return value;
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+export interface AsyncStorageAreaOptions {
+  /** IPC 往返的模拟延迟(ms)。0 = 下一个宏任务。 */
+  readonly latencyMs?: number;
+}
+
+/**
+ * 模拟 `chrome.storage.local` 的跨进程异步性,并可模拟 popup 文档被销毁。
+ */
+export class AsyncStorageArea implements StorageArea {
+  #data: Record<string, unknown>;
+  readonly #listeners = new Set<StorageChangeListener>();
+  readonly #latencyMs: number;
+
+  /** 文档是否已销毁。销毁后任务队列停止推进 —— 挂起的调用永不完成。 */
+  #destroyed = false;
+
+  /** 已完成的 `set` 次数(**不含**挂起中的)。 */
+  setCallCount = 0;
+
+  /** 已**发起**(未必完成)的 `set` 次数 —— 用于断言「有没有在同一轮发出写」。 */
+  setInvocationCount = 0;
+
+  /** 尚未 resolve 的调用数。 */
+  #inflight = 0;
+
+  constructor(
+    initial: Record<string, unknown> = {},
+    options: AsyncStorageAreaOptions = {},
+  ) {
+    this.#data = clone(initial);
+    this.#latencyMs = options.latencyMs ?? 0;
+  }
+
+  /** 已落盘的数据(只反映**已完成**的 set)。 */
+  snapshot(): Record<string, unknown> {
+    return clone(this.#data);
+  }
+
+  get inflightCount(): number {
+    return this.#inflight;
+  }
+
+  get destroyed(): boolean {
+    return this.#destroyed;
+  }
+
+  /**
+   * 销毁「popup 文档」—— 任务队列停止推进。
+   *
+   * 此后:
+   * - 所有**挂起中**的 `get`/`set` 永远不会 resolve,也不会改变已落盘数据;
+   * - 之后**新发起**的调用同样永远不会 resolve(JS 上下文已经没了)。
+   *
+   * 这是 Chrome 工具栏 popup 失焦即销毁的忠实模型:
+   * 「拆除时再补一次异步写」在这里**物理上不可能**成功 —— 与 ADR-061 认定的
+   * 「上一轮的关闭时 flush 已被证伪」一致。
+   */
+  destroy(): void {
+    this.#destroyed = true;
+  }
+
+  #later<T>(produce: () => T): Promise<T> {
+    this.#inflight += 1;
+    return new Promise<T>((resolve) => {
+      setTimeout(() => {
+        this.#inflight -= 1;
+        // 文档已销毁 → 这一轮宏任务在真机上根本不会被执行。
+        if (this.#destroyed) return;
+        resolve(produce());
+      }, this.#latencyMs);
+    });
+  }
+
+  get(keys: string | string[] | null): Promise<Record<string, unknown>> {
+    return this.#later(() => {
+      if (keys === null) return clone(this.#data);
+      const list = Array.isArray(keys) ? keys : [keys];
+      const out: Record<string, unknown> = {};
+      for (const k of list) {
+        if (k in this.#data) out[k] = clone(this.#data[k]);
+      }
+      return out;
+    });
+  }
+
+  set(items: Record<string, unknown>): Promise<void> {
+    this.setInvocationCount += 1;
+    return this.#later(() => {
+      this.setCallCount += 1;
+
+      const changes: Record<string, StorageChange> = {};
+      for (const [k, v] of Object.entries(items)) {
+        changes[k] = { oldValue: clone(this.#data[k]), newValue: clone(v) };
+        this.#data[k] = clone(v);
+      }
+
+      for (const listener of [...this.#listeners]) {
+        listener(changes, STORAGE_AREA_NAME);
+      }
+    });
+  }
+
+  addChangeListener(listener: StorageChangeListener): void {
+    this.#listeners.add(listener);
+  }
+
+  removeChangeListener(listener: StorageChangeListener): void {
+    this.#listeners.delete(listener);
+  }
+
+  get listenerCount(): number {
+    return this.#listeners.size;
+  }
+}
