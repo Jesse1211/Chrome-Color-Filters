@@ -8,7 +8,8 @@
       "injectedSvg": 0,
       "ccfNodes": 0,
       "sessionKeys": [],
-      "localKeys": []
+      "localKeys": [],
+      "everOn": false
     },
     "on": {
       "attr": true,
@@ -20,7 +21,8 @@
       "sessionKeys": [],
       "localKeys": [
         "__ccf_fp_github.com"
-      ]
+      ],
+      "everOn": true
     }
   },
   "wikipedia": {
@@ -32,7 +34,8 @@
       "injectedSvg": 0,
       "ccfNodes": 0,
       "sessionKeys": [],
-      "localKeys": []
+      "localKeys": [],
+      "everOn": false
     },
     "on": {
       "attr": true,
@@ -44,7 +47,8 @@
       "sessionKeys": [],
       "localKeys": [
         "__ccf_fp_en.wikipedia.org"
-      ]
+      ],
+      "everOn": true
     }
   },
   "hn": {
@@ -56,7 +60,8 @@
       "injectedSvg": 0,
       "ccfNodes": 0,
       "sessionKeys": [],
-      "localKeys": []
+      "localKeys": [],
+      "everOn": false
     },
     "on": {
       "attr": true,
@@ -68,7 +73,8 @@
       "sessionKeys": [],
       "localKeys": [
         "__ccf_fp_news.ycombinator.com"
-      ]
+      ],
+      "everOn": true
     }
   }
 }

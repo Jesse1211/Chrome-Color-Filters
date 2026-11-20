@@ -18,7 +18,7 @@ import '../src/injection/filter.css';
 
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { SettingsRepository } from '../src/storage/index.js';
-import { defaultSessionStore, runInjector } from '../src/injection/index.js';
+import { defaultFastPathStore, runInjector } from '../src/injection/index.js';
 
 /**
  * - `matches: ['<all_urls>']`(ADR-004)—— 规则匹配在领域层做(resolveRule),
@@ -44,11 +44,13 @@ export default defineContentScript({
 
     const { settled } = runInjector({
       target: document.documentElement,
-      // 🔴 只用 sessionStorage,**不升级到 localStorage** —— DESIGN.md §1:
-      // 宿主页面不属于本 BC,「只可观察,永不拥有」。按源且跨会话的
-      // localStorage 会让扩展在页面自己的源里持有一份持久记录,越界。
-      // 详见 src/injection/session-store.ts 头注释。
-      store: defaultSessionStore(),
+      // 🔴 ADR-060:宿主 origin 的 localStorage。这是 INV-3(零闪烁)
+      // **唯一可行**的同步通道 —— MV3 没有任何同步的扩展存储 API,而
+      // sessionStorage 活不过标签页(实测冷启动 6 次闪 3 次)。
+      // 这是对 DESIGN.md §1「永不拥有宿主页面」的窄口例外,隐私代价
+      // (站点 JS 能读到该记录)已记入 §4.1 并由产品负责人接受。
+      // 详见 src/injection/fast-path-store.ts 头注释。
+      store: defaultFastPathStore(),
       url: location.href,
       readSettings: () => repo.read(),
       // 🔴 INV-8 / ADR-027:主开关被关掉的那一刻就抹掉本 host 的快路径推测。

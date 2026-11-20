@@ -11,6 +11,7 @@ import {
 import {
   type FilterTarget,
   type SyncKeyValueStore,
+  currentFilterValue,
   decide,
   isFilterApplied,
   runInjector,
@@ -332,6 +333,162 @@ describe('🔴 INV-3 · 同步快路径（chrome.storage 异步性的解法）',
   });
 });
 
+// ─────────────────────────── ADR-060 ───────────────────────────
+
+describe('🔴 ADR-060 · 快路径必须跨「标签页 / 浏览器重启」存活（INV-3 冷启动）', () => {
+  /**
+   * 上一轮用 `sessionStorage`，它随标签页蒸发。于是
+   * 「浏览器重启后首访」与「新标签页首访」在 document_start 同步阶段
+   * **没有任何通道**能得知 (mode,intensity) —— 实测 6 次闪 3 次，
+   * 截图确认是完整渲染的未滤镜页面。ADR-060 改用宿主 origin 的
+   * `localStorage` 正是为了关掉这两格。
+   *
+   * 单测层把「存活性」建模为:**同一个 store 实例跨越两次独立的
+   * runInjector 调用**（= 跨标签页/跨重启），第二次必须同步命中。
+   * 这是 `sessionStorage` 做不到而 `localStorage` 做得到的那个差别。
+   */
+  it('🔴 新标签页首访同一 host —— 同步阶段即命中（sessionStorage 做不到）', async () => {
+    // 标签页 A:冷的，异步阶段回写缓存。
+    const store = makeStore();
+    const tabA = makeTarget();
+    const { fastPathHit: hitA, settled } = runInjector({
+      target: tabA,
+      store,
+      url: 'https://a.example.com/',
+      readSettings: async () => settingsWith({ rules: [GRAY_RULE] }),
+    });
+    expect(hitA, '首访本就无缓存可命中').toBe(false);
+    await settled;
+
+    // 标签页 B:全新的 target（新文档），但 origin 的 localStorage 还在。
+    const tabB = makeTarget();
+    const { fastPathHit: hitB } = runInjector({
+      target: tabB,
+      store,
+      url: 'https://a.example.com/',
+      readSettings: async () => settingsWith({ rules: [GRAY_RULE] }),
+    });
+    expect(hitB, '新标签页未同步命中 —— INV-3 在该场景下破裂').toBe(true);
+    expect(isFilterApplied(tabB)).toBe(true);
+  });
+
+  it('🔴 TTL 覆盖长间隔不访问的站点 —— 29 天后仍命中', () => {
+    const store = makeStore();
+    const t0 = Date.UTC(2026, 0, 1);
+    writeFastPath(store, 'a.example.com', true, { mode: 'Grayscale', intensity: 100 }, t0);
+
+    // 24 小时的旧 TTL 会在这里判过期 → 冷启动闪烁重新出现。
+    const { fastPathHit } = runInjector({
+      target: makeTarget(),
+      store,
+      url: 'https://a.example.com/',
+      readSettings: async () => settingsWith({ rules: [GRAY_RULE] }),
+      clock: () => t0 + 29 * 24 * 60 * 60 * 1000,
+    });
+    expect(fastPathHit, '29 天后未命中 —— TTL 太短会让 INV-3 重新变成非确定性失败').toBe(true);
+  });
+
+  it('超出 TTL（31 天）后不再命中 —— 陈旧推测终须清退，且由异步权威兜底', async () => {
+    const store = makeStore();
+    const t0 = Date.UTC(2026, 0, 1);
+    writeFastPath(store, 'a.example.com', true, { mode: 'Grayscale', intensity: 100 }, t0);
+    const later = t0 + 31 * 24 * 60 * 60 * 1000;
+
+    const target = makeTarget();
+    const { fastPathHit, settled } = runInjector({
+      target,
+      store,
+      url: 'https://a.example.com/',
+      readSettings: async () => settingsWith({ rules: [GRAY_RULE] }),
+      clock: () => later,
+    });
+    expect(fastPathHit).toBe(false);
+    // 但功能本身不受影响 —— 异步权威路径照样把滤镜套上。
+    await settled;
+    expect(isFilterApplied(target)).toBe(true);
+  });
+
+  it('🔴 异步校对发现配置已变时:更新渲染**并**刷新缓存（gate 逐字要求）', async () => {
+    const store = makeStore();
+    const now = Date.now();
+    // 陈旧推测:Grayscale。
+    writeFastPath(store, 'a.example.com', true, { mode: 'Grayscale', intensity: 100 }, now);
+
+    const target = makeTarget();
+    const { fastPathHit, settled } = runInjector({
+      target,
+      store,
+      url: 'https://a.example.com/',
+      // 权威设置其实已改成 RedGreen 40。
+      readSettings: async () =>
+        settingsWith({ rules: [{ pattern: '*.example.com', mode: 'RedGreen', intensity: 40 }] }),
+    });
+
+    // 同步阶段先按陈旧推测上色（有色总比无色好 —— INV-3 优先于短暂的色相不准）。
+    expect(fastPathHit).toBe(true);
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 100));
+
+    const r = await settled;
+
+    // 1) 渲染被更新为权威值。
+    expect(r.corrected).toBe(true);
+    expect(currentFilterValue(target)).toBe(filterCssValue('RedGreen', 40));
+
+    // 2) 缓存被刷新 —— 否则下一次加载还会先闪一下旧色相。
+    const entry = JSON.parse(store.data.get('__ccf_fp_a.example.com')!) as {
+      mode: string; intensity: number;
+    };
+    expect(entry.mode).toBe('RedGreen');
+    expect(entry.intensity).toBe(40);
+  });
+
+  it('🔴 记录内容**只含** mode + intensity（ADR-060 授权范围，隐私代价的上限）', async () => {
+    const store = makeStore();
+    const { settled } = runInjector({
+      target: makeTarget(),
+      store,
+      url: 'https://a.example.com/secret-path?q=token#frag',
+      readSettings: async () => settingsWith({ rules: [GRAY_RULE] }),
+    });
+    await settled;
+
+    const raw = store.data.get('__ccf_fp_a.example.com')!;
+    const entry = JSON.parse(raw) as Record<string, unknown>;
+
+    // 站点 JS 能读到这条记录（ADR-060 已接受的代价）。所以它里面
+    // 能有什么必须被**精确**钉死，不能随实现漂移地多带出任何东西。
+    expect(Object.keys(entry).sort()).toEqual(
+      ['intensity', 'masterEnabled', 'mode', 'writtenAt'].sort(),
+    );
+    expect(entry.mode).toBe('Grayscale');
+    expect(entry.intensity).toBe(100);
+
+    // 绝不含 URL / 路径 / 查询串等页面信息。
+    expect(raw).not.toContain('secret-path');
+    expect(raw).not.toContain('token');
+    expect(raw).not.toContain('frag');
+  });
+
+  it('🔴 键按 host 分隔 —— 不把别的站点的配置泄露给本站（ADR-060 窄口）', async () => {
+    const store = makeStore();
+    for (const url of ['https://a.example.com/', 'https://other.test/']) {
+      const { settled } = runInjector({
+        target: makeTarget(),
+        store,
+        url,
+        readSettings: async () => settingsWith({ rules: [GRAY_RULE] }),
+      });
+      await settled;
+    }
+    // 两个 host 各自一条，键名互不相同。
+    expect([...store.data.keys()].sort()).toEqual(
+      ['__ccf_fp_a.example.com', '__ccf_fp_other.test'].sort(),
+    );
+    // 真实浏览器里 localStorage 本就按 origin 隔离，这条断言守的是
+    // 「键名里带 host，不会在同一 origin 下互相覆盖」。
+  });
+});
+
 // ─────────────────────────── ADR-025 ───────────────────────────
 
 describe('🔴 ADR-025 · 缓存里绝不出现派生值（不制造第二份真相）', () => {
@@ -403,7 +560,7 @@ describe('decide · 首个命中胜（INV-6）与四种模式', () => {
 });
 
 describe('健壮性', () => {
-  it('sessionStorage 抛 SecurityError 时不崩溃（data: 文档等上下文）', () => {
+  it('localStorage 抛 SecurityError 时不崩溃（data: 文档 / 站点禁用存储等上下文）', () => {
     const hostile: SyncKeyValueStore = {
       getItem: () => { throw new Error('SecurityError'); },
       setItem: () => { throw new Error('SecurityError'); },

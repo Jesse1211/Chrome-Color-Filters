@@ -58,7 +58,7 @@ import {
 export interface InjectorDeps {
   /** 注入目标 —— 生产环境恒为 `document.documentElement`(T0 spike §1)。 */
   readonly target: FilterTarget;
-  /** 同步缓存存储 —— 生产环境为 `sessionStorage`(见 `session-store.ts`)。 */
+  /** 同步缓存存储 —— 生产环境为宿主 origin 的 `localStorage`(ADR-060,见 `fast-path-store.ts`)。 */
   readonly store: SyncKeyValueStore;
   /** 当前页面 URL。 */
   readonly url: string;

@@ -28,6 +28,10 @@ web-ext.config.ts
 # Chrome for Testing(REAL_STACK_GATE 用,按需下载,不入库)
 docs/T0-spike/spike-code/chrome/
 docs/T0-spike/spike-code/node_modules/
+# 门禁依赖的本地安装锚点(npm 需要一个 package.json 才肯把 node_modules
+# 装在本目录而不是仓库根);由 README 的复现步骤现场生成,不入库。
+docs/T0-spike/spike-code/package.json
+docs/T0-spike/spike-code/package-lock.json
 
 # REAL_STACK_GATE 的运行期输出（每次跑都会重建）。
 # 入库的是 docs/T4a-gate/evidence/ 里经过挑选的证据，不是这里的原始产物。

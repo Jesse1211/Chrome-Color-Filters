@@ -16,8 +16,10 @@ const AUDIT=`(() => {
     injectedStyle: document.querySelectorAll('style[id*="ccf"],style[data-ccf]').length,
     injectedSvg: document.querySelectorAll('svg[id*="ccf"]').length,
     ccfNodes: document.querySelectorAll('[id*="ccf"],[class*="ccf"]').length,
-    // 两层都查。localStorage 本不该再出现任何 __ccf 键（BC 边界已回退到
-    // 仅 sessionStorage），这条断言因此同时是**边界回归**的机械判定。
+    // 两层都查。ADR-060 之后快路径缓存**就在 localStorage**,故判据反过来了:
+    // 主开关关闭时该键必须被**清掉**(ADR-027「彻底止血」—— 留着它,
+    // 下次加载的同步阶段还会照它上色);而 sessionStorage 不再被使用,
+    // 出现任何 __ccf 键都说明有残留的旧实现。
     sessionKeys: (()=>{try{return Object.keys(sessionStorage).filter(k=>k.indexOf('__ccf')===0);}catch(e){return ['ERR'];}})(),
     localKeys: (()=>{try{return Object.keys(localStorage).filter(k=>k.indexOf('__ccf')===0);}catch(e){return ['ERR'];}})(),
   };
@@ -74,8 +76,9 @@ function earlyProbe(){
       //    「同步阶段拿陈旧缓存上色」这个缺陷根本没有触发条件 ——
       //    门禁会对着一个不可能失败的场景报 PASS(实测确认:带缺陷的实现
       //    在没有这一步时同样 PASS)。这一步是该断言有效性的前提。
-      //    快路径缓存是 sessionStorage(按标签页),故捂热必须发生在
-      //    **同一个标签页**里 —— 换标签页则缓存天然为空,缺陷无从触发。
+      //    📌 ADR-060 之后快路径缓存在 **localStorage**(按 origin、跨标签页、
+      //    跨重启存活),所以捂热不再要求同一个标签页。这里仍沿用同一个
+      //    标签页,因为它同时也是最接近真实用户路径的那条。
       const p=await b.newPage();
       await seed(b,settings([rule('*')],true));
       await p.goto(url,{waitUntil:'networkidle2',timeout:90000});
@@ -113,8 +116,13 @@ function earlyProbe(){
     if(r.off.varVal){console.log(`FAIL ${k}: 主开关关闭仍设了 CSS 变量`);fail=true;}
     if(r.off.computedFilter!=='none'){console.log(`FAIL ${k}: 主开关关闭仍有 filter=${r.off.computedFilter}`);fail=true;}
     if(r.off.injectedStyle||r.off.injectedSvg||r.off.ccfNodes){console.log(`FAIL ${k}: 主开关关闭仍有注入节点`);fail=true;}
-    if(r.off.sessionKeys.length){console.log(`FAIL ${k}: 主开关关闭仍残留会话层快路径缓存 ${JSON.stringify(r.off.sessionKeys)}`);fail=true;}
-    if(r.off.localKeys.length){console.log(`FAIL ${k}: localStorage 出现 __ccf 键 —— 越过 DESIGN.md §1 的 BC 所有权边界 ${JSON.stringify(r.off.localKeys)}`);fail=true;}
+    if(r.off.sessionKeys.length){console.log(`FAIL ${k}: sessionStorage 出现 __ccf 键 —— ADR-060 之后快路径只应使用 localStorage ${JSON.stringify(r.off.sessionKeys)}`);fail=true;}
+    // 🔴 ADR-027「关主开关可彻底止血」:主开关关闭时,该 host 的快路径条目
+    //    必须被**清掉**。留着它 = 下一次加载的同步阶段仍会照它上色。
+    if(r.off.localKeys.length){console.log(`FAIL ${k}: 主开关关闭后快路径缓存未被清除 ${JSON.stringify(r.off.localKeys)} —— 下次加载仍会上色,止不住血`);fail=true;}
+    // 对照:主开关开启时缓存**必须**写回,否则 INV-3 的冷启动命中无从谈起,
+    // 且上面那条「关闭后为空」会变成假阴性(可能它从来就没写过)。
+    if(!r.on.localKeys.length){console.log(`FAIL ${k}: 主开关开启时 localStorage 未写入快路径缓存 —— INV-3 的同步通道没建立(ADR-060)`);fail=true;}
     // 🔴 核心断言:主开关关闭时,滤镜在整个加载过程中**一瞬都不得出现**。
     //    「先上色再纠正」同样是 FAIL —— INV-8 说的是不注入,ADR-027 的理由
     //    是「关主开关可彻底止血」,先上色就止不住。

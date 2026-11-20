@@ -38,18 +38,17 @@
  * 于是主开关 OFF 时同步阶段**什么都不画** —— INV-8 要求的是「不注入」,
  * 不是「先注入再纠正」。详见 `injector.ts` 的 INV-8 一节。
  *
- * ## 作用域:`sessionStorage`(按标签页),不升级到 `localStorage`
+ * ## 作用域:宿主 origin 的 `localStorage`(ADR-060 的窄口例外)
  *
- * 曾经为了覆盖冷启动把底层换成 `localStorage`。那是**错的**,已回退:
- * DESIGN.md §1 划定本 BC 的边界 ——「宿主页面(host page)的 DOM、样式、脚本
- * **不属于**本 BC —— 只可观察,**永不拥有**」。`localStorage` 按源且跨会话,
- * 等于让扩展在宿主页面自己的源里**持有一份跨会话、按站点、页面可读**的持久记录,
- * 那是「拥有」,越过了 §1 的所有权红线。`sessionStorage` 随标签页蒸发,
- * 不构成持久所有权。
+ * 底层存储由 `fast-path-store.ts` 装配。曾经因 DESIGN.md §1 的
+ *「永不拥有宿主页面」而退回 `sessionStorage` —— 那在当时是对的,
+ * 但 `sessionStorage` 随标签页蒸发,导致「浏览器重启后首访」与
+ *「新标签页首访」**必然**闪烁(实测 6 次闪 3 次,非确定性失败)。
  *
- * 代价是「本标签页首次访问该 host」不命中 —— 已如实申报为 blindSpot,
- * 不再用越界的存储去粉饰(ADR-018 把零闪烁定为硬性不变式,但它
- * **没有**授予拿 INV-9/§1 去交换的权力;真有冲突应按 DESIGN.md §8.1 上报)。
+ * 该冲突已由产品负责人裁决为 **ADR-060**:允许在宿主 origin 的
+ * `localStorage` 下存这一条仅含 `mode`+`intensity` 的记录,
+ * 隐私代价(站点 JS 能读到它)记入 DESIGN.md §4.1 并被接受。
+ * 理由与取舍矩阵见 `fast-path-store.ts` 头注释。
  *
  * ## 为什么用 Web Storage 仍不违反 INV-9 / ADR-026
  *
@@ -77,9 +76,18 @@ const CACHE_PREFIX = '__ccf_fp_';
  *
  * 缓存是**推测**,权威始终是异步读到的设置。过期只是为了避免一个
  * 长期开着的标签页无限期地用陈旧推测开场;真正的纠正发生在每次异步阶段。
- * 取 24 小时:足够长以覆盖正常的浏览会话,足够短以免陈旧值长期留存。
+ *
+ * 🔴 取 **30 天**(ADR-060 之后)。此前取 24 小时是配合 `sessionStorage`
+ * 的——那时缓存本就活不过标签页,TTL 只是个兜底。改用 `localStorage` 后
+ * TTL 直接决定 INV-3 的覆盖面:**TTL 一过,下次访问就是一个未滤镜的首帧**,
+ * 而「超过一天没访问过某站」是极其普通的使用模式。24 小时会让 INV-3
+ * 在这些站点上重新变成非确定性失败 —— 正是本轮要根治的那个缺陷。
+ *
+ * 取 30 天而非无限:陈旧条目终须有一个自然的清退期,且**正确性不依赖 TTL** ——
+ * 每次导航的异步阶段都会用权威设置纠正渲染并刷新缓存,TTL 只影响
+ * 「首帧能否命中推测」。
  */
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** 同步存储的最小端口 —— 便于在 Node 下单测(对齐 `StorageArea` 的做法)。 */
 export interface SyncKeyValueStore {
@@ -139,7 +147,7 @@ function keyFor(host: string): string {
  * 🔴 **ADR-025**:返回的 `filterValue` 由 `filterCssValue(mode,intensity)`
  * **当场算出**,不是从存储里读出来的 —— 存储里根本没有派生值。
  *
- * **永不抛异常**:`sessionStorage` 在某些上下文(`data:` 文档、
+ * **永不抛异常**:`localStorage` 在某些上下文(`data:` 文档、
  * 禁用了存储的站点、隐私模式的极端配置)会直接 throw SecurityError。
  * 滤镜是辅助功能,绝不能因为读缓存失败就让 content script 崩掉 ——
  * 那会把一个优化问题变成功能性故障。

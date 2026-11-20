@@ -1,7 +1,21 @@
-// REAL_STACK_GATE #2:零闪烁(INV-3 / ADR-018)。
+// REAL_STACK_GATE #2:零闪烁(INV-3 / ADR-018 / ADR-060)。
 // 🔴 ADR-038:必须在 npm run build 产物上做。dev 模式必然不成立。
 // 方法同 T0 §3.3:CDP Page.startScreencast(everyNthFrame:1)捕获导航全过程的
 // 每一个合成帧,逐帧判定「带色像素数 > 总像素 0.2%」。
+//
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// DESIGN.md §6 T4a 要求覆盖**三种缓存状态,缺一不可**,本脚本逐一对应:
+//
+//   1. coldCache  —— 清空该 origin 的 localStorage 后首次访问(上一轮失败的正是它)
+//   2. newTab     —— 新标签页访问同一站点
+//   3. restart    —— 浏览器进程完全退出后,用同一 profile 重启再访问
+//
+// 外加 hot(同标签页再次导航)与 off(主开关关闭的基线,用于证明探针有效)。
+//
+// ⚠️ 该门禁此前是**非确定性失败**(6 次闪 3 次),取决于缓存是否命中。
+//    故 `RUNS`(默认 5)次**全部**通过才算过 —— 单次通过不作数。
+//    用 `CCF_FLICKER_RUNS=1` 可在排障时缩短,但验收必须是 5。
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const fs = require('fs');
 const path = require('path');
 const { PNG } = require('pngjs');
@@ -56,62 +70,125 @@ async function run(browser, key, url, tag, page) {
   return { frames: frames.length, colorFrames, worst: worst < 0 ? 0 : Math.round(worst*10000)/10000 };
 }
 
-(async () => {
+const RUNS = Number(process.env.CCF_FLICKER_RUNS || 5);
+
+/** 清空该 origin 的 localStorage —— 制造「冷缓存」状态。 */
+async function clearOriginStorage(browser, url) {
+  const p = await browser.newPage();
+  try {
+    await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await p.evaluate(() => {
+      try {
+        // 只删本扩展的键,不动站点自己的数据(同 ADR-060 的窄口精神)。
+        const doomed = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.indexOf('__ccf') === 0) doomed.push(k);
+        }
+        doomed.forEach((k) => localStorage.removeItem(k));
+      } catch (e) { /* 存储不可用 —— 本就等同于冷缓存 */ }
+    });
+  } finally { await p.close(); }
+}
+
+/** 跑一轮完整的五场景测量,返回 { site: {off, coldCache, newTab, restart, hot} }。 */
+async function oneRun(runIdx) {
   const results = {};
   for (const [key, url] of Object.entries(SITES)) {
-    const udd = path.join(OUT, `fp-${key}`);
+    const udd = path.join(OUT, `fp-${key}-r${runIdx}`);
     fs.rmSync(udd, { recursive: true, force: true });
-    // ── 阶段 1：基线（主开关关闭）+ 用户配置规则后的首次访问。
+
+    // ── 阶段 1:基线 + 建立权威判定 ────────────────────────────────────
     let off;
     {
       const browser = await launch(udd, { headless: true });
       try {
-        // (a) 基线：主开关关闭 → 页面必然彩色。证明探针确实能抓到带色帧。
+        // (a) 基线:主开关关闭 → 页面必然彩色。证明探针确实能抓到带色帧。
         await seed(browser, settings([rule('*')], false));
-        off = await run(browser, key, url, 'off', null);
+        off = await run(browser, key, url, `r${runIdx}-off`, null);
 
-        // 用户打开主开关并配置规则，然后访问一次 —— 这一步建立「权威判定结果」，
-        // 是真实用户的必然前提：没配规则就没有「该滤镜的站点」可言。
+        // 用户打开主开关并配置规则 —— 真实用户的必然前提。
         await seed(browser, settings([rule('*')], true));
-        const warm = await browser.newPage();
-        await warm.goto(url, { waitUntil: 'networkidle2', timeout: 90000 });
-        await new Promise((r) => setTimeout(r, 1200));
-        await warm.close();
       } finally { await browser.close(); }
     }
 
-    // ── 阶段 2：真正的**浏览器冷启动** —— 进程已完全退出，
-    //    用同一份 profile 重新启动（即真实用户第二天打开浏览器）。
-    //    🔴 这就是 DESIGN.md §6 T4a 逐字要求的「冷启动加载录屏」，
-    //    其结果**必须**进入 fail 判据，不得降级为 INFO。
-    let cold, on;
+    // ── 阶段 2:🔴 冷缓存 —— 清空该 origin 的 localStorage 后首次访问 ──
+    //    这是上一轮失败的那个场景。清掉快路径键后,同步阶段无从得知
+    //    (mode,intensity);扩展必须靠异步权威补上并回写,**本次**可能带色。
+    //
+    //    ⚠️ 判据说明:INV-3 的要求是「在匹配到规则的页面上,用户绝不可见
+    //    任何未滤镜的帧」。冷缓存首访同样在此范围内 —— 故它**计入 fail**,
+    //    不降级为 INFO。扩展能做到的原因:ADR-060 的 localStorage 条目
+    //    在用户配置规则后的第一次访问就已写入并**跨重启存活**,
+    //    此处的"清空"是人为制造的极端状态,用来证明即便如此也不闪。
+    let coldCache, newTab, restart, hot;
     {
       const browser = await launch(udd, { headless: true });
       try {
-        const coldPage = await browser.newPage();
-        cold = await run(browser, key, url, 'cold', coldPage);
+        await clearOriginStorage(browser, url);
+        const p1 = await browser.newPage();
+        coldCache = await run(browser, key, url, `r${runIdx}-coldcache`, p1);
+        // (b) 热路径:**同一个标签页**再次导航 —— 刷新/站内跳转/前进后退。
+        hot = await run(browser, key, url, `r${runIdx}-hot`, p1);
+        await p1.close();
 
-        // (b) 热路径：**同一个标签页**再次导航 —— 刷新/站内跳转/前进后退。
-        on = await run(browser, key, url, 'on', coldPage);
-        await coldPage.close();
+        // ── 🔴 新标签页访问同一站点 ───────────────────────────────────
+        //    sessionStorage 方案在这里必然失败(缓存按标签页);
+        //    localStorage 按 origin,故新标签页能同步命中。
+        const p2 = await browser.newPage();
+        newTab = await run(browser, key, url, `r${runIdx}-newtab`, p2);
+        await p2.close();
       } finally { await browser.close(); }
     }
 
-    results[key] = { off, cold, on };
-    console.log(key, JSON.stringify(results[key]));
-  }
-  fs.writeFileSync(path.join(OUT, 'flicker.json'), JSON.stringify(results, null, 2));
+    // ── 阶段 3:🔴 浏览器重启后首次访问 ────────────────────────────────
+    //    进程已完全退出,用同一份 profile 重新启动(真实用户第二天开浏览器)。
+    //    sessionStorage 到这里必然蒸发 —— 这正是上一轮 6 次闪 3 次的根因。
+    {
+      const browser = await launch(udd, { headless: true });
+      try {
+        const p = await browser.newPage();
+        restart = await run(browser, key, url, `r${runIdx}-restart`, p);
+        await p.close();
+      } finally { await browser.close(); }
+    }
 
-  let fail = false;
-  for (const [k, r] of Object.entries(results)) {
-    if (r.off.colorFrames === 0) { console.log(`FAIL ${k}: 基线零带色帧 —— 探针无效`); fail = true; }
-    if (r.on.colorFrames !== 0) { console.log(`FAIL ${k}: 滤镜态(快路径已热)${r.on.colorFrames}/${r.on.frames} 帧带色(INV-3 破裂)`); fail = true; }
-    // 🔴 冷启动是 T4a gate 逐字写明的子句（「冷启动加载录屏，逐帧检查，
-    //    第一个可见帧即已滤镜」），必须与热路径同等判 fail。
-    //    曾经这里是一行不影响结果的 INFO —— 那是在绕过自己的验收标准。
-    if (r.cold.colorFrames !== 0) { console.log(`FAIL ${k}: 冷启动 ${r.cold.colorFrames}/${r.cold.frames} 帧带色（INV-3 破裂）`); fail = true; }
-    console.log(`INFO ${k}: 冷启动 ${r.cold.colorFrames}/${r.cold.frames}；热路径 ${r.on.colorFrames}/${r.on.frames}；基线 ${r.off.colorFrames}/${r.off.frames}`);
+    results[key] = { off, coldCache, newTab, restart, hot };
+    console.log(`run${runIdx} ${key}`, JSON.stringify(results[key]));
   }
-  console.log(fail ? 'FLICKER: FAIL' : 'FLICKER: PASS');
+  return results;
+}
+
+(async () => {
+  const all = [];
+  let fail = false;
+
+  for (let runIdx = 1; runIdx <= RUNS; runIdx++) {
+    console.log(`──────── RUN ${runIdx}/${RUNS} ────────`);
+    const results = await oneRun(runIdx);
+    all.push(results);
+
+    for (const [k, r] of Object.entries(results)) {
+      // 探针有效性 —— 基线必须抓到带色帧,否则下面全是假阴性。
+      if (r.off.colorFrames === 0) {
+        console.log(`FAIL run${runIdx} ${k}: 基线零带色帧 —— 探针无效`); fail = true;
+      }
+      // 🔴 三种缓存状态 + 热路径,全部同等判 fail(INV-3 不分场景)。
+      for (const scen of ['coldCache', 'newTab', 'restart', 'hot']) {
+        if (r[scen].colorFrames !== 0) {
+          console.log(`FAIL run${runIdx} ${k}: ${scen} ${r[scen].colorFrames}/${r[scen].frames} 帧带色(INV-3 破裂)`);
+          fail = true;
+        }
+      }
+      console.log(`INFO run${runIdx} ${k}: coldCache ${r.coldCache.colorFrames}/${r.coldCache.frames}；newTab ${r.newTab.colorFrames}/${r.newTab.frames}；restart ${r.restart.colorFrames}/${r.restart.frames}；hot ${r.hot.colorFrames}/${r.hot.frames}；基线 ${r.off.colorFrames}/${r.off.frames}`);
+    }
+  }
+
+  fs.writeFileSync(path.join(OUT, 'flicker.json'),
+    JSON.stringify({ runs: RUNS, all }, null, 2));
+
+  // 🔴 连续 RUNS 次**全部**通过才算过 —— 该门禁此前是非确定性失败,
+  //    单次通过不能作为证据。
+  console.log(fail ? `FLICKER: FAIL (${RUNS} 次中存在失败)` : `FLICKER: PASS (连续 ${RUNS} 次全绿)`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

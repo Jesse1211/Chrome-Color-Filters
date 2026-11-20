@@ -38,17 +38,17 @@
  * 所以在 JS 完成之前页面是**未滤镜**的。
  *
  * 这看起来像是放弃了 INV-3,其实不是 —— 真正的保证来自
- * **同步执行的 `sessionStorage` 快路径**(`fast-path-cache.ts`):同一标签页内,
- * 一旦某个 host 被判定为匹配,`(mode,intensity)` 被记在 `sessionStorage`
- * (同步 API,无需 await;**不存派生的 filter 串** —— ADR-025)。
- * 此后该标签页在该 host 上的每一次导航,JS 都能在 `document_start` 的
+ * **同步执行的 `localStorage` 快路径**(`fast-path-cache.ts` + `fast-path-store.ts`,
+ * ADR-060):一旦某个 host 被判定为匹配,`(mode,intensity)` 被记在宿主 origin 的
+ * `localStorage`(同步 API,无需 await;**不存派生的 filter 串** —— ADR-025)。
+ * 此后在该 host 上的每一次加载,JS 都能在 `document_start` 的
  * **同一个同步执行块**里算出 filter 值并把属性和变量写好 ——
  * 与静态 CSS 同处首帧之前。
  *
- * ⚠️ 已申报的缺口:**浏览器重启后**对某 host 的首次访问,`sessionStorage`
- * 已随标签页蒸发,此时无从同步得知答案(MV3 无同步的扩展存储 API)。
- * 这是 INV-3 与 DESIGN.md §1 的真实冲突,已如实上报待裁决 ——
- * 详见 `docs/T4a-gate/README.md` 的 blindSpot 一节。
+ * 📌 选 `localStorage` 而非 `sessionStorage` 正是为了关掉「浏览器重启后首访」
+ * 与「新标签页首访」这两个缺口:`sessionStorage` 随标签页蒸发,实测冷启动
+ * **6 次闪 3 次**。ADR-060 为此开了「永不拥有宿主页面」的窄口例外,
+ * 隐私代价记入 DESIGN.md §4.1。详见 `fast-path-store.ts` 头注释。
  *
  * 反过来,默认「不滤镜」是 INV-1 与 INV-8 所必需的:
  * 若默认就把整页变灰再由 JS 撤销,则**每一个不匹配的页面**都会闪一下灰

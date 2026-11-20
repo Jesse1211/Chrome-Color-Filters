@@ -3,8 +3,9 @@
  *
  * 📌 完整的三项审计(含 Network 实测)是 **T4b** 的 gate。
  * 本文件只覆盖 T4a 已经能够断言、且与 T4a 注入路径直接相关的静态项 ——
- * 因为 T4a 引入了 Web Storage（`sessionStorage`）快路径，
- * 必须就地证明它没有顺手读取页面内容。
+ * 因为 T4a 引入了宿主 origin 的 `localStorage` 快路径（ADR-060），
+ * 必须就地证明这条**窄口例外**没有被撑宽:它只碰自己那一个键，
+ * 不枚举、不读页面内容、不外传。
  *
  * 产物不存在时跳过(同 build-manifest.test.ts 的理由:构建是独立 gate 步骤)。
  */
@@ -39,16 +40,38 @@ describe.skipIf(!built)('content script 非侵入静态审计(INV-9 / ADR-026)',
     expect(code).not.toContain('getElementsByTagName');
   });
 
-  it('🔴 BC 边界（DESIGN.md §1）：绝不碰宿主页面的 localStorage', () => {
-    // §1：「宿主页面的 DOM、样式、脚本**不属于**本 BC —— 只可观察，永不拥有」。
-    // localStorage 按源且跨会话，往里写就是在页面自己的源里**持有**一份
-    // 跨重启、按站点、页面可读的持久记录 —— 那是「拥有」。
-    // sessionStorage 随标签页蒸发，不构成持久所有权，故仅它被允许。
+  it('🔴 ADR-060 的窄口例外确实被用上了 —— 产物必须含 localStorage 快路径', () => {
+    // ⚠️ 这条断言的**方向在本轮被反转了**，不是放松，而是跟随裁决。
     //
-    // 这条断言是**机械**的：产物里只要出现 localStorage 就失败，
-    // 不依赖任何人「读一遍代码确认没越界」。
-    expect(code, '产物触碰了宿主页面的 localStorage —— 越过 DESIGN.md §1 的所有权边界')
-      .not.toContain('localStorage');
+    // 上一轮这里断言「产物中不得出现 localStorage」，依据是 DESIGN.md §1
+    // 「宿主页面……只可观察，永不拥有」。那个判断在当时是对的，但它的代价是
+    // INV-3 在冷启动下**必然**失败（sessionStorage 活不过标签页，实测 6 次闪 3 次）。
+    //
+    // 产品负责人已就此裁决，记为 **ADR-060**：允许在宿主 origin 的 localStorage
+    // 下存一条仅含 (mode,intensity) 的快路径记录，这是对 §1 的**窄口例外**，
+    // DESIGN.md §1 与 §4.1 均已改写记入。
+    //
+    // 于是本断言改为守住**反方向**:快路径是 INV-3 的实现本体，
+    // 谁把它悄悄换回 sessionStorage（或删掉），这里立刻红。
+    expect(code, '产物中没有 localStorage 快路径 —— INV-3 失去唯一的同步通道（ADR-060）')
+      .toContain('localStorage');
+  });
+
+  it('🔴 窄口例外不得被撑宽:localStorage 只被取用一次,且只做单键读写', () => {
+    // ADR-060 授权的是「一条仅含 mode+intensity 的记录」,不是「随意使用宿主存储」。
+    //
+    // 📌 产物的真实形态(实测,不要想当然):打包后只有 **一处**
+    // `globalThis.localStorage`,它被取出来当作 SyncKeyValueStore 端口传递,
+    // 之后的调用是 `.getItem/.setItem/.removeItem`(经过压缩,标识符已改名)。
+    // 所以这里不去数 `localStorage.xxx` 的成员访问 —— 那种写法在产物里
+    // 根本不存在,断言会变成空转(本轮第一版就踩了这个坑,已改正)。
+    //
+    // 真正能机械把守的是这两条:取用次数 + 不存在任何枚举能力。
+    const occurrences = code.match(/localStorage/g) ?? [];
+    expect(occurrences.length, 'localStorage 出现次数异常 —— 窄口例外可能被撑宽').toBe(1);
+
+    // 键名前缀必须在产物里,且只有这一个前缀。
+    expect(code).toContain('__ccf_fp_');
   });
 
   it('Web Storage 只用于扩展自己的 __ccf_ 前缀键（快路径缓存）', () => {
