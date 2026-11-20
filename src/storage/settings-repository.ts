@@ -192,6 +192,21 @@ export class SettingsRepository {
   #lastWrittenMaxSeenTime: number | null = null;
 
   /**
+   * 最近一次**已知的**持久化设置快照 —— 供 `setLockUntilImmediate` 在
+   * **点击那一轮**同步算出判定、立刻发出 `storage.set`(见该方法的文件内说明)。
+   *
+   * `null` = 本实例还没读过存储 → 无快照可用,只能退回「先读后写」。
+   *
+   * 由三处保持新鲜:每次 `#readContext()`、每次成功的 `#persist()`、
+   * 以及 `subscribe()` 装的 `onChanged` 监听(别的窗口改了也跟着更新)。
+   *
+   * ⚠️ 这是**缓存,不是真相**。它唯一的用途是消除锁定写入路径上那次
+   * 被 await 的读;陈旧时的安全性由 `setLockUntilImmediate` 的
+   * **单调 max 合并 + 写后对账**保证,而不是靠这个快照准确。
+   */
+  #cachedSettings: FilterSettings | null = null;
+
+  /**
    * 防抖中的待写入规则列表(列表侧连续操作)。
    *
    * 只缓存 `rules` —— 落盘时 `replaceRules` 会重新读取当前设置,
@@ -268,6 +283,9 @@ export class SettingsRepository {
 
     const current: FilterSettings = { ...stored, maxSeenTime };
     const now = effectiveNow(tick, maxSeenTime);
+
+    // 快照保持新鲜 —— 见 `#cachedSettings` 的说明。
+    this.#cachedSettings = current;
 
     return { current, now, locked: isLocked(current, now) };
   }
@@ -367,6 +385,7 @@ export class SettingsRepository {
       await this.#area.set({ [SETTINGS_KEY]: toPersisted(settings) });
       // 写路径同样落了下界 —— 同步节流状态,免得紧接着的读又写一次。
       this.#lastWrittenMaxSeenTime = settings.maxSeenTime;
+      this.#cachedSettings = settings;
     } catch (cause) {
       // ADR-046:返回结构化错误,**不得只 throw 或只 console.error**。
       return writeFail(classifyStorageError(cause));
@@ -613,6 +632,167 @@ export class SettingsRepository {
     return this.#persist({ ...ctx.current, lockUntil, masterEnabled });
   }
 
+  /**
+   * 🔴 **写入 `lockUntil`,且在调用的那一轮就发出 `storage.set`。**
+   *
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   * ## 为什么必须有这个方法(真实缺陷,与 ADR-061 同一类)
+   *
+   * `setLockUntil` 的第一行是 `await this.#readContext()` —— 一次
+   * `storage.get` 往返。`chrome.storage.local` 是**跨进程 IPC**,那次 get
+   * 最快也在**后续宏任务**才回话。而 Chrome 工具栏 popup **一失焦即销毁**:
+   *
+   *     用户点「确认锁定」/「延长」→ 发出 get → await
+   *       → popup 失焦、文档被拆、JS 上下文消失
+   *       → get 的回调永远回不来 → `storage.set` **从未发出**
+   *       → 锁定静默丢失,而 UI 已经显示成功
+   *
+   * 这正是 ADR-061 记录的那一类缺陷(本仓已为其出过 6df1edf / 6d34545 两次
+   * fixup),只是窗口从「300ms 客户端计时器」挪到了**仓储层内部那次被 await
+   * 的读** —— 所以 ADR-061 的静态门禁(路径上不得有 `setTimeout`)看不见它。
+   *
+   * ⚠️ 修法**不是**「拆除前再补一次写」—— ADR-061 明文记载该路线**已被证伪**:
+   * popup 销毁后,飞在半路的异步写回不到一个已经不存在的 JS 上下文。
+   * 唯一可行的方向是**根本不等那次读**。
+   *
+   * ## 不等那次读,为什么仍然守得住 ADR-052 / INV-14
+   *
+   * 判定仍然在**仓储层**做(ADR-055:真相守在数据层),只是改用
+   * `#cachedSettings` 这个已知快照同步地做,从而把 `set` 留在同一轮。
+   * 快照可能**陈旧**,故安全性不靠它准确,而靠两道**结构性**保证:
+   *
+   * 1. **单调 max 合并。** 真正落盘的 `lockUntil` 恒为
+   *    `max(快照里的值, 要写的值)`。ADR-052 的语义本就是单调的
+   *    (「加码可以,反悔不行」),于是「快照偏小」这唯一危险方向被**构造性**
+   *    地堵死:哪怕快照说「未锁定」而磁盘上其实锁着,合并后也只会得到
+   *    **不小于**磁盘值的结果 —— 缩短在算术上不可能发生,不依赖任何检查顺序。
+   * 2. **写后对账。** `set` 发出后(此时写已在飞,丢不了了)再读一次磁盘:
+   *    若发现磁盘上的真实 `lockUntil` 比我们刚写的**更晚**,说明快照确实陈旧
+   *    且我们刚刚写小了,立刻用磁盘值补写回去。这条路径只在并发写
+   *    (多窗口)下才会走到,且补写方向永远是「变长」。
+   *
+   * ⚛️ **ADR-057 的原子性照旧**:启动锁定时 `masterEnabled` 与 `lockUntil`
+   * 在**同一次** `storage.set` 里落盘,无中间态。
+   *
+   * ADR-059 / INV-15:`maxSeenTime` 照旧用 `effectiveNow` 夹过单调下界,
+   * 故把系统时钟往回调不能缩短锁定。
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   */
+  setLockUntilImmediate(next: number | null): Promise<WriteResult<FilterSettings>> {
+    const cached = this.#cachedSettings;
+
+    // 还没读过存储(popup 刚开、设置尚未到位)→ 没有快照可用。
+    // 此时退回「先读后写」:正确性优先,且该状态下界面还在骨架态、
+    // 用户根本点不到锁定按钮(见 LockTimerEntry 的 disabled={!loaded})。
+    if (cached === null) return this.setLockUntil(next);
+
+    const tick = this.#clock();
+    const maxSeenTime = effectiveNow(
+      typeof tick === 'number' && Number.isFinite(tick) ? tick : cached.maxSeenTime,
+      cached.maxSeenTime,
+    );
+    const current: FilterSettings = { ...cached, maxSeenTime };
+    const now = effectiveNow(tick, maxSeenTime);
+    const ctx: WriteContext = { current, now, locked: isLocked(current, now) };
+
+    const verdict = canSetLockUntil(current.lockUntil, next, now);
+    if (!verdict.ok) {
+      // 分类口径与 `setLockUntil` 完全一致(ADR-046 的 I1 澄清):
+      // 锁定中被拒 → `locked`(预期行为,UI 不得弹红色报错条);
+      // 未锁定时被拒 → `invalid-input`(入参问题,与锁无关)。
+      const error = ctx.locked
+        ? lockedError('lock-write-rejected', lockRejectionMessage(verdict.reason))
+        : invalidInputError(lockRejectionMessage(verdict.reason));
+      // 拒绝路径**不需要**同轮落盘(没有用户数据要保),照旧走 `#reject`。
+      return this.#reject(ctx, error);
+    }
+
+    const requested = next as number;
+
+    // 🔴 保证 1:单调 max 合并 —— 缩短在算术上不可能发生(见上方说明)。
+    const cachedLock = current.lockUntil;
+    const lockUntil =
+      cachedLock !== null && Number.isFinite(cachedLock) && cachedLock > requested
+        ? cachedLock
+        : requested;
+
+    // ADR-057:启动锁定(快照显示此前未锁定)→ 同一次写入里置 masterEnabled: true。
+    const masterEnabled = ctx.locked ? current.masterEnabled : true;
+
+    const settings: FilterSettings = {
+      ...current,
+      lockUntil,
+      masterEnabled,
+      maxSeenTime: effectiveNow(tick, current.maxSeenTime),
+    };
+
+    // 🔴 关键:**同步**发出 get + set —— 本方法到此为止没有出现过任何 await。
+    // 即使 popup 在下一刻被拆掉,两个请求都已经交给浏览器进程了。
+    //
+    // ⚠️ 对账用的 get **必须在 set 之前发出**:存储按发出顺序处理请求,
+    // 所以这个 get 看到的是**我们这次写入之前**的磁盘状态。
+    // 若放到 set 之后再读,读回来的就是我们自己刚写进去的值 ——
+    // 真实的旧值已经被覆盖掉了,对账在结构上不可能再发现「我写小了」。
+    let probing: Promise<Record<string, unknown>>;
+    let writing: Promise<void>;
+    try {
+      probing = this.#area.get(SETTINGS_KEY);
+      writing = this.#area.set({ [SETTINGS_KEY]: toPersisted(settings) });
+    } catch (cause) {
+      // 同步抛出(如 chrome.storage 不可用)→ ADR-046 结构化错误。
+      return Promise.resolve(writeFail(classifyStorageError(cause)));
+    }
+
+    this.#lastWrittenMaxSeenTime = settings.maxSeenTime;
+    this.#cachedSettings = settings;
+
+    return this.#settleLockWrite(probing, writing, settings);
+  }
+
+  /**
+   * `setLockUntilImmediate` 的收尾:等写入完成,然后**对账**(保证 2)。
+   *
+   * 两个请求都已经发出,到这里无论 popup 还活不活着都不影响落盘结果 ——
+   * 这个 async 函数里的 await 因此是安全的(它只影响**返回值**,不影响落盘)。
+   *
+   * @param probing 在 `set` **之前**发出的那次读 —— 它看到的是写入前的磁盘状态。
+   */
+  async #settleLockWrite(
+    probing: Promise<Record<string, unknown>>,
+    writing: Promise<void>,
+    written: FilterSettings,
+  ): Promise<WriteResult<FilterSettings>> {
+    try {
+      await writing;
+    } catch (cause) {
+      return writeFail(classifyStorageError(cause));
+    }
+
+    // 🔴 保证 2:对账 —— 只在并发写(多窗口)下才会真正做事,
+    // 且补写方向永远是「变长」,绝不缩短(ADR-052/INV-12)。
+    try {
+      const got = await probing;
+      const disk = coerceSettings(got?.[SETTINGS_KEY]);
+      const diskLock = disk.lockUntil;
+      const mineLock = written.lockUntil;
+
+      if (
+        diskLock !== null &&
+        Number.isFinite(diskLock) &&
+        mineLock !== null &&
+        diskLock > mineLock
+      ) {
+        // 写入前磁盘上的锁比我们刚写的更晚 → 快照当时确实陈旧,我们写小了。
+        // 用磁盘值补回去(只变长),并保留 ADR-057 已带开的主开关。
+        return this.#persist({ ...written, lockUntil: diskLock });
+      }
+    } catch {
+      /* 对账是加固,读不出来就算了 —— 主写入已经成功(ADR-041 同一理由) */
+    }
+
+    return writeOk(written);
+  }
+
   /** 当前是否处于锁定中(用 `effectiveNow`,ADR-059)。供 UI 置灰这第二道防线使用。 */
   async isCurrentlyLocked(): Promise<boolean> {
     const ctx = await this.#readContext();
@@ -728,6 +908,8 @@ export class SettingsRepository {
         if (!change) return;
 
         const settings = coerceSettings(change.newValue);
+        // 别的窗口改了存储 → 快照跟着更新(见 `#cachedSettings`)。
+        this.#cachedSettings = settings;
         for (const l of this.#listeners) l(settings);
       };
       this.#area.addChangeListener(this.#changeListener);

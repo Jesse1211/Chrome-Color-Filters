@@ -22,6 +22,12 @@
  * 启动/延长锁定都是一次性动作,防抖对它们只有风险没有收益 ——
  * popup 一失焦即销毁,排在队列里的锁定写入会静默丢失。
  *
+ * 🔴 **且「立即」必须立即到连一次 `storage.get` 往返都不等。**
+ * 走 `repository.setLockUntilImmediate`,它在**点击那一轮**就发出
+ * `storage.set`;`setLockUntil` 则会先 `await` 一次跨进程读,
+ * 那次 await 正是 popup 被拆时的丢写窗口(与 ADR-061 同一类缺陷,
+ * 回归测试见 `__tests__/lock-teardown.test.tsx`)。
+ *
  * ## INV-14 / ADR-055:写入一律经仓储层
  *
  * 锁定强制点在仓储层。UI 的置灰只是第二道防线,
@@ -136,7 +142,14 @@ export function useLockState({
         };
       }
       // 🔴 一次写入(ADR-057 的原子性由仓储层保证);不防抖(ADR-061)。
-      const result = await repository.setLockUntil(target);
+      //
+      // 用 `setLockUntilImmediate` 而非 `setLockUntil`:后者第一行是
+      // `await #readContext()`(一次跨进程 storage.get 往返),而 popup
+      // **一失焦即销毁** —— 那次 await 就是一个丢写窗口,写请求根本发不出去,
+      // 用户以为锁上了、其实没有。前者在**点击这一轮**就发出 storage.set。
+      // 判定仍在仓储层做(ADR-055/INV-14),缩短由单调 max 合并构造性堵死
+      // (ADR-052)—— 详见该方法的说明。
+      const result = await repository.setLockUntilImmediate(target);
       if (result.ok) {
         onSettings?.(result.value);
         return { ok: true };
@@ -173,10 +186,12 @@ export function useLockState({
       const ms = durationToMs(duration);
       if (ms === null) return apply(null);
       const current = settings.lockUntil;
+      // 只读一次时钟 —— 读两次理论上可能跨过一毫秒,让判据与取值不同口径。
+      const nowTick = readNow();
       const base =
-        current !== null && Number.isFinite(current) && current > readNow()
+        current !== null && Number.isFinite(current) && current > nowTick
           ? current
-          : readNow();
+          : nowTick;
       const next = base + ms;
       return apply(Number.isFinite(next) ? next : null);
     },

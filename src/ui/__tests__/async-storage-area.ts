@@ -122,9 +122,40 @@ export class AsyncStorageArea implements StorageArea {
     });
   }
 
+  /**
+   * 写入。
+   *
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   * 🔴 **进程归属:数据由「浏览器进程」拥有,不由 popup 的渲染进程拥有。**
+   *
+   * `chrome.storage.local.set()` 做的事是**向浏览器进程发一条 IPC 消息**。
+   * 消息一旦发出,渲染进程(popup 文档)随后被销毁**并不会把它撤回** ——
+   * 浏览器进程照样落盘,丢掉的只是**回调**(它要回到一个已经不存在的
+   * JS 上下文)。这正是 6d34545 的修复能在真实 Chromium 上 3/3 成功的原因:
+   * 那次修复没做别的,只是把写入从「拆除时才发出」挪到了「松手当轮就发出」。
+   *
+   * 故本替身按**发出时刻**判定落盘,与真机一致:
+   *
+   * - 销毁**之前**发出的 `set` → 数据照样落盘(`snapshot()` 看得见),
+   *   但 Promise 永不 resolve(回调丢失)。
+   * - 销毁**之后**发出的 `set` → 什么都不会发生(JS 上下文已经没了,
+   *   这行代码在真机上根本不会被执行)。
+   *
+   * ⚠️ 若反过来把「已发出的写」也一并丢掉,这个替身就比真机**更严格**,
+   * 会把一个本来正确的修复判成失败 —— 而且会与 ADR-061 自相矛盾:
+   * ADR-061 的全部结论就是「同一轮发出写入即可活过拆除」。
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   */
   set(items: Record<string, unknown>): Promise<void> {
+    // 销毁后「发出」的调用:真机上这行代码根本不会被执行到。
+    if (this.#destroyed) return new Promise<void>(() => undefined);
+
     this.setInvocationCount += 1;
-    return this.#later(() => {
+
+    // 🔴 数据的提交交给「浏览器进程」—— 与渲染进程的存活无关。
+    // 用一个**独立于** #later 的宏任务表达 IPC 延迟:它不受 destroy() 影响,
+    // 因为落盘发生在另一个进程里。
+    setTimeout(() => {
       this.setCallCount += 1;
 
       const changes: Record<string, StorageChange> = {};
@@ -133,10 +164,15 @@ export class AsyncStorageArea implements StorageArea {
         this.#data[k] = clone(v);
       }
 
+      // 变更通知要回到渲染进程 —— 文档已销毁则送不到。
+      if (this.#destroyed) return;
       for (const listener of [...this.#listeners]) {
         listener(changes, STORAGE_AREA_NAME);
       }
-    });
+    }, this.#latencyMs);
+
+    // 回调(Promise)回到渲染进程 —— 销毁后永不 resolve。
+    return this.#later(() => undefined);
   }
 
   addChangeListener(listener: StorageChangeListener): void {

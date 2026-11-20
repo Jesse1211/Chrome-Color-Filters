@@ -118,12 +118,17 @@ describe('🔴 ADR-057 · 启动锁定是一次写入,不得拆成两次', () =>
     ).not.toContain('setMasterEnabled');
   });
 
-  it('useLockState 里对仓储层的写入调用只有 setLockUntil 一处', () => {
+  it('useLockState 里对仓储层的写入调用只有一处(且是「同轮落盘」的那一个)', () => {
     const src = stripComments(
       readFileSync(resolve(ROOT, 'src/ui/useLockState.ts'), 'utf8'),
     );
     const calls = src.match(/repository\.\w+\(/g) ?? [];
-    expect(calls).toEqual(['repository.setLockUntil(']);
+    // 🔴 ADR-057:**一处**调用 —— 拆成两次就有中间态。
+    // 🔴 ADR-061 同类:必须是 `setLockUntilImmediate`,不是 `setLockUntil`。
+    //    后者第一行 `await #readContext()`(一次跨进程 storage.get 往返),
+    //    而 popup 一失焦即销毁 —— 那次 await 就是丢写窗口,
+    //    写请求根本发不出去(回归测试:src/ui/__tests__/lock-teardown.test.tsx)。
+    expect(calls).toEqual(['repository.setLockUntilImmediate(']);
   });
 });
 

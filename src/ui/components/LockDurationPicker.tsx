@@ -28,7 +28,6 @@ import {
   UNIT_LABELS,
   formatDuration,
   isLockUnit,
-  isValidDuration,
 } from '../lock-duration.js';
 
 export interface LockDurationPickerProps {
@@ -147,6 +146,3 @@ export function LockDurationPicker({
     </div>
   );
 }
-
-/** 供调用方复用的校验 —— 与提交按钮的 `disabled` 同一判据。 */
-export { isValidDuration };
