@@ -47,6 +47,12 @@ body {
   background: var(--surface);
   border-radius: var(--radius-card);
   overflow: hidden;
+  /*
+   * T6c:为二次确认模态(ADR-056)提供**包含块**。
+   * `.lock-modal` 用 `position:absolute; inset:0` 铺满 popup;
+   * 没有这一行它会相对视口定位,在 360×452 的弹窗里会错位。
+   */
+  position: relative;
 }
 
 /* ───────────────────────── 顶部:主开关(固定顶部,§5.3) ───────────────────────── */
@@ -489,4 +495,360 @@ body {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* ═══════════════════════ 锁定 UI(T6c · §5.4 第六种状态变体)═══════════════════════
+ *
+ * 视觉层说明:`docs/design/popup-mockup.html` **不含锁定界面** ——
+ * 这不是 §6.1 的「冲突」,是设计稿的覆盖范围不含锁定(ADR-042 限定其权威范围)。
+ * 故本节的结构与文案一律以 §5.4 与 ADR-051/052/056/058 为准,
+ * 色值与圆角仍只取 §5.1 的 token(不得内联硬编码,否则深色模式会有漏网残留)。
+ */
+
+/* ── 锁定中(ADR-051):倒计时条 ── */
+
+.lock-banner {
+  flex: 0 0 auto;
+  padding: 10px 15px 12px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.lock-banner__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/*
+ * §5.4:「🔒 锁定中 02:14:07」。
+ * §5.1:百分比与数字用 tabular-nums —— 倒计时每秒变化,
+ * 非等宽数字会让整行宽度抖动,读起来像在闪。
+ */
+.lock-banner__countdown {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.lock-banner__hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.lock-banner__extend {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lock-banner__extend-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.lock-banner__extend-button {
+  flex: 0 0 auto;
+  padding: 5px 13px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lock-banner__extend-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.lock-banner__extend-button:disabled {
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/*
+ * §5.4 锁定中:「规则列表照常**可见可滚动**但不可编辑」。
+ *
+ * ⚠️ 刻意**只降不透明度、不设 `pointer-events:none`**(与 `popup--dimmed` 不同)——
+ * 那会连滚动一起禁掉,而 §5.4 要求列表仍可滚动。
+ * 不可编辑由各控件的 `disabled` 属性保证(键盘用户同样绕不过),
+ * 最终防线在仓储层(INV-14 / ADR-055)。
+ */
+.popup--locked .rule-list {
+  opacity: .62;
+}
+
+.popup--locked .popup__foot {
+  opacity: .62;
+}
+
+/* ── 未锁定:计时器入口(ADR-058) ── */
+
+.lock-entry {
+  flex: 0 0 auto;
+  padding: 9px 15px 11px;
+  border-top: 1px solid var(--line-2);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.lock-entry__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lock-entry__title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.lock-entry__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.lock-entry__invalid {
+  margin: 0;
+  font-size: 11px;
+  color: var(--bad);
+}
+
+.lock-entry__start {
+  padding: 7px 13px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control-sm);
+  background: var(--accent);
+  color: var(--surface);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lock-entry__start:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.lock-entry__start:disabled {
+  border-color: var(--line);
+  background: var(--line-2);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* ── 时长选择器(ADR-058:预设按钮 + 数字 + 单位下拉) ── */
+
+.lock-duration {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lock-duration__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: .01em;
+}
+
+.lock-duration__presets {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lock-duration__preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.lock-preset {
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.lock-preset:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/*
+ * 选中态同时改**边框 + 底色 + 字重**,不只改颜色 ——
+ * 目标用户含色觉异常者,选中与否不能只靠色相传达(同 ADR-043 的理由)。
+ */
+.lock-preset--selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.lock-preset:disabled {
+  border-color: var(--line-2);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.lock-duration__custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lock-duration__amount {
+  width: 62px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lock-duration__unit {
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+
+/* ── 二次确认模态(ADR-056) ── */
+
+/*
+ * 覆盖整个 popup。固定 360×452(§5.1 / OQ-06),
+ * 故用绝对定位铺满 `.popup` 而不是 viewport 单位。
+ */
+.lock-modal {
+  position: absolute;
+  inset: 0;
+  width: var(--popup-width);
+  height: var(--popup-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(16, 18, 24, .42);
+  z-index: 10;
+}
+
+.lock-modal__panel {
+  width: 100%;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lock-modal__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.lock-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.lock-modal__duration {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ADR-056 的三条后果 —— 不可逆操作,必须读得清。 */
+.lock-modal__consequences {
+  margin: 0;
+  padding-left: 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+/* ADR-057:主开关会被一并打开的告知,用琥珀强调 —— 这是用户没显式要求的变化。 */
+.lock-modal__note {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-control-sm);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 11.5px;
+}
+
+.lock-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.lock-modal__cancel,
+.lock-modal__ok {
+  padding: 6px 13px;
+  border-radius: var(--radius-control-sm);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lock-modal__cancel {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.lock-modal__cancel:hover {
+  border-color: var(--ink-2);
+  color: var(--ink);
+}
+
+/*
+ * 确认是不可逆动作(ADR-056),用 `bad` 而非 `accent` ——
+ * 它不是「主要的下一步」,是一个需要停一下的动作。
+ */
+.lock-modal__ok {
+  border: 1px solid var(--bad);
+  background: var(--bad);
+  color: var(--surface);
+}
+
+.lock-modal__ok:hover {
+  filter: brightness(1.08);
 }

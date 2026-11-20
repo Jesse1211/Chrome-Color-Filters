@@ -28,6 +28,20 @@ export interface PopupSettingsState {
   readonly toggleMaster: (next: boolean) => Promise<ActionResult>;
   readonly deleteRule: (index: number) => Promise<ActionResult>;
   readonly reorderRules: (rules: readonly FilterRule[]) => Promise<ActionResult>;
+  /**
+   * 把一次**本窗口自己**完成的写入结果同步进 React 状态(T6c 接入点)。
+   *
+   * 仓储层的 `subscribe` 走 `storage.onChanged`,它只在**别处**改动时触发;
+   * 本窗口自己的写入必须显式回灌 —— 上面的 `apply` 正是这么做的。
+   * 锁定写入(`useLockState`)不走本 hook 的 `apply`(它直接调
+   * `repository.setLockUntil`,一次写入,ADR-057 的原子性在仓储层),
+   * 故把这个 setter 暴露出来供其回灌。
+   *
+   * ⚠️ 这**不是**一个绕过仓储层的写入口:它只改 React 的本地状态,
+   * 且调用方只应传**仓储层写入成功后返回的那一份** `FilterSettings`
+   * (INV-4:真相在存储)。
+   */
+  readonly syncSettings: (next: FilterSettings) => void;
 }
 
 export interface UsePopupSettingsOptions {
@@ -149,9 +163,30 @@ export function usePopupSettings({
     [apply, repository],
   );
 
+  /** 见 `PopupSettingsState.syncSettings`。 */
+  const syncSettings = useCallback((next: FilterSettings) => {
+    setSettings(next);
+  }, []);
+
   return useMemo(
-    () => ({ settings, tabState, loaded, toggleMaster, deleteRule, reorderRules }),
-    [settings, tabState, loaded, toggleMaster, deleteRule, reorderRules],
+    () => ({
+      settings,
+      tabState,
+      loaded,
+      toggleMaster,
+      deleteRule,
+      reorderRules,
+      syncSettings,
+    }),
+    [
+      settings,
+      tabState,
+      loaded,
+      toggleMaster,
+      deleteRule,
+      reorderRules,
+      syncSettings,
+    ],
   );
 }
 
