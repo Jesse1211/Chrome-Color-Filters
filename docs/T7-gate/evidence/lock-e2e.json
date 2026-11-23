@@ -1,0 +1,424 @@
+{
+  "gate": "lock-e2e",
+  "assertions": [
+    {
+      "name": "前置:主开关 OFF 时页面无滤镜(INV-8,探针有效)",
+      "ok": true,
+      "detail": {
+        "offFilter": "none"
+      }
+    },
+    {
+      "name": "前置:popup 里主开关显示为 OFF",
+      "ok": true,
+      "detail": {
+        "checked": false
+      }
+    },
+    {
+      "name": "未锁定 → 计时器入口在场(T6c)",
+      "ok": true
+    },
+    {
+      "name": "未锁定 → 倒计时横幅不在场",
+      "ok": true
+    },
+    {
+      "name": "ADR-056:点「锁定」弹出二次确认框",
+      "ok": true
+    },
+    {
+      "name": "🔴 ADR-057:确认框预先告知「主开关会被一并打开」",
+      "ok": true,
+      "detail": "滤镜当前已关闭,启动锁定将同时开启滤镜"
+    },
+    {
+      "name": "ADR-056:未确认前不写入任何数据",
+      "ok": true,
+      "detail": {
+        "lockUntil": null,
+        "masterEnabled": false
+      }
+    },
+    {
+      "name": "🔴 锁定已启动,lockUntil 为绝对时间戳(ADR-053/INV-13)",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795439016125,
+        "now": 1795438956122
+      }
+    },
+    {
+      "name": "🔴 ADR-057:启动锁定**原子地**把 masterEnabled 置为 true",
+      "ok": true,
+      "detail": {
+        "masterEnabled": true
+      }
+    },
+    {
+      "name": "锁定时长约等于 UI 选的 1 分钟",
+      "ok": true,
+      "detail": {
+        "plannedMs": 60003
+      }
+    },
+    {
+      "name": "🔴 ADR-057 的端到端后果:主开关自动 ON → 真实页面真的上了滤镜",
+      "ok": true,
+      "detail": {
+        "onFilter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "🔴 INV-14 验收通道有效:真实仓储层在真实 Chrome 中判定为锁定中",
+      "ok": true,
+      "detail": {
+        "lockedNow": true
+      }
+    },
+    {
+      "name": "🔴 INV-11/14:锁定中 addRule 被拒,错误是 locked(非静默丢弃)",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "locked"
+      }
+    },
+    {
+      "name": "🔴 INV-11/14:锁定中 removeRule 被拒(locked)",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "locked"
+      }
+    },
+    {
+      "name": "🔴 INV-11/14:锁定中 updateRule 被拒(locked)",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "locked"
+      }
+    },
+    {
+      "name": "🔴 INV-11/14:锁定中关主开关被拒(locked)",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "locked"
+      }
+    },
+    {
+      "name": "🔴 INV-12:锁定中**缩短**计时器被拒(locked)",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "locked"
+      }
+    },
+    {
+      "name": "🔴 INV-12:锁定中**解锁**(置 null)被拒 —— 没有任何提前结束的途径",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "locked"
+      }
+    },
+    {
+      "name": "🔴 INV-12:锁定中**延长**成功 —— 加码可以,反悔不行",
+      "ok": true,
+      "detail": {
+        "ok": true,
+        "kind": null
+      }
+    },
+    {
+      "name": "🔴 INV-11:被拒写入后 masterEnabled / rules 原样未变",
+      "ok": true,
+      "detail": {
+        "masterEnabled": true,
+        "rules": [
+          {
+            "intensity": 100,
+            "mode": "Grayscale",
+            "pattern": "*.wikipedia.org"
+          }
+        ]
+      }
+    },
+    {
+      "name": "🔴 INV-11 例外 b:maxSeenTime 在锁定期间**仍在推进**(未随锁定冻结)",
+      "ok": true,
+      "detail": {
+        "maxSeenTime": 1795438957922,
+        "tStart": 1795438956122
+      }
+    },
+    {
+      "name": "锁定中 → 倒计时横幅在场(T6c)",
+      "ok": true
+    },
+    {
+      "name": "锁定中 → 计时器启动入口**不**在场",
+      "ok": true
+    },
+    {
+      "name": "锁定中 → **仅**提供延长(lock-extend 在场)",
+      "ok": true
+    },
+    {
+      "name": "ADR-055 第二道防线:锁定中主开关在 UI 上被置灰",
+      "ok": true,
+      "detail": {
+        "disabled": true
+      }
+    },
+    {
+      "name": "锁定中倒计时有内容",
+      "ok": true,
+      "detail": "🔒 锁定中 00:01:29"
+    },
+    {
+      "name": "🔴 INV-15:时钟倒退 1 小时后仍判定为锁定中(倒退不能解锁)",
+      "ok": true,
+      "detail": {
+        "stillLocked": true
+      }
+    },
+    {
+      "name": "🔴 INV-15/ADR-059:有效剩余时长**未因倒退而增加**(单调下界起作用)",
+      "ok": true,
+      "detail": {
+        "naiveRemainingMs": 3600000,
+        "actualRemainingMs": 88179,
+        "lockWindowMs": 90003,
+        "说明": "裸时钟会算出 ~1 小时剩余(倒退量);夹过单调下界后仅剩真实锁定窗口内的余额"
+      }
+    },
+    {
+      "name": "🔴 INV-12:倒退的时钟也无法解锁",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "locked"
+      }
+    },
+    {
+      "name": "🔴 INV-12:倒退的时钟也无法缩短锁定",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "locked"
+      }
+    },
+    {
+      "name": "INV-11:倒退时钟的各项尝试之后,lockUntil 未被改动",
+      "ok": true,
+      "detail": {
+        "before": 1795439046125,
+        "after": 1795439046125
+      }
+    },
+    {
+      "name": "🔴 INV-13:完全退出并重启浏览器后,锁定仍有效(lockUntil 原值存活)",
+      "ok": true,
+      "detail": {
+        "before": 1795439046125,
+        "after": 1795439046125
+      }
+    },
+    {
+      "name": "🔴 INV-13/ADR-053:重启后剩余时间按绝对时间正确递减(未被重置为完整窗口)",
+      "ok": true,
+      "detail": {
+        "remainingMs": 85851,
+        "lockWindowMs": 90003,
+        "已消耗ms": 4152
+      }
+    },
+    {
+      "name": "ADR-010:重启后规则与顺序完好",
+      "ok": true,
+      "detail": {
+        "rules": [
+          {
+            "intensity": 100,
+            "mode": "Grayscale",
+            "pattern": "*.wikipedia.org"
+          }
+        ]
+      }
+    },
+    {
+      "name": "🔴 INV-13:重启后锁定**仍在强制**(解锁尝试仍被拒)",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "locked",
+        "isLocked": true
+      }
+    },
+    {
+      "name": "🔴 到期后自动解锁(isCurrentlyLocked 为 false,无需任何手动操作)",
+      "ok": true,
+      "detail": {
+        "stillLocked": false,
+        "masterOff": {
+          "ok": true,
+          "kind": null
+        },
+        "addRule": {
+          "ok": true,
+          "kind": null
+        }
+      }
+    },
+    {
+      "name": "🔴 到期后设置可改:关主开关成功",
+      "ok": true,
+      "detail": {
+        "ok": true,
+        "kind": null
+      }
+    },
+    {
+      "name": "🔴 到期后设置可改:新增规则成功",
+      "ok": true,
+      "detail": {
+        "ok": true,
+        "kind": null
+      }
+    },
+    {
+      "name": "到期后的写入真的落盘了",
+      "ok": true,
+      "detail": {
+        "masterEnabled": false,
+        "rules": [
+          {
+            "intensity": 100,
+            "mode": "Grayscale",
+            "pattern": "*.wikipedia.org"
+          },
+          {
+            "intensity": 80,
+            "mode": "BlueYellow",
+            "pattern": "example.com"
+          }
+        ]
+      }
+    },
+    {
+      "name": "到期后 UI:计时器启动入口回来了",
+      "ok": true
+    },
+    {
+      "name": "到期后 UI:倒计时横幅消失了",
+      "ok": true
+    },
+    {
+      "name": "到期后 UI:主开关不再置灰",
+      "ok": true,
+      "detail": {
+        "disabled": false
+      }
+    }
+  ],
+  "cases": [
+    {
+      "step": "锁定中经仓储层的写入尝试",
+      "repoResults": {
+        "lockedNow": true,
+        "addRule": {
+          "ok": false,
+          "kind": "locked"
+        },
+        "removeRule": {
+          "ok": false,
+          "kind": "locked"
+        },
+        "updateRule": {
+          "ok": false,
+          "kind": "locked"
+        },
+        "masterOff": {
+          "ok": false,
+          "kind": "locked"
+        },
+        "shorten": {
+          "ok": false,
+          "kind": "locked"
+        },
+        "unlock": {
+          "ok": false,
+          "kind": "locked"
+        },
+        "extend": {
+          "ok": true,
+          "kind": null
+        }
+      }
+    },
+    {
+      "step": "INV-15 注入倒退时钟",
+      "skew": {
+        "stillLocked": true,
+        "naiveRemaining": 3600000,
+        "actualRemaining": 88179,
+        "maxSeenTime": 1795438957946,
+        "unlock": {
+          "ok": false,
+          "kind": "locked"
+        },
+        "shorten": {
+          "ok": false,
+          "kind": "locked"
+        }
+      }
+    },
+    {
+      "step": "到期后",
+      "expired": {
+        "stillLocked": false,
+        "masterOff": {
+          "ok": true,
+          "kind": null
+        },
+        "addRule": {
+          "ok": true,
+          "kind": null
+        }
+      }
+    },
+    {
+      "step": "到期后 storage 变更审计轨迹",
+      "audit": [
+        {
+          "t": 1795439049130,
+          "masterEnabled": true,
+          "rules": 1,
+          "lockUntil": 1795439046125
+        },
+        {
+          "t": 1795439049131,
+          "masterEnabled": true,
+          "rules": 1,
+          "lockUntil": 1795439046125
+        },
+        {
+          "t": 1795439049131,
+          "masterEnabled": false,
+          "rules": 1,
+          "lockUntil": 1795439046125
+        },
+        {
+          "t": 1795439049134,
+          "masterEnabled": false,
+          "rules": 2,
+          "lockUntil": 1795439046125
+        }
+      ]
+    }
+  ],
+  "pass": true
+}

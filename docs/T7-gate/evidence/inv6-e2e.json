@@ -1,0 +1,136 @@
+{
+  "gate": "inv6-e2e",
+  "assertions": [
+    {
+      "name": "基线:wikipedia 建规则前无滤镜(探针有效)",
+      "ok": true,
+      "detail": {
+        "wikiBase": "none"
+      }
+    },
+    {
+      "name": "取到目标页 tab",
+      "ok": true,
+      "detail": {
+        "id": 390879716,
+        "windowId": 390879714
+      }
+    },
+    {
+      "name": "popup 收到 GET_TAB_STATE 响应(ADR-044 真实联调)",
+      "ok": true
+    },
+    {
+      "name": "🔴 UI 建的两条规则已落盘(ADR-010 storage.local)",
+      "ok": true,
+      "detail": [
+        {
+          "intensity": 100,
+          "mode": "Grayscale",
+          "pattern": "*.wikipedia.org"
+        },
+        {
+          "intensity": 100,
+          "mode": "BlueYellow",
+          "pattern": "*"
+        }
+      ]
+    },
+    {
+      "name": "🔴 顺序即优先级(ADR-008):索引 0 = 专属规则,索引 1 = 通配规则",
+      "ok": true,
+      "detail": [
+        {
+          "intensity": 100,
+          "mode": "Grayscale",
+          "pattern": "*.wikipedia.org"
+        },
+        {
+          "intensity": 100,
+          "mode": "BlueYellow",
+          "pattern": "*"
+        }
+      ]
+    },
+    {
+      "name": "UI 写出的 mode 是合法 FilterMode 字面量",
+      "ok": true,
+      "detail": [
+        "Grayscale",
+        "BlueYellow"
+      ]
+    },
+    {
+      "name": "🔴 INV-6 端到端:wikipedia 命中索引 0(Grayscale),**不是**通配的 B/Y",
+      "ok": true,
+      "detail": {
+        "wikiFilter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "🔴 INV-2 端到端:wikipedia 上只有**一个** filter 生效(非两条叠加)",
+      "ok": true,
+      "detail": {
+        "wikiFilter": "grayscale(1)",
+        "count": 1
+      }
+    },
+    {
+      "name": "🔴 INV-6 端到端:example.com 落到索引 1 的通配规则(BlueYellow 矩阵)",
+      "ok": true,
+      "detail": {
+        "otherFilter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/20"
+      }
+    },
+    {
+      "name": "🔴 INV-2 端到端:example.com 上只有**一个** filter 生效",
+      "ok": true,
+      "detail": {
+        "count": 1
+      }
+    },
+    {
+      "name": "列表首行是专属规则",
+      "ok": true,
+      "detail": "*.wikipedia.org"
+    },
+    {
+      "name": "通过 UI 删除索引 0 后只剩通配规则",
+      "ok": true,
+      "detail": [
+        {
+          "intensity": 100,
+          "mode": "BlueYellow",
+          "pattern": "*"
+        }
+      ]
+    },
+    {
+      "name": "🔴 反向确认:删掉专属规则后 wikipedia 改由通配规则生效(B/Y)",
+      "ok": true,
+      "detail": {
+        "wikiAfter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/20"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "site": "en.wikipedia.org",
+      "expected": "Grayscale",
+      "filter": "grayscale(1)"
+    },
+    {
+      "site": "example.com",
+      "expected": "BlueYellow",
+      "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.741159%20-0.407208%200.666049%200%200%200.075098%200.585234%200.339668%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+    },
+    {
+      "site": "x.com (留档,不参与判定)",
+      "observed": {
+        "url": "chrome-error://chromewebdata/",
+        "filter": "none"
+      }
+    }
+  ],
+  "pass": true
+}

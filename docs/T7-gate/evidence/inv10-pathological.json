@@ -1,0 +1,224 @@
+{
+  "gate": "inv10-pathological",
+  "assertions": [
+    {
+      "name": "🔴 仪器有效性:基线组有 ≥2 个有效 FCP 观测(否则判据空转)",
+      "ok": true,
+      "detail": {
+        "validFcpSamples": 4,
+        "rounds": 5,
+        "raw": [
+          2220,
+          null,
+          300,
+          312,
+          316
+        ]
+      }
+    },
+    {
+      "name": "🔴 仪器有效性:病态组有 ≥2 个有效 FCP 观测(否则判据空转)",
+      "ok": true,
+      "detail": {
+        "validFcpSamples": 4,
+        "rounds": 5,
+        "raw": [
+          292,
+          352,
+          312,
+          596,
+          null
+        ]
+      }
+    },
+    {
+      "name": "探针有效:基线组真的套上了滤镜",
+      "ok": true,
+      "detail": [
+        "grayscale(1)",
+        "grayscale(1)",
+        "grayscale(1)",
+        "grayscale(1)",
+        "grayscale(1)"
+      ]
+    },
+    {
+      "name": "探针有效:病态组(100 条 100 个 `*`)真的套上了滤镜",
+      "ok": true,
+      "detail": [
+        "grayscale(1)",
+        "grayscale(1)",
+        "grayscale(1)",
+        "grayscale(1)",
+        "grayscale(1)"
+      ]
+    },
+    {
+      "name": "🔴 INV-10:病态模式下首帧耗时未显著恶化(FCP 中位数 < 2× 基线)",
+      "ok": true,
+      "detail": {
+        "baselineFcp": 316,
+        "pathologicalFcp": 352,
+        "ratio": 1.114
+      }
+    },
+    {
+      "name": "🔴 INV-10:病态模式下首帧绝对耗时 < 5000ms(无灾难性回溯)",
+      "ok": true,
+      "detail": {
+        "pathologicalFcp": 352
+      }
+    },
+    {
+      "name": "INV-10:病态模式下 DOMContentLoaded 未显著恶化(< 2× 基线)",
+      "ok": true,
+      "detail": {
+        "baselineDcl": 303.40000009536743,
+        "pathologicalDcl": 333.40000009536743
+      }
+    },
+    {
+      "name": "ADR-062:病态模式下声明式注册仍在 2000ms 内完成",
+      "ok": true,
+      "detail": {
+        "registerMs": [
+          9,
+          7,
+          8,
+          8,
+          1
+        ]
+      }
+    },
+    {
+      "name": "🔴 ADR-062/064:101 条同 (mode,intensity) 规则塌缩为 1 条注册(未按规则数膨胀)",
+      "ok": true,
+      "detail": {
+        "registrations": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "baseline": [
+        {
+          "label": "baseline",
+          "fcp": 2220,
+          "fp": 2220,
+          "domContentLoaded": 2198.300000190735,
+          "responseEnd": 2050.199999809265,
+          "registerMs": 2,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "baseline",
+          "fcp": null,
+          "fp": null,
+          "domContentLoaded": 271.5,
+          "responseEnd": 240.09999990463257,
+          "registerMs": 2,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "baseline",
+          "fcp": 300,
+          "fp": 300,
+          "domContentLoaded": 296.19999980926514,
+          "responseEnd": 236.09999990463257,
+          "registerMs": 7,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "baseline",
+          "fcp": 312,
+          "fp": 312,
+          "domContentLoaded": 303.40000009536743,
+          "responseEnd": 243.7000002861023,
+          "registerMs": 6,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "baseline",
+          "fcp": 316,
+          "fp": 316,
+          "domContentLoaded": 313.80000019073486,
+          "responseEnd": 246.5,
+          "registerMs": 8,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        }
+      ],
+      "pathological": [
+        {
+          "label": "pathological",
+          "fcp": 292,
+          "fp": 292,
+          "domContentLoaded": 333.40000009536743,
+          "responseEnd": 291.80000019073486,
+          "registerMs": 9,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "pathological",
+          "fcp": 352,
+          "fp": 352,
+          "domContentLoaded": 350.19999980926514,
+          "responseEnd": 284.2999997138977,
+          "registerMs": 7,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "pathological",
+          "fcp": 312,
+          "fp": 312,
+          "domContentLoaded": 310.6000003814697,
+          "responseEnd": 242,
+          "registerMs": 8,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "pathological",
+          "fcp": 596,
+          "fp": 596,
+          "domContentLoaded": 584.8000001907349,
+          "responseEnd": 519,
+          "registerMs": 8,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "pathological",
+          "fcp": null,
+          "fp": null,
+          "domContentLoaded": 266.90000009536743,
+          "responseEnd": 235.90000009536743,
+          "registerMs": 1,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        }
+      ]
+    },
+    {
+      "medians": {
+        "baselineFcp": 316,
+        "pathologicalFcp": 352,
+        "baselineDcl": 303.40000009536743,
+        "pathologicalDcl": 333.40000009536743
+      }
+    }
+  ],
+  "pass": true
+}

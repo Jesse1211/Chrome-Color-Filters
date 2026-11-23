@@ -1,0 +1,110 @@
+{
+  "gate": "inv7-capacity",
+  "assertions": [
+    {
+      "name": "前置:已有正好 20 条规则(ADR-011 上限)",
+      "ok": true,
+      "detail": {
+        "count": 20
+      }
+    },
+    {
+      "name": "🔴 INV-7:第 21 条被仓储层拒绝",
+      "ok": true,
+      "detail": {
+        "ok": false,
+        "kind": "other",
+        "reason": "capacity-exceeded",
+        "message": "规则数量已达上限 20 条,请先删除几条再添加。"
+      }
+    },
+    {
+      "name": "🔴 ADR-046:拒绝是**结构化错误**(kind/reason 皆符合契约),非静默丢弃也非 throw",
+      "ok": true,
+      "detail": {
+        "kind": "other",
+        "reason": "capacity-exceeded"
+      }
+    },
+    {
+      "name": "🔴 INV-7:提示**明确**(错误消息非空且点明 20 条上限)",
+      "ok": true,
+      "detail": {
+        "message": "规则数量已达上限 20 条,请先删除几条再添加。"
+      }
+    },
+    {
+      "name": "🔴 ADR-012:拒绝之后原有 20 条**一字未动**(绝不静默淘汰)",
+      "ok": true,
+      "detail": {
+        "count": 20,
+        "unchanged": true
+      }
+    },
+    {
+      "name": "新规则确实没有被写进去",
+      "ok": true,
+      "detail": {
+        "patterns": [
+          "site0.example.com",
+          "site1.example.com",
+          "site2.example.com"
+        ]
+      }
+    },
+    {
+      "name": "🔴 UI:达到上限时出现容量提示条",
+      "ok": true
+    },
+    {
+      "name": "🔴 INV-7:UI 提示文案逐字符合规格(ADR-047 中文)",
+      "ok": true,
+      "detail": {
+        "text": "已达 20 条上限,请先删除一条再添加",
+        "expected": "已达 20 条上限,请先删除一条再添加"
+      }
+    },
+    {
+      "name": "🔴 UI:达到上限时「新建规则」入口被禁用(第二道防线,ADR-055 同理)",
+      "ok": true,
+      "detail": {
+        "disabled": true
+      }
+    },
+    {
+      "name": "UI:条数显示为 20",
+      "ok": true,
+      "detail": {
+        "text": "20/20"
+      }
+    },
+    {
+      "name": "🔴 删掉一条后即可再添加(提示所说的「请先删除一条再添加」确实可行)",
+      "ok": true,
+      "detail": {
+        "rm": true,
+        "add": true,
+        "kind": null
+      }
+    },
+    {
+      "name": "闭环后仍恰好 20 条",
+      "ok": true,
+      "detail": {
+        "count": 20
+      }
+    }
+  ],
+  "cases": [
+    {
+      "step": "第 21 条的仓储层写入尝试",
+      "attempt": {
+        "ok": false,
+        "kind": "other",
+        "reason": "capacity-exceeded",
+        "message": "规则数量已达上限 20 条,请先删除几条再添加。"
+      }
+    }
+  ],
+  "pass": true
+}

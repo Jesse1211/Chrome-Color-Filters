@@ -1,0 +1,245 @@
+{
+  "gate": "persistence",
+  "assertions": [
+    {
+      "name": "经 UI 建出 5 条规则",
+      "ok": true,
+      "detail": {
+        "count": 5
+      }
+    },
+    {
+      "name": "UI 写出的 pattern/mode/intensity 与所填一致",
+      "ok": true,
+      "detail": [
+        {
+          "intensity": 25,
+          "mode": "Grayscale",
+          "pattern": "*"
+        },
+        {
+          "intensity": 75,
+          "mode": "RedGreen",
+          "pattern": "news.ycombinator.com"
+        },
+        {
+          "intensity": 60,
+          "mode": "BlueYellow",
+          "pattern": "example.com"
+        },
+        {
+          "intensity": 40,
+          "mode": "GreenRed",
+          "pattern": "*.github.com"
+        },
+        {
+          "intensity": 100,
+          "mode": "Grayscale",
+          "pattern": "*.wikipedia.org"
+        }
+      ]
+    },
+    {
+      "name": "前提:末条规则在 wikipedia 页上确为「被遮蔽」(§5.6)",
+      "ok": true,
+      "detail": {
+        "testid": "status-line",
+        "kind": "shadowed",
+        "tone": "warn"
+      }
+    },
+    {
+      "name": "经 UI 触发一次重排(走 replaceRules,与拖拽松手同一写入路径)",
+      "ok": true,
+      "detail": {
+        "reordered": true
+      }
+    },
+    {
+      "name": "重排确实改变了顺序(探针有效)",
+      "ok": true,
+      "detail": {
+        "beforeReorder": [
+          "*",
+          "news.ycombinator.com",
+          "example.com",
+          "*.github.com",
+          "*.wikipedia.org"
+        ],
+        "afterReorder": [
+          "*.wikipedia.org",
+          "*",
+          "news.ycombinator.com",
+          "example.com",
+          "*.github.com"
+        ]
+      }
+    },
+    {
+      "name": "🔴 ADR-010:完全退出并重启 Chrome 后,规则仍在(storage.local 持久化)",
+      "ok": true,
+      "detail": {
+        "count": 5
+      }
+    },
+    {
+      "name": "🔴 ADR-010/ADR-008:重启后规则**顺序**逐字完好(顺序即优先级)",
+      "ok": true,
+      "detail": {
+        "before": [
+          {
+            "intensity": 100,
+            "mode": "Grayscale",
+            "pattern": "*.wikipedia.org"
+          },
+          {
+            "intensity": 25,
+            "mode": "Grayscale",
+            "pattern": "*"
+          },
+          {
+            "intensity": 75,
+            "mode": "RedGreen",
+            "pattern": "news.ycombinator.com"
+          },
+          {
+            "intensity": 60,
+            "mode": "BlueYellow",
+            "pattern": "example.com"
+          },
+          {
+            "intensity": 40,
+            "mode": "GreenRed",
+            "pattern": "*.github.com"
+          }
+        ],
+        "after": [
+          {
+            "intensity": 100,
+            "mode": "Grayscale",
+            "pattern": "*.wikipedia.org"
+          },
+          {
+            "intensity": 25,
+            "mode": "Grayscale",
+            "pattern": "*"
+          },
+          {
+            "intensity": 75,
+            "mode": "RedGreen",
+            "pattern": "news.ycombinator.com"
+          },
+          {
+            "intensity": 60,
+            "mode": "BlueYellow",
+            "pattern": "example.com"
+          },
+          {
+            "intensity": 40,
+            "mode": "GreenRed",
+            "pattern": "*.github.com"
+          }
+        ]
+      }
+    },
+    {
+      "name": "🔴 ADR-061:重排后立即关闭浏览器,顺序**未**丢失(写入无防抖窗口)",
+      "ok": true,
+      "detail": {
+        "afterPatterns": [
+          "*.wikipedia.org",
+          "*",
+          "news.ycombinator.com",
+          "example.com",
+          "*.github.com"
+        ]
+      }
+    },
+    {
+      "name": "重启后 masterEnabled / version / maxSeenTime 等字段完好",
+      "ok": true,
+      "detail": {
+        "masterEnabled": true,
+        "version": 1,
+        "maxSeenTime": 1795437287163
+      }
+    },
+    {
+      "name": "ADR-025:重启后持久化键集仍只有规格内的 5 个(无派生值被写进去)",
+      "ok": true,
+      "detail": {
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "maxSeenTime",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "ADR-025:规则对象的键集仍只有 pattern/mode/intensity",
+      "ok": true,
+      "detail": {
+        "ruleKeys": [
+          "intensity",
+          "mode",
+          "pattern"
+        ]
+      }
+    },
+    {
+      "name": "🔴 重启后规则**真的仍在生效**(数据完好 ≠ 行为完好)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)",
+        "winner": {
+          "intensity": 100,
+          "mode": "Grayscale",
+          "pattern": "*.wikipedia.org"
+        },
+        "firstWikiIndex": 0
+      }
+    },
+    {
+      "name": "ADR-062:重启后声明式注册仍在(persistAcrossSessions 生效)",
+      "ok": true,
+      "detail": {
+        "registrations": 5
+      }
+    }
+  ],
+  "cases": [
+    {
+      "step": "重排后、关闭前的持久化内容",
+      "rules": [
+        {
+          "intensity": 100,
+          "mode": "Grayscale",
+          "pattern": "*.wikipedia.org"
+        },
+        {
+          "intensity": 25,
+          "mode": "Grayscale",
+          "pattern": "*"
+        },
+        {
+          "intensity": 75,
+          "mode": "RedGreen",
+          "pattern": "news.ycombinator.com"
+        },
+        {
+          "intensity": 60,
+          "mode": "BlueYellow",
+          "pattern": "example.com"
+        },
+        {
+          "intensity": 40,
+          "mode": "GreenRed",
+          "pattern": "*.github.com"
+        }
+      ]
+    }
+  ],
+  "pass": true
+}

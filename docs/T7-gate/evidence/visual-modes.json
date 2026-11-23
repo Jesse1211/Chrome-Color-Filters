@@ -1,0 +1,840 @@
+{
+  "gate": "visual-modes",
+  "assertions": [
+    {
+      "name": "[wikipedia] 基线:无规则时无滤镜,且页面本身是彩色的(探针有效)",
+      "ok": true,
+      "detail": {
+        "baseFilter": "none",
+        "maxSpread": 178,
+        "coloredRatio": 0.0596,
+        "sampled": 72000
+      }
+    },
+    {
+      "name": "[wikipedia] 基线:三个注入色块未被滤镜改动(= 原纯色,证明 fixture 可信)",
+      "ok": true,
+      "detail": {
+        "baseSwatch": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "expected": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ]
+      }
+    },
+    {
+      "name": "[wikipedia/Grayscale] 滤镜在真实网页上真的生效,且形状符合本模式",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "[wikipedia/Grayscale] 🔴 确定性色块的像素确实被滤镜改变了(三色至少一变)",
+      "ok": true,
+      "detail": {
+        "swatch": [
+          [
+            208,
+            208,
+            208
+          ],
+          [
+            73,
+            73,
+            73
+          ],
+          [
+            18,
+            18,
+            18
+          ]
+        ],
+        "offBaseline": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "navigations": 1
+      }
+    },
+    {
+      "name": "[wikipedia/Grayscale] 🔴 Grayscale 在真实网页上彻底无彩(maxSpread === 0)",
+      "ok": true,
+      "detail": {
+        "maxSpread": 0
+      }
+    },
+    {
+      "name": "[wikipedia/RedGreen] 滤镜在真实网页上真的生效,且形状符合本模式",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/20"
+      }
+    },
+    {
+      "name": "[wikipedia/RedGreen] 🔴 确定性色块的像素确实被滤镜改变了(三色至少一变)",
+      "ok": true,
+      "detail": {
+        "swatch": [
+          [
+            102,
+            173,
+            0
+          ],
+          [
+            255,
+            133,
+            255
+          ],
+          [
+            0,
+            11,
+            255
+          ]
+        ],
+        "offBaseline": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "navigations": 1
+      }
+    },
+    {
+      "name": "[wikipedia/RedGreen] 🔴 辅助模式仍保有色彩(非灰化;coloredRatio > 0.01)",
+      "ok": true,
+      "detail": {
+        "coloredRatio": 0.0584,
+        "maxSpread": 134
+      }
+    },
+    {
+      "name": "[wikipedia/RedGreen] 使用内联 data: URI 的 feColorMatrix(ADR-063)",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[wikipedia/GreenRed] 滤镜在真实网页上真的生效,且形状符合本模式",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/20"
+      }
+    },
+    {
+      "name": "[wikipedia/GreenRed] 🔴 确定性色块的像素确实被滤镜改变了(三色至少一变)",
+      "ok": true,
+      "detail": {
+        "swatch": [
+          [
+            0,
+            255,
+            80
+          ],
+          [
+            255,
+            0,
+            207
+          ],
+          [
+            50,
+            0,
+            254
+          ]
+        ],
+        "offBaseline": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "navigations": 1
+      }
+    },
+    {
+      "name": "[wikipedia/GreenRed] 🔴 辅助模式仍保有色彩(非灰化;coloredRatio > 0.01)",
+      "ok": true,
+      "detail": {
+        "coloredRatio": 0.0611,
+        "maxSpread": 208
+      }
+    },
+    {
+      "name": "[wikipedia/GreenRed] 使用内联 data: URI 的 feColorMatrix(ADR-063)",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[wikipedia/BlueYellow] 滤镜在真实网页上真的生效,且形状符合本模式",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/20"
+      }
+    },
+    {
+      "name": "[wikipedia/BlueYellow] 🔴 确定性色块的像素确实被滤镜改变了(三色至少一变)",
+      "ok": true,
+      "detail": {
+        "swatch": [
+          [
+            6,
+            174,
+            51
+          ],
+          [
+            255,
+            106,
+            255
+          ],
+          [
+            170,
+            87,
+            255
+          ]
+        ],
+        "offBaseline": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "navigations": 1
+      }
+    },
+    {
+      "name": "[wikipedia/BlueYellow] 🔴 辅助模式仍保有色彩(非灰化;coloredRatio > 0.01)",
+      "ok": true,
+      "detail": {
+        "coloredRatio": 0.0548,
+        "maxSpread": 95
+      }
+    },
+    {
+      "name": "[wikipedia/BlueYellow] 使用内联 data: URI 的 feColorMatrix(ADR-063)",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[hn] 基线:无规则时无滤镜,且页面本身是彩色的(探针有效)",
+      "ok": true,
+      "detail": {
+        "baseFilter": "none",
+        "maxSpread": 255,
+        "coloredRatio": 0.0217,
+        "sampled": 72000
+      }
+    },
+    {
+      "name": "[hn] 基线:三个注入色块未被滤镜改动(= 原纯色,证明 fixture 可信)",
+      "ok": true,
+      "detail": {
+        "baseSwatch": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "expected": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ]
+      }
+    },
+    {
+      "name": "[hn/Grayscale] 滤镜在真实网页上真的生效,且形状符合本模式",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "[hn/Grayscale] 🔴 确定性色块的像素确实被滤镜改变了(三色至少一变)",
+      "ok": true,
+      "detail": {
+        "swatch": [
+          [
+            208,
+            208,
+            208
+          ],
+          [
+            73,
+            73,
+            73
+          ],
+          [
+            18,
+            18,
+            18
+          ]
+        ],
+        "offBaseline": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "navigations": 1
+      }
+    },
+    {
+      "name": "[hn/Grayscale] 🔴 Grayscale 在真实网页上彻底无彩(maxSpread === 0)",
+      "ok": true,
+      "detail": {
+        "maxSpread": 0
+      }
+    },
+    {
+      "name": "[hn/RedGreen] 滤镜在真实网页上真的生效,且形状符合本模式",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/20"
+      }
+    },
+    {
+      "name": "[hn/RedGreen] 🔴 确定性色块的像素确实被滤镜改变了(三色至少一变)",
+      "ok": false,
+      "detail": {
+        "swatch": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "offBaseline": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "navigations": 5
+      }
+    },
+    {
+      "name": "[hn/RedGreen] 🔴 辅助模式仍保有色彩(非灰化;coloredRatio > 0.01)",
+      "ok": true,
+      "detail": {
+        "coloredRatio": 0.0217,
+        "maxSpread": 255
+      }
+    },
+    {
+      "name": "[hn/RedGreen] 使用内联 data: URI 的 feColorMatrix(ADR-063)",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[hn/GreenRed] 滤镜在真实网页上真的生效,且形状符合本模式",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/20"
+      }
+    },
+    {
+      "name": "[hn/GreenRed] 🔴 确定性色块的像素确实被滤镜改变了(三色至少一变)",
+      "ok": true,
+      "detail": {
+        "swatch": [
+          [
+            0,
+            255,
+            80
+          ],
+          [
+            255,
+            0,
+            207
+          ],
+          [
+            50,
+            0,
+            254
+          ]
+        ],
+        "offBaseline": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "navigations": 4
+      }
+    },
+    {
+      "name": "[hn/GreenRed] 🔴 辅助模式仍保有色彩(非灰化;coloredRatio > 0.01)",
+      "ok": true,
+      "detail": {
+        "coloredRatio": 0.0221,
+        "maxSpread": 255
+      }
+    },
+    {
+      "name": "[hn/GreenRed] 使用内联 data: URI 的 feColorMatrix(ADR-063)",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[hn/BlueYellow] 滤镜在真实网页上真的生效,且形状符合本模式",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/20"
+      }
+    },
+    {
+      "name": "[hn/BlueYellow] 🔴 确定性色块的像素确实被滤镜改变了(三色至少一变)",
+      "ok": false,
+      "detail": {
+        "swatch": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "offBaseline": [
+          [
+            102,
+            255,
+            51
+          ],
+          [
+            255,
+            0,
+            255
+          ],
+          [
+            0,
+            0,
+            255
+          ]
+        ],
+        "navigations": 5
+      }
+    },
+    {
+      "name": "[hn/BlueYellow] 🔴 辅助模式仍保有色彩(非灰化;coloredRatio > 0.01)",
+      "ok": true,
+      "detail": {
+        "coloredRatio": 0.0217,
+        "maxSpread": 255
+      }
+    },
+    {
+      "name": "[hn/BlueYellow] 使用内联 data: URI 的 feColorMatrix(ADR-063)",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "screenshots": [
+        {
+          "site": "wikipedia",
+          "mode": "OFF",
+          "file": "wikipedia-00-OFF.png",
+          "maxSpread": 178,
+          "coloredRatio": 0.0596,
+          "sampled": 72000
+        },
+        {
+          "site": "wikipedia",
+          "mode": "Grayscale",
+          "file": "wikipedia-Grayscale.png",
+          "filter": "grayscale(1)",
+          "maxSpread": 0,
+          "coloredRatio": 0,
+          "sampled": 72000,
+          "meanDiffVsOff": 2.14,
+          "swatch": [
+            [
+              208,
+              208,
+              208
+            ],
+            [
+              73,
+              73,
+              73
+            ],
+            [
+              18,
+              18,
+              18
+            ]
+          ],
+          "navigations": 1
+        },
+        {
+          "site": "wikipedia",
+          "mode": "RedGreen",
+          "file": "wikipedia-RedGreen.png",
+          "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%",
+          "maxSpread": 134,
+          "coloredRatio": 0.0584,
+          "sampled": 72000,
+          "meanDiffVsOff": 0.93,
+          "swatch": [
+            [
+              102,
+              173,
+              0
+            ],
+            [
+              255,
+              133,
+              255
+            ],
+            [
+              0,
+              11,
+              255
+            ]
+          ],
+          "navigations": 1
+        },
+        {
+          "site": "wikipedia",
+          "mode": "GreenRed",
+          "file": "wikipedia-GreenRed.png",
+          "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%",
+          "maxSpread": 208,
+          "coloredRatio": 0.0611,
+          "sampled": 72000,
+          "meanDiffVsOff": 0.42,
+          "swatch": [
+            [
+              0,
+              255,
+              80
+            ],
+            [
+              255,
+              0,
+              207
+            ],
+            [
+              50,
+              0,
+              254
+            ]
+          ],
+          "navigations": 1
+        },
+        {
+          "site": "wikipedia",
+          "mode": "BlueYellow",
+          "file": "wikipedia-BlueYellow.png",
+          "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%",
+          "maxSpread": 95,
+          "coloredRatio": 0.0548,
+          "sampled": 72000,
+          "meanDiffVsOff": 1.23,
+          "swatch": [
+            [
+              6,
+              174,
+              51
+            ],
+            [
+              255,
+              106,
+              255
+            ],
+            [
+              170,
+              87,
+              255
+            ]
+          ],
+          "navigations": 1
+        },
+        {
+          "site": "hn",
+          "mode": "OFF",
+          "file": "hn-00-OFF.png",
+          "maxSpread": 255,
+          "coloredRatio": 0.0217,
+          "sampled": 72000
+        },
+        {
+          "site": "hn",
+          "mode": "Grayscale",
+          "file": "hn-Grayscale.png",
+          "filter": "grayscale(1)",
+          "maxSpread": 0,
+          "coloredRatio": 0,
+          "sampled": 72000,
+          "meanDiffVsOff": 3.98,
+          "swatch": [
+            [
+              208,
+              208,
+              208
+            ],
+            [
+              73,
+              73,
+              73
+            ],
+            [
+              18,
+              18,
+              18
+            ]
+          ],
+          "navigations": 1
+        },
+        {
+          "site": "hn",
+          "mode": "RedGreen",
+          "file": "hn-RedGreen.png",
+          "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%",
+          "maxSpread": 255,
+          "coloredRatio": 0.0217,
+          "sampled": 72000,
+          "meanDiffVsOff": 0,
+          "swatch": [
+            [
+              102,
+              255,
+              51
+            ],
+            [
+              255,
+              0,
+              255
+            ],
+            [
+              0,
+              0,
+              255
+            ]
+          ],
+          "navigations": 5
+        },
+        {
+          "site": "hn",
+          "mode": "GreenRed",
+          "file": "hn-GreenRed.png",
+          "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%",
+          "maxSpread": 255,
+          "coloredRatio": 0.0221,
+          "sampled": 72000,
+          "meanDiffVsOff": 16.35,
+          "swatch": [
+            [
+              0,
+              255,
+              80
+            ],
+            [
+              255,
+              0,
+              207
+            ],
+            [
+              50,
+              0,
+              254
+            ]
+          ],
+          "navigations": 4
+        },
+        {
+          "site": "hn",
+          "mode": "BlueYellow",
+          "file": "hn-BlueYellow.png",
+          "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%",
+          "maxSpread": 255,
+          "coloredRatio": 0.0217,
+          "sampled": 72000,
+          "meanDiffVsOff": 0,
+          "swatch": [
+            [
+              102,
+              255,
+              51
+            ],
+            [
+              255,
+              0,
+              255
+            ],
+            [
+              0,
+              0,
+              255
+            ]
+          ],
+          "navigations": 5
+        }
+      ]
+    }
+  ],
+  "pass": false
+}
