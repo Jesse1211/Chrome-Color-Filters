@@ -22,7 +22,34 @@ export default defineConfig({
     // 漏了这条权限所有注册调用都会失败,且失败表现是「滤镜静默不生效」。
     // 它**不增加任何用户可见的权限警告**(DESIGN.md §6 第 3 条),
     // 故没有产品侧理由省它。
-    permissions: ['storage', 'scripting'],
+    // 🔴 `tabs` 是 **ADR-013 + ADR-044 的前提**(本轮返工加入)。
+    //
+    // ADR-044 把 `reason` 的取值**逐字定死**为
+    // `'internal-page' | 'web-store' | 'pdf' | 'new-tab' | 'no-tab'`,
+    // 而 ADR-013 把 `chrome://` 与「新标签页」列为**两类不同**的不可注入页
+    // (两者的 popup 文案不同 —— 这正是 ADR-013「说明原因」的全部意义)。
+    //
+    // 实测(docs/T5-gate/tabstate.cjs,真实 Chrome 产物上 A/B):
+    // 没有本权限时,`chrome://` 页的 tab 对象里 `url` / `pendingUrl` /
+    // `title` / `favIconUrl` **全部被 Chrome 扣留** —— `chrome.tabs.get()`
+    // 返回的对象连 key 都没有。`<all_urls>` **不覆盖**特权 scheme,
+    // 故 host_permissions 给不了这个信息。
+    // 结果是 `chrome://settings` 与 `chrome://newtab` 在 SW 眼里**完全同形**,
+    // 判定只能退化成 `new-tab` —— 即 ADR-044 契约字段取值**错误**,
+    // 且是 §6 T5 gate「`reason` 字段取值正确」直接判红的那一条。
+    // 加上本权限后同一产物上 `url` 变为 `"chrome://settings/"`,reason 恢复
+    // 为 `'internal-page'`。
+    //
+    // ⚠️ **本条会新增一条用户可见警告「读取您的浏览记录」** —— 实测
+    // `chrome://extensions` 的权限列表在加它之后多出这一行,它**不**被
+    // `<all_urls>` 的站点访问警告吸收(docs/T5-gate/ 的 warning A/B)。
+    // 这与 DESIGN.md §6 第 3 条给 `scripting` 的那句「不增加任何用户可见的
+    // 权限警告」**不同**,故此处如实记下,已作为 needs-human 事项上报:
+    // 契约(ADR-044 的五档 reason)与零新增警告两者不可兼得,本轮按
+    // 「ADR 定死的契约优先」处理,未自行放宽 ADR-044。
+    // 不违反 ADR-026/§8 第 7 条:那条禁的是**读取/外传页面内容**,
+    // 本权限只用于读当前 tab 的 URL 做可注入性分类,不读 DOM、不外传。
+    permissions: ['storage', 'scripting', 'tabs'],
 
     // ADR-045 / ADR-019:图标两态,必须是不同的图片资源。
     // 这里注册的是「未生效态」作为静态默认值;T5 在运行时按 tab 切到

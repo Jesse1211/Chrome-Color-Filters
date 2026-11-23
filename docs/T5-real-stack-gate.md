@@ -1,4 +1,4 @@
-# T5 REAL_STACK_GATE — 人工执行步骤
+# T5 REAL_STACK_GATE — **已自动化执行**(附人工复核步骤)
 
 DESIGN.md §8 第 8 条:
 
@@ -9,10 +9,21 @@ DESIGN.md §8 第 8 条:
 > 真实 Chrome 中,让 service worker 被终止(或等待自然休眠)后,打开匹配站点 ——
 > 滤镜仍正确应用(证明真相来源在 storage 而非 worker 内存)
 
-该门禁依赖「**终止 service worker**」这个动作(`chrome://extensions` 卡片上的
-"Service Worker" → "终止",或等约 30 秒自然休眠)。无头环境里没有这个按钮,
-且 MV3 的休眠时机由浏览器决定、不可编程触发 —— 故此处给出可复核的人工步骤,
-**由人类或 Tester 在真实 Chrome 中执行**。
+## ⚠️ 本轮(返工第 2 轮)的更正
+
+**上一轮本文件只是一份空白人工清单**(底部 6 行结果全部未勾选、无执行人、无日期)——
+那等于这道门禁**从未执行**。审核据此判红,且指出:跑它自己的 GATE-5 本就会
+当场暴露 `reason` 的错值。**这个判断是对的。**
+
+同时本文件上一轮的一句论断**已被实测推翻**:原文称终止 service worker
+「无头环境里没有这个按钮,且不可编程触发」。实测可以 ——
+**页面级** CDP session 上的 `ServiceWorker.stopAllWorkers` 就能终止它
+(browser 级 session 上 `ServiceWorker.enable` 会报 `wasn't found`,这是上一轮
+误判为「不可编程」的原因)。
+
+故 GATE-1..GATE-5 现已**全部自动化并真实执行**:
+`docs/T5-gate/tabstate.cjs`,原始结果在 `docs/T5-gate/evidence/`。
+下方的人工步骤**保留**,作为无 Node 环境时的复核手段。
 
 单元层的前提已由自动化覆盖,但那**不是**本门禁的通过凭据:
 
@@ -171,13 +182,58 @@ worker 被消息唤醒后显示真实状态(规则列表 + 生效标记)。
 
 ---
 
+## 自动化执行(推荐)
+
+```bash
+npm run build                      # ADR-038:一律在产物上验收
+node docs/T5-gate/tabstate.cjs     # 前置环境同 docs/T4a-gate/README.md
+```
+
+退出码 0 = 全绿;非 0 会列出每一条失败。原始结果写入
+`docs/T5-gate/evidence/summary.json` 与 `gate5-tabstate.json`。
+
+---
+
 ## 结果记录
 
-| GATE | 结果 | 执行人 | 日期 | 备注 |
-|------|------|--------|------|------|
-| GATE-1 worker 终止后滤镜仍生效 | ☐ PASS ☐ FAIL | | | |
-| GATE-2 图标两态 | ☐ PASS ☐ FAIL | | | |
-| GATE-3 INV-4 多 tab 同步 | ☐ PASS ☐ FAIL | | | |
-| GATE-4 INV-8 主开关凌驾 | ☐ PASS ☐ FAIL | | | |
-| GATE-5 reason 取值 | ☐ PASS ☐ FAIL | | | |
-| GATE-6 休眠后 popup 可用 | ☐ PASS ☐ FAIL | | | |
+**执行人:** Dev agent(返工第 2 轮) · **日期:** 2026-11-23
+**环境:** Google Chrome for Testing 158.0.8127.36 / Node v23.10.0 / macOS arm64
+**产物:** `npm run build` → `.output/chrome-mv3/`(permissions:`storage, scripting, tabs`)
+**原始结果:** `docs/T5-gate/evidence/summary.json`(**30/30 断言通过**)
+
+| GATE | 结果 | 方式 | 备注 |
+|------|------|------|------|
+| BASELINE 探针有效性 | ✅ **PASS** | 自动 | 匹配站 `filter: grayscale(1)`;对照组 `none` —— 证明后面的 PASS 非空转 |
+| GATE-1 worker 终止后滤镜仍生效 | ✅ **PASS** | 自动 | 终止后新开 `en.wikipedia.org` → `grayscale(1)`;且 worker 被唤醒后 `GET_TAB_STATE` 仍答对 `activeRuleIndex=0` |
+| GATE-2 图标两态 | ✅ **PASS** | 自动 | 匹配站 `active` / 不匹配站 `inactive`;产物两态 16px PNG 内容不等(128B vs 116B,ADR-045) |
+| GATE-3 INV-4 多 tab 同步 | ✅ **PASS** | 自动 | 4 个 wikipedia tab 图标全 `active`;改规则后**未刷新**三页 `filter` 全部即时变为 RedGreen@60 |
+| GATE-4 INV-8 主开关凌驾 | ✅ **PASS** | 自动 | OFF → 三页 `filter: none` + 图标全 `inactive` + 规则原样保留;ON → 全部恢复 |
+| GATE-5 reason 取值 | ✅ **PASS** | 自动 | **上一轮判红的那条**。四个 URL 的 `injectable`/`reason`/`host` 与 ADR-044 逐行一致,且 `TabState` 字段集不多不少 |
+| GATE-6 休眠后 popup 可用 | ⬜ **人工待做** | 人工 | 要判的是「用户看到骨架态而非错误横幅」,属主观视觉判定,**不在自动脚本范围**。如实标注为未执行,不冒充通过 |
+
+### 🔴 GATE-1 的「真的死了吗」如何判定(本轮踩过的坑)
+
+`ServiceWorker.stopAllWorkers` 确实会停掉 worker,但 `browser.targets()` 里的
+`service_worker` **条目仍然存在**(puppeteer auto-attach 留下的陈旧 target 记录)。
+
+- 若按「target 列表里没有了」判定 → 这一步**永远判 FAIL**;
+- 若干脆不判定就往下走 → 下一条断言会在 worker **其实还活着**时**空转**通过。
+
+两者都是假结果。故改用**行为探针**:worker 死了的充要可观测后果是
+`chrome.runtime.sendMessage` 不再有人应答(超时)。脚本先断言
+`swSilent === 'silent'`,**再**去断言滤镜仍生效 —— 前提不成立就判红,
+不给空转留口子。
+
+### 🔴 门禁自身的变异测试(证明它有牙齿)
+
+一道从未判红过的门禁没有可信度。实测:在**同一产物**上把 manifest 的
+`permissions` 改回 `['storage','scripting']`(即撤掉本轮的修复)重跑:
+
+```
+[FAIL] GATE-5 · chrome://settings/ → reason=internal-page — {"got":"no-tab"}
+── 28/30 断言通过 ──
+```
+
+门禁当场判红 —— 证明 GATE-5 真的在考这件事,不是摆设。
+(`got` 是 `no-tab` 而非上一轮的 `new-tab`,因为本轮还补了第二层语义修复:
+URL 未知时如实说「不知道」,不再自信地断言「这是新标签页」。)

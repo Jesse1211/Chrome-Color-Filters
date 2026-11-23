@@ -76,6 +76,16 @@ describe.skipIf(!built)(
       expect(manifest.permissions).toContain('scripting');
     });
 
+    it("🔴 T5 · ADR-013/ADR-044 前提 · permissions 含 'tabs'", () => {
+      // 漏了这条,Chrome 会对 `chrome://` 页**扣留** tab.url(`<all_urls>`
+      // 不覆盖特权 scheme),于是 `chrome://settings` 与 `chrome://newtab`
+      // 在 SW 眼里完全同形,ADR-044 的 `reason` 只能退化成 `new-tab` ——
+      // 即契约字段**错值**,§6 T5 gate「reason 取值正确」判红。
+      // 真实栈 A/B 实测记录见 wxt.config.ts 该权限处的注释。
+      // 必须在**产物**上核对(ADR-038)。
+      expect(manifest.permissions).toContain('tabs');
+    });
+
     it('🔴 content script 的 run_at 为 document_start(INV-3 的前提)', () => {
       const cs = manifest.content_scripts ?? [];
       expect(cs.length).toBeGreaterThan(0);
