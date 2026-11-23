@@ -20,9 +20,23 @@ import {
 import { type TabLike } from '../compute-tab-state.js';
 import { type TabState } from '../../ui/tab-state.js';
 
+/**
+ * 🔴 `url` 是**可选**的 —— 这不是图方便,而是修一个让门禁瞎掉的建模错误。
+ *
+ * 原先 `url: string` 是必填,于是整个测试套件**根本无法表达**真实 Chrome 上
+ * 最关键的那个形态:`chrome://` 页的 tab 对象里 `url` 被浏览器**整个扣留**
+ * (连 key 都没有,实测见 `wxt.config.ts` 里 `tabs` 权限那段)。
+ * 测试只能把 URL 字符串直接喂给纯函数,而真实 SW 在 `chrome://` 页上
+ * **永远到不了**那个状态 —— ADR-044 契约字段的错值因此一路绿灯,
+ * 直到真实栈才暴露。
+ *
+ * **能表达的状态才测得到。** 保留 `url?: string` 让「tab 没有 url」
+ * 成为一等公民形态。
+ */
 export interface FakeTab {
   id: number;
-  url: string;
+  url?: string;
+  pendingUrl?: string;
   active?: boolean;
   windowId?: number;
 }

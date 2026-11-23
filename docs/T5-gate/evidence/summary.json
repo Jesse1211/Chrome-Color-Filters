@@ -1,0 +1,290 @@
+{
+  "ranAt": "2026-11-23T10:22:40.195Z",
+  "total": 30,
+  "passed": 30,
+  "failed": 0,
+  "results": [
+    {
+      "gate": "BASELINE",
+      "name": "匹配站点上 html.filter 非 none(探针有效)",
+      "pass": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "gate": "BASELINE",
+      "name": "不匹配站点上 html.filter 为 none(对照组)",
+      "pass": true,
+      "detail": {
+        "filter": "none"
+      }
+    },
+    {
+      "gate": "GATE-2",
+      "name": "匹配站点的图标为 active(ADR-019 亮 = 这页被改色了)",
+      "pass": true,
+      "detail": {
+        "tabId": 286578214,
+        "icon": "active"
+      }
+    },
+    {
+      "gate": "GATE-2",
+      "name": "不匹配站点的图标为 inactive",
+      "pass": true,
+      "detail": {
+        "tabId": 286578215,
+        "icon": "inactive"
+      }
+    },
+    {
+      "gate": "GATE-2",
+      "name": "产物中两态 16px 图标内容不相同(ADR-045)",
+      "pass": true,
+      "detail": {
+        "activeBytes": 128,
+        "inactiveBytes": 116
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "chrome://settings/ → injectable=false",
+      "pass": true,
+      "detail": {
+        "got": false
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "chrome://settings/ → reason=internal-page",
+      "pass": true,
+      "detail": {
+        "got": "internal-page"
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "chrome://settings/ → host=null",
+      "pass": true,
+      "detail": {
+        "got": null
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "chrome://settings/ → TabState 字段集与 ADR-044 完全一致",
+      "pass": true,
+      "detail": {
+        "keys": "activeRuleIndex,host,injectable,reason,shadowedRuleIndexes,tabId"
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "https://chromewebstore.google.com/ → injectable=false",
+      "pass": true,
+      "detail": {
+        "got": false
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "https://chromewebstore.google.com/ → reason=web-store",
+      "pass": true,
+      "detail": {
+        "got": "web-store"
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "https://chromewebstore.google.com/ → host=null",
+      "pass": true,
+      "detail": {
+        "got": null
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "https://chromewebstore.google.com/ → TabState 字段集与 ADR-044 完全一致",
+      "pass": true,
+      "detail": {
+        "keys": "activeRuleIndex,host,injectable,reason,shadowedRuleIndexes,tabId"
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "chrome://newtab/ → injectable=false",
+      "pass": true,
+      "detail": {
+        "got": false
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "chrome://newtab/ → reason=new-tab",
+      "pass": true,
+      "detail": {
+        "got": "new-tab"
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "chrome://newtab/ → host=null",
+      "pass": true,
+      "detail": {
+        "got": null
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "chrome://newtab/ → TabState 字段集与 ADR-044 完全一致",
+      "pass": true,
+      "detail": {
+        "keys": "activeRuleIndex,host,injectable,reason,shadowedRuleIndexes,tabId"
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "https://zh.wikipedia.org/wiki/Color → injectable=true",
+      "pass": true,
+      "detail": {
+        "got": true
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "https://zh.wikipedia.org/wiki/Color → reason=undefined",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "gate": "GATE-5",
+      "name": "https://zh.wikipedia.org/wiki/Color → host=zh.wikipedia.org",
+      "pass": true,
+      "detail": {
+        "got": "zh.wikipedia.org"
+      }
+    },
+    {
+      "gate": "GATE-5",
+      "name": "https://zh.wikipedia.org/wiki/Color → TabState 字段集与 ADR-044 完全一致",
+      "pass": true,
+      "detail": {
+        "keys": "activeRuleIndex,host,injectable,shadowedRuleIndexes,tabId"
+      }
+    },
+    {
+      "gate": "GATE-3",
+      "name": "3 个匹配同一规则的 tab 图标全部 active",
+      "pass": true,
+      "detail": {
+        "ids3": [
+          286578214,
+          286578226,
+          286578227,
+          286578228
+        ],
+        "icons3": [
+          "active",
+          "active",
+          "active",
+          "active"
+        ]
+      }
+    },
+    {
+      "gate": "GATE-3",
+      "name": "改规则后 3 个 tab 的 filter 全部即时变化(未刷新,INV-4)",
+      "pass": true,
+      "detail": {
+        "after": [
+          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+        ]
+      }
+    },
+    {
+      "gate": "GATE-4",
+      "name": "主开关 OFF → 3 个 tab 滤镜全部消失",
+      "pass": true,
+      "detail": {
+        "offFilters": [
+          "none",
+          "none",
+          "none"
+        ]
+      }
+    },
+    {
+      "gate": "GATE-4",
+      "name": "主开关 OFF → 图标全灰(ADR-019 明文)",
+      "pass": true,
+      "detail": {
+        "offIcons": [
+          "inactive",
+          "inactive",
+          "inactive",
+          "inactive"
+        ]
+      }
+    },
+    {
+      "gate": "GATE-4",
+      "name": "主开关 OFF → 规则原样保留(INV-8)",
+      "pass": true,
+      "detail": {
+        "keptRules": [
+          {
+            "intensity": 60,
+            "mode": "RedGreen",
+            "pattern": "*.wikipedia.org"
+          }
+        ]
+      }
+    },
+    {
+      "gate": "GATE-4",
+      "name": "主开关 ON → 3 个 tab 滤镜全部恢复",
+      "pass": true,
+      "detail": {
+        "onFilters": [
+          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+        ]
+      }
+    },
+    {
+      "gate": "GATE-1",
+      "name": "service worker 已被终止(行为探针:不再应答消息)",
+      "pass": true,
+      "detail": {
+        "killed": true,
+        "swSilent": "silent"
+      }
+    },
+    {
+      "gate": "GATE-1",
+      "name": "🔴 worker 被终止后打开匹配站点,滤镜仍正确应用",
+      "pass": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "gate": "GATE-1",
+      "name": "worker 重启后 GET_TAB_STATE 仍答出正确的 activeRuleIndex",
+      "pass": true,
+      "detail": {
+        "revivedState": {
+          "tabId": 286578236,
+          "injectable": true,
+          "host": "en.wikipedia.org",
+          "activeRuleIndex": 0,
+          "shadowedRuleIndexes": []
+        }
+      }
+    }
+  ]
+}

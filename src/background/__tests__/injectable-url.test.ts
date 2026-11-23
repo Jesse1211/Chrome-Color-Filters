@@ -74,9 +74,17 @@ describe('ADR-013 · PDF', () => {
 });
 
 describe('空 / 畸形 URL', () => {
-  it('空字符串、undefined、null → new-tab(tab 尚未提交导航)', () => {
-    for (const url of ['', undefined, null]) {
-      expect(classifyUrl(url)).toEqual({ injectable: false, reason: 'new-tab' });
+  it('空字符串 → new-tab(tab 明确报了空 URL,尚未提交导航)', () => {
+    expect(classifyUrl('')).toEqual({ injectable: false, reason: 'new-tab' });
+  });
+
+  // 🔴 本轮返工修正的真实缺陷。原断言是 `new-tab`,它把「URL 未被告知」
+  // 与「这是新标签页」混为一谈 —— 而真实 Chrome 在缺 `tabs` 权限时正是
+  // 对 `chrome://` 页扣留 URL,于是设置页被报成「新标签页」(ADR-044 契约字段错值)。
+  // 「不知道」在 ADR-044 里有专门的一档:`no-tab`(popup 超时降级同值)。
+  it('🔴 undefined / null(URL 未被告知)→ no-tab,而**不是** new-tab', () => {
+    for (const url of [undefined, null]) {
+      expect(classifyUrl(url)).toEqual({ injectable: false, reason: 'no-tab' });
     }
   });
 

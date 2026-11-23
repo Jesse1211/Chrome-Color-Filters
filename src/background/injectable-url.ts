@@ -132,8 +132,36 @@ const WEB_STORE_PATH_PREFIX = '/webstore';
  *
  * 解析失败(非法 URL)返回 `no-tab` —— 它是 ADR-044 里「什么都不知道」的
  * 那一档,与超时降级同值(`FALLBACK_TAB_STATE`),语义一致。
+ *
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔴 **URL「缺失」与「空串」不是一回事(本轮返工修正的真实缺陷)**
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *
+ * 原实现把 `null` / `undefined` / `''` 三者**一并**判成 `new-tab`。
+ * 这在真实 Chrome 上产生了一个 ADR-044 契约字段的**错值**:
+ * `chrome://` 页上 tab 对象的 `url` 被浏览器扣留(见 `wxt.config.ts` 中
+ * `tabs` 权限那段的实测记录),于是 `chrome://settings` 被报成 `new-tab` ——
+ * popup 会显示「新标签页上没有可滤镜的内容」,而用户正看着设置页。
+ *
+ * 根因有两层,两层都修:
+ * 1. **能力层**:缺 `tabs` 权限导致 URL 根本拿不到 → 已在 `wxt.config.ts` 补。
+ * 2. **语义层(本处)**:URL **未知**时不应当断言一个**具体**原因。
+ *    `new-tab` 是一条确定的事实陈述(「这是新标签页」),而我们此时
+ *    什么都不知道。ADR-044 为「什么都不知道」留的那一档是 `no-tab`
+ *    (契约注释里它正是 popup 超时降级用的值)。
+ *    故:`null` / `undefined`(= 未被告知)→ `no-tab`;
+ *    `''`(= tab 明确报了一个空 URL,尚未提交导航)→ `new-tab`。
+ *
+ * 第 2 层是**纵深防御**:即使将来某个渠道/某个权限配置下 URL 又一次被扣留,
+ * 失效方向也从「自信地说错」退化成「诚实地说不知道」——
+ * popup 两种情况都会置灰控件(ADR-013),但不再对用户撒谎。
  */
 export function classifyUrl(url: string | null | undefined): UrlClassification {
+  // URL 未被告知(权限不足 / tab 已消失)—— 不知道就说不知道,见上注。
+  if (url === null || url === undefined) {
+    return notInjectable('no-tab');
+  }
+  // tab 报了一个空 URL:确实是尚未提交导航的新标签页。
   if (typeof url !== 'string' || url.length === 0) {
     return notInjectable('new-tab');
   }

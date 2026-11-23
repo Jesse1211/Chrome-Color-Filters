@@ -40,7 +40,8 @@ interface Harness {
 
 function harness(
   initial: Partial<FilterSettings>,
-  tabs: { id: number; url: string; active?: boolean }[],
+  // `url` 可选:真实 Chrome 在 chrome:// 页上扣留 URL,见 fakes.ts 的 FakeTab 注释。
+  tabs: { id: number; url?: string; pendingUrl?: string; active?: boolean }[],
 ): Harness {
   let settings: FilterSettings = { ...defaultSettings(), ...initial };
   const listeners: (() => void)[] = [];
@@ -426,6 +427,72 @@ describe('ADR-013 · 不可注入页面向 popup 上报', () => {
       expect(state?.tabId).toBe(2);
     });
   }
+});
+
+/**
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔴 本轮返工新增 —— 关掉那个让真实栈判红的**盲点**。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *
+ * 上一轮**所有** `chrome://settings` 断言都把 URL **字符串**直接喂给
+ * 纯函数(`injectable-url.test.ts` / `compute-tab-state.test.ts` /
+ * 本文件上面那张表),而真实 service worker 在 `chrome://` 页上
+ * **永远到不了**那个状态:Chrome 会把 `url` 整个扣留(实测见
+ * `wxt.config.ts` 中 `tabs` 权限那段的 A/B)。
+ *
+ * 于是契约字段的错值(`new-tab` 而非 `internal-page`)在单测里**不可能**
+ * 被发现 —— 这正是「mock 绿灯不构成通过」(§8 第 8 条)的教科书案例。
+ * 下面的测试走**协调器整条路径**(`tabs.query` → `computeTabState`),
+ * 且 tab 形态与真实 Chrome 一致:**没有 url 这个 key**。
+ */
+describe('🔴 ADR-013/ADR-044 · URL 被 Chrome 扣留时的真实 tab 形态', () => {
+  it('tabs.query 返回无 url 的 tab(chrome:// 的真实形态)→ reason 不得是 new-tab', async () => {
+    // 真实形态:只有 id,没有 url / pendingUrl / title。
+    const h = harness({ rules: [rule('*')] }, [{ id: 7, active: true }]);
+    h.coordinator.start();
+    const state = await h.messaging.send({ type: GET_TAB_STATE });
+
+    expect(state?.injectable).toBe(false);
+    // 「不知道 URL」必须报 no-tab(ADR-044 的「什么都不知道」那一档),
+    // 绝不能自信地断言「这是新标签页」—— 用户看着设置页,popup 说是新标签页。
+    expect(state?.reason).toBe('no-tab');
+    expect(state?.reason).not.toBe('new-tab');
+    expect(state?.host).toBeNull();
+    expect(state?.activeRuleIndex).toBeNull();
+    expect(state?.shadowedRuleIndexes).toEqual([]);
+    // tabId 仍如实上报 —— tab 是存在的,只是 URL 拿不到。
+    expect(state?.tabId).toBe(7);
+  });
+
+  it('🔴 补上 tabs 权限后的形态:url 到位 → chrome://settings 回到 internal-page', async () => {
+    // 这是 `wxt.config.ts` 补 `tabs` 权限后真实 Chrome 的实测形态
+    // (A/B 的 after 侧:`chrome.tabs.get()` 返回 url: 'chrome://settings/')。
+    const h = harness({ rules: [rule('*')] }, [
+      { id: 8, url: 'chrome://settings/', active: true },
+    ]);
+    h.coordinator.start();
+    const state = await h.messaging.send({ type: GET_TAB_STATE });
+
+    expect(state?.injectable).toBe(false);
+    expect(state?.reason).toBe('internal-page');
+    expect(state?.tabId).toBe(8);
+  });
+
+  it('导航中途只有 pendingUrl → 按 pendingUrl 分类,不退化成 no-tab', async () => {
+    const h = harness({ rules: [rule('*')] }, [
+      { id: 9, pendingUrl: 'chrome://settings/', active: true },
+    ]);
+    h.coordinator.start();
+    const state = await h.messaging.send({ type: GET_TAB_STATE });
+    expect(state?.reason).toBe('internal-page');
+  });
+
+  it('无 url 的 tab 图标算 inactive(不得谎称此页被改色了,ADR-019)', async () => {
+    const h = harness({ rules: [rule('*')] }, [{ id: 7, active: true }]);
+    h.coordinator.start();
+    await h.coordinator.syncActiveTab();
+    expect(h.action.stateOf(7)).toBe('inactive');
+  });
 });
 
 describe('MV3 · service worker 不是真相来源(§6 T5 注)', () => {
