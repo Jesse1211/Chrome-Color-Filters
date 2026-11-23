@@ -39,6 +39,33 @@
  * 它压根不往下走到 `syncFilter`。
  *
  * ───────────────────────────────────────────────────────────────────────────
+ * ## 覆盖的**归属**(多端口并发;ADR-049 的同一条保证)
+ * ───────────────────────────────────────────────────────────────────────────
+ *
+ * 覆盖只有一层,但**可能有不止一个端口**连到同一个 tab 上:
+ * - 两个浏览器窗口各自开着 popup,连的是同一个 tab
+ *   (本仓库已把「另一个窗口」当成活场景建模,见 `injector.ts` 的 onChanged
+ *   注释与 `__tests__/preview.test.ts` 的整条链路用例);
+ * - popup 关闭与重开**重叠**:Chrome 的 `onDisconnect` 不保证在新 `connect`
+ *   之前送达,于是「旧端口尚未收尸、新端口已在拖动」这一格是真实可达的。
+ *
+ * 此时若 `onDisconnect` 无条件 `clearOverride()`,**旧端口的收尸会擦掉
+ * 新端口正在编辑的预览** —— 页面在用户拖动中途跳回规则值。那正是
+ * ADR-049 要消灭的那一类可见 bug(「预览死在拖动中途」),只是触发源
+ * 从「迟到的 onChanged」换成了「迟到的 onDisconnect」。
+ *
+ * 故覆盖带**归属令牌**:
+ * - `setOverride(value, owner)` —— 最后一次设置者取得归属(last-writer-wins:
+ *   正在被拖动的那个滑块就是用户此刻看着的那个);
+ * - `clearOverride(owner)` —— **只有当前归属者**能撤掉;非归属者(陈旧端口)
+ *   的 `PREVIEW_CLEAR` 与 `onDisconnect` 都是 no-op,零重绘。
+ *
+ * 📌 `owner` 在两处都是**可选**参数:省略即「无条件撤掉」,与 T4b 首版
+ *    行为逐字一致(向后兼容)。INV-8/ADR-027 的主开关止血路径
+ *    (`injector.ts`)正是靠这个无条件形态凌驾一切 —— 主开关必须赢,
+ *    它不是端口之间的归属之争。
+ *
+ * ───────────────────────────────────────────────────────────────────────────
  * ## 生命周期(DESIGN.md §6 T4b)
  * ───────────────────────────────────────────────────────────────────────────
  *
@@ -74,16 +101,50 @@ import {
 export interface RenderArbiter {
   /** 更新底层(规则解析)结果。覆盖活动时**不重绘**。 */
   setBase(value: string | null): void;
-  /** 套上/更新预览覆盖。立即重绘。 */
-  setOverride(value: string | null): void;
-  /** 撤掉覆盖,按底层值重绘。 */
-  clearOverride(): void;
+  /**
+   * 套上/更新预览覆盖。立即重绘。
+   *
+   * @param owner 归属令牌(可选)。传了就**取得归属**,此后只有同一个令牌
+   *   能条件式 `clearOverride`。省略 → 归属为空(匿名),与 T4b 首版
+   *   语义逐字一致。
+   */
+  setOverride(value: string | null, owner?: OverrideOwner): void;
+  /**
+   * 撤掉覆盖,按底层值重绘。
+   *
+   * @param owner 传了就是**条件撤除**:仅当该令牌是当前归属者时才撤。
+   *   非归属者调用是 no-op(零重绘)—— 这正是「陈旧端口的 onDisconnect
+   *   不得擦掉别人正在编辑的预览」那条保证。
+   *   省略 → **无条件**撤除(INV-8 主开关止血用)。
+   */
+  clearOverride(owner?: OverrideOwner): void;
   /** 覆盖是否活动。 */
   hasOverride(): boolean;
+  /**
+   * 当前覆盖的归属令牌;无覆盖或匿名覆盖时为 `null`。
+   *
+   * 暴露出来是为了让断言能检查**归属本身**,否则「归属已转移」与
+   * 「碰巧两者的值一样」在测试里无法区分。
+   */
+  overrideOwner(): OverrideOwner | null;
   /** 当前**应当**渲染的值(覆盖优先)。供存活性恢复用(INV-5)。 */
   current(): string | null;
   /** 已发生的 DOM 同步次数 —— 供 gate 断言「不重绘」。 */
   renders(): number;
+}
+
+/**
+ * 覆盖的归属令牌 —— 一个**不透明**的身份对象。
+ *
+ * 故意不用 `string`/`number`:令牌只需要「引用相等」这一个能力。
+ * 用不透明对象可杜绝两个端口意外撞上同一个 id(并发下那等于把本次
+ * 修复的 bug 原样放回去),也杜绝任何人试图从令牌里读出意义。
+ */
+export type OverrideOwner = { readonly __overrideOwner?: undefined };
+
+/** 造一个新的归属令牌。每次调用都返回一个**互不相等**的令牌。 */
+export function createOverrideOwner(): OverrideOwner {
+  return {};
 }
 
 export function createRenderArbiter(
@@ -93,6 +154,7 @@ export function createRenderArbiter(
   let base: string | null = initialBase;
   let override: string | null = null;
   let overrideActive = false;
+  let owner: OverrideOwner | null = null;
   let renders = 0;
 
   const render = (): void => {
@@ -108,21 +170,30 @@ export function createRenderArbiter(
       if (overrideActive) return;
       render();
     },
-    setOverride(value) {
+    setOverride(value, nextOwner) {
       override = value;
       overrideActive = true;
+      // last-writer-wins:最后设置的那个端口取得归属。用户此刻看着的
+      // 就是最后一次拖动的结果,归属理应跟着它走。
+      owner = nextOwner ?? null;
       render();
     },
-    clearOverride() {
+    clearOverride(requester) {
       if (!overrideActive) return;
+      // 🔴 条件撤除:带令牌的调用者只能撤掉**自己的**覆盖。
+      //    陈旧端口的 onDisconnect / 迟到的 PREVIEW_CLEAR 在此被挡住,
+      //    不会擦掉另一个端口正在编辑的预览(零重绘,见头注释)。
+      if (requester !== undefined && requester !== owner) return;
       overrideActive = false;
       override = null;
+      owner = null;
       // 撤掉覆盖后按**最新**底层值渲染 —— 若预览期间来过 onChanged,
       // 这里渲染的就是那个新值(ADR-049:「直到 PREVIEW_CLEAR
       // 或端口断开才按新结果渲染」)。
       render();
     },
     hasOverride: () => overrideActive,
+    overrideOwner: () => (overrideActive ? owner : null),
     current: () => (overrideActive ? override : base),
     renders: () => renders,
   };
@@ -176,6 +247,11 @@ export interface PreviewReceiverStats {
  * 把一个端口接进仲裁器 —— 消息语义的本体。
  *
  * 单独导出是为了让单测能直接喂一个假端口,不必经过 `onConnect`。
+ *
+ * 🔴 每个端口拿**自己**的归属令牌(见头注释「覆盖的归属」):它对覆盖的
+ *    撤除一律是条件式的,只能撤掉自己套上去的那层。于是「两个窗口的 popup
+ *    连同一个 tab」「关闭与重开重叠」这两种真实并发下,陈旧端口收尸
+ *    不会打断另一个端口正在进行的拖动。
  */
 export function attachPreviewPort(
   port: PreviewPortLike,
@@ -183,6 +259,7 @@ export function attachPreviewPort(
   onEvent?: (kind: 'filter' | 'clear' | 'disconnect' | 'ignored') => void,
 ): void {
   let closed = false;
+  const owner = createOverrideOwner();
 
   port.onMessage.addListener((raw: unknown) => {
     if (closed) return;
@@ -195,7 +272,9 @@ export function attachPreviewPort(
     }
 
     if (message.type === PREVIEW_CLEAR) {
-      arbiter.clearOverride();
+      // 条件撤除:若此刻的覆盖已被**另一个**端口接手(用户在另一个窗口
+      // 继续拖动),本端口的 PREVIEW_CLEAR 不得把它撤掉。
+      arbiter.clearOverride(owner);
       onEvent?.('clear');
       return;
     }
@@ -207,7 +286,11 @@ export function attachPreviewPort(
       //    纯函数算出,绝不持久化。预览路径与规则路径用的是**同一个**函数,
       //    于是「预览看到的」与「保存后看到的」逐字节一致 ——
       //    否则保存那一刻页面会跳一下(可见的 bug)。
-      arbiter.setOverride(filterCssValue(message.mode, message.intensity));
+      // 带令牌设置 → 本端口取得归属(last-writer-wins)。
+      arbiter.setOverride(
+        filterCssValue(message.mode, message.intensity),
+        owner,
+      );
       onEvent?.('filter');
       return;
     }
@@ -224,7 +307,12 @@ export function attachPreviewPort(
     closed = true;
     // 🔴 popup 关闭或页面导航 → 覆盖**必须**结束,不得残留
     //    (DESIGN.md §6 T4b:「popup 关闭必须自动恢复,不得残留」)。
-    arbiter.clearOverride();
+    //
+    //    但只撤**自己的**那层:若归属已转给另一个活端口,本端口的收尸
+    //    不得让页面在用户拖动中途跳回规则值。这不是削弱「不得残留」——
+    //    残留的前提是「没有别的活动预览」,而归属不在自己手上恰恰说明
+    //    页面显示的是**另一个**端口此刻正当的预览,它的收尸会负责撤除。
+    arbiter.clearOverride(owner);
     onEvent?.('disconnect');
   });
 }

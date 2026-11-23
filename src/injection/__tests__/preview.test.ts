@@ -643,6 +643,310 @@ describe('🔴 存活性(INV-5)守护的是**当前**真相 —— 含预览覆�
   });
 });
 
+// ─────────── 多端口并发:覆盖的归属(ADR-049) ───────────
+//
+// 为什么这一组必须存在:gate 的五条写死的是**单端口**时序,但本接收端
+// 是整个产品里**唯一**能同时看见一个以上端口的组件,多端口因此结构性地
+// 归它仲裁(DESIGN.md §6 T6b 给发送端的义务只有「四个不发送」与
+// 「三个主动 PREVIEW_CLEAR」,没有一条谈端口之间的仲裁)。
+//
+// 可达性不是臆造的:
+// - 两个浏览器窗口各开一个 popup,连的是同一个 tab —— 本仓库已把
+//   「另一个窗口」当成活场景(injector.ts 的 onChanged 注释、
+//   本文件「整条链路」用例);
+// - popup 关闭与重开**重叠**:Chrome 不保证旧端口的 onDisconnect
+//   在新端口 connect 之前送达。
+//
+// 不修的后果是真实可见的:旧端口收尸把**正在拖动**的预览擦掉,
+// 页面在拖动中途跳回规则值 —— 正是 ADR-049 存在要消灭的那一类 bug,
+// 只是触发源从「迟到的 onChanged」换成了「迟到的 onDisconnect」。
+
+describe('🔴 ADR-049 · 两个活端口并存时,陈旧端口的收尸不得打断正在进行的预览', () => {
+  it('🔴 回归:A 先预览、B 接手,随后 A 的 onDisconnect 迟到 → 页面仍是 B 的值', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(GRAY_100); // 该页按规则是灰阶 100
+
+    const portA = makePort();
+    const portB = makePort();
+    attachPreviewPort(portA, arbiter);
+    attachPreviewPort(portB, arbiter);
+
+    // 窗口 A 的 popup 拖到 10。
+    portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 10 });
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 10));
+
+    // 窗口 B 的 popup 接手,正拖到 30(用户此刻看着的就是这个)。
+    portB.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 30 });
+    const bValue = currentFilterValue(target);
+    expect(bValue).toBe(filterCssValue('Grayscale', 30));
+    const rendersBeforeReap = arbiter.renders();
+
+    // 🔴 旧端口 A 这才被收尸(Chrome 的 onDisconnect 没有时序保证)。
+    portA.disconnect();
+
+    // 修复前:页面 snap 回 grayscale(1) —— 用户拖动中途被打断。
+    // 修复后:B 的预览仍活着,且**一次重绘都没有发生**。
+    expect(currentFilterValue(target)).toBe(bValue);
+    expect(arbiter.hasOverride()).toBe(true);
+    expect(arbiter.renders()).toBe(rendersBeforeReap);
+  });
+
+  it('🔴 归属者自己断开 → 照常恢复规则结果(「不得残留」未被削弱)', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(GRAY_100);
+
+    const portA = makePort();
+    const portB = makePort();
+    attachPreviewPort(portA, arbiter);
+    attachPreviewPort(portB, arbiter);
+
+    portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 10 });
+    portB.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 30 });
+
+    // 归属在 B 手上,B 关闭 → 必须恢复,不得残留在 30 上。
+    portB.disconnect();
+
+    expect(arbiter.hasOverride()).toBe(false);
+    expect(currentFilterValue(target)).toBe(GRAY_100);
+  });
+
+  it('🔴 非归属端口的 PREVIEW_CLEAR 不得撤掉别人的预览', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(GRAY_100);
+
+    const portA = makePort();
+    const portB = makePort();
+    attachPreviewPort(portA, arbiter);
+    attachPreviewPort(portB, arbiter);
+
+    portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 10 });
+    portB.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 30 });
+    const bValue = currentFilterValue(target);
+    const rendersBefore = arbiter.renders();
+
+    // A 侧用户点了「返回」(T6b 的主动发送义务)—— 但页面上活着的是 B 的预览。
+    portA.send({ type: 'PREVIEW_CLEAR' });
+
+    expect(currentFilterValue(target)).toBe(bValue);
+    expect(arbiter.hasOverride()).toBe(true);
+    expect(arbiter.renders()).toBe(rendersBefore);
+  });
+
+  it('🔴 归属者的 PREVIEW_CLEAR 照常生效(条件撤除没有变成「永不撤除」)', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(GRAY_100);
+
+    const portA = makePort();
+    const portB = makePort();
+    attachPreviewPort(portA, arbiter);
+    attachPreviewPort(portB, arbiter);
+
+    portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 10 });
+    portB.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 30 });
+    portB.send({ type: 'PREVIEW_CLEAR' });
+
+    expect(arbiter.hasOverride()).toBe(false);
+    expect(currentFilterValue(target)).toBe(GRAY_100);
+  });
+
+  it('归属随 last-writer 转移,且令牌互不相等(不是「碰巧值一样」)', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(null);
+
+    const portA = makePort();
+    const portB = makePort();
+    attachPreviewPort(portA, arbiter);
+    attachPreviewPort(portB, arbiter);
+
+    portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 50 });
+    const ownerA = arbiter.overrideOwner();
+    expect(ownerA).not.toBeNull();
+
+    // 两端口发**同一个**值 —— 若只看渲染出的字符串,归属转移无法被观测到。
+    portB.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 50 });
+    const ownerB = arbiter.overrideOwner();
+    expect(ownerB).not.toBeNull();
+    expect(ownerB).not.toBe(ownerA);
+
+    // A 收尸:它已不是归属者 → no-op。
+    portA.disconnect();
+    expect(arbiter.overrideOwner()).toBe(ownerB);
+    expect(arbiter.hasOverride()).toBe(true);
+  });
+
+  it('A → B → A:归属能转回来,A 的收尸此时该生效', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(GRAY_100);
+
+    const portA = makePort();
+    const portB = makePort();
+    attachPreviewPort(portA, arbiter);
+    attachPreviewPort(portB, arbiter);
+
+    portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 10 });
+    portB.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 30 });
+    portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 60 });
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 60));
+
+    portA.disconnect();
+    expect(arbiter.hasOverride()).toBe(false);
+    expect(currentFilterValue(target)).toBe(GRAY_100);
+  });
+
+  it('🔴 INV-8 主开关止血仍然凌驾一切(无条件撤除未被归属挡住)', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(GRAY_100);
+
+    const port = makePort();
+    attachPreviewPort(port, arbiter);
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 30 });
+    expect(arbiter.hasOverride()).toBe(true);
+
+    // injector.ts 的主开关路径调的就是**无参**形态(ADR-027/INV-8)。
+    arbiter.clearOverride();
+    arbiter.setBase(null);
+
+    expect(arbiter.hasOverride()).toBe(false);
+    expect(isFilterApplied(target)).toBe(false);
+    expect(isFilterSuppressed(target)).toBe(true);
+  });
+
+  it('🔴 预览值仍绝不落盘 —— 多端口并发下亦然(storage spy)', async () => {
+    const target = makeTarget();
+    const store = makeStore();
+    const onConnect = makeOnConnect();
+
+    const run = runInjector({
+      target,
+      store,
+      url: URL,
+      readSettings: () =>
+        Promise.resolve(settingsWith({ rules: [RULE_GRAY_100] })),
+      onConnect,
+    });
+    await run.settled;
+
+    const writesBefore = store.writes.length;
+    const removesBefore = store.removes.length;
+
+    const portA = makePort();
+    const portB = makePort();
+    onConnect.connect(portA);
+    onConnect.connect(portB);
+    for (let i = 0; i <= 50; i += 1) {
+      portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: i });
+      portB.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: i });
+    }
+    portA.disconnect();
+    portB.disconnect();
+
+    expect(store.writes.length).toBe(writesBefore);
+    expect(store.removes.length).toBe(removesBefore);
+    // 并且没有任何一条存储项里出现预览用过的 RedGreen。
+    for (const v of store.data.values()) expect(v).not.toContain('RedGreen');
+  });
+
+  it('两个端口都走 onConnect 时,stats 如实计数', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, GRAY_100);
+    const onConnect = makeOnConnect();
+    const handle = startPreviewReceiver({ arbiter, onConnect });
+
+    const portA = makePort();
+    const portB = makePort();
+    onConnect.connect(portA);
+    onConnect.connect(portB);
+    expect(handle.stats().ports).toBe(2);
+
+    portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 10 });
+    portB.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 20 });
+    portA.disconnect();
+
+    expect(handle.stats().filters).toBe(2);
+    expect(handle.stats().disconnects).toBe(1);
+    // 事件**发生**了(如实记录),但覆盖没被撤 —— 两者不是一回事。
+    expect(arbiter.hasOverride()).toBe(true);
+  });
+});
+
+// ─────────── 边界:intensity === 0 ───────────
+//
+// 为什么要钉这条:PREVIEW_FILTER 的 intensity 取值域是 0..100(ADR-003 收敛),
+// 而 `null` 是「不上色」的哨兵值(走 data-ccf-off 压制,见 apply-filter.ts)。
+// 强度 0 与「无滤镜」在视觉上一样,实现上却必须是**两种**状态:
+// 前者是 identity 滤镜(覆盖活动),后者是压制。混同会让「拖到 0」
+// 变成「覆盖消失」,于是底层规则色会冒出来 —— 可见 bug。
+
+describe('🔴 边界 · intensity 0 的预览是 identity 滤镜,不是「无滤镜」', () => {
+  it('预览 0 渲染为 grayscale(0) 且覆盖活动,与压制态区分', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(GRAY_100);
+
+    const port = makePort();
+    attachPreviewPort(port, arbiter);
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 0 });
+
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 0));
+    expect(isFilterApplied(target)).toBe(true);
+    expect(isFilterSuppressed(target)).toBe(false);
+    expect(arbiter.hasOverride()).toBe(true);
+  });
+
+  it('底层「不上色」时预览 0 也必须解除压制(否则拖到 0 看不出在预览)', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(null);
+    expect(isFilterSuppressed(target)).toBe(true);
+
+    const port = makePort();
+    attachPreviewPort(port, arbiter);
+    port.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: 0 });
+
+    expect(isFilterSuppressed(target)).toBe(false);
+    expect(isFilterApplied(target)).toBe(true);
+    expect(currentFilterValue(target)).toBe(filterCssValue('RedGreen', 0));
+  });
+
+  it('预览 0 后 PREVIEW_CLEAR → 回到规则结果,不残留 identity', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(GRAY_100);
+
+    const port = makePort();
+    attachPreviewPort(port, arbiter);
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 0 });
+    port.send({ type: 'PREVIEW_CLEAR' });
+
+    expect(currentFilterValue(target)).toBe(GRAY_100);
+    expect(arbiter.hasOverride()).toBe(false);
+  });
+
+  it('预览 0 期间 onChanged 到达 → 仍不重绘(优先级条款在边界上同样成立)', () => {
+    const target = makeTarget();
+    const arbiter = createRenderArbiter(target, null);
+    arbiter.setBase(GRAY_100);
+
+    const port = makePort();
+    attachPreviewPort(port, arbiter);
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 0 });
+    const zeroValue = currentFilterValue(target);
+    const rendersBefore = arbiter.renders();
+
+    arbiter.setBase(GRAY_30);
+
+    expect(arbiter.renders()).toBe(rendersBefore);
+    expect(currentFilterValue(target)).toBe(zeroValue);
+  });
+});
+
 // ─────────── 向后兼容(additive) ───────────
 
 describe('向后兼容:不传 T4b 的新选项时行为与 T4a 完全一致', () => {

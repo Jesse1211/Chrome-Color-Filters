@@ -343,6 +343,34 @@ describe('🔴 T4b · 生产入口必须真的启用存活性与预览(反「fla
     }
   });
 
+  it('🔴 端口的撤除一律带归属令牌 —— 陈旧端口不得擦掉别人的活预览(ADR-049)', () => {
+    // 行为断言在 `preview.test.ts`「多端口并发」那一组。这一条是它的
+    // **结构**对偶:`attachPreviewPort` 里的两处撤除(PREVIEW_CLEAR 与
+    // onDisconnect)都必须是条件形态 `clearOverride(owner)`。
+    //
+    // 为什么值得机械把守:无参 `clearOverride()` 与带参形态在单端口下
+    // 行为完全一致,所以退回无参**不会**让任何单端口用例变红 ——
+    // 多端口那组才会。把它钉在源码形态上,退化就会在两处同时暴露。
+    const receiver = stripComments(
+      readFileSync(resolve(ROOT, 'src/injection/preview-receiver.ts'), 'utf8'),
+    );
+    const attachBody = receiver.slice(
+      receiver.indexOf('export function attachPreviewPort'),
+      receiver.indexOf('export function startPreviewReceiver'),
+    );
+    expect(attachBody.length).toBeGreaterThan(0);
+    const clears = attachBody.match(/clearOverride\(([^)]*)\)/g) ?? [];
+    expect(clears.length).toBe(2); // PREVIEW_CLEAR + onDisconnect
+    for (const call of clears) {
+      expect(call, `attachPreviewPort 里出现了无条件撤除:${call}`).toBe(
+        'clearOverride(owner)',
+      );
+    }
+    // 令牌必须是 per-port 新造的,不能是模块级共享的单例
+    // (共享单例等于没有归属,bug 原样回来)。
+    expect(attachBody).toMatch(/const\s+owner\s*=\s*createOverrideOwner\(\)/);
+  });
+
   it('🔴 ADR-049 的消息字面量只在契约文件里定义一次', () => {
     // ADR-044/049 的全部意义是「不得各自发挥」。两处各写一个字面量
     // 就是分叉的开始(DESIGN.md §6.2 为此列了一行风险)。
