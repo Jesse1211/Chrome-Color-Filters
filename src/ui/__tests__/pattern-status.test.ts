@@ -47,7 +47,10 @@ describe('§5.6 · computePatternStatus 的四种情况', () => {
       draftPattern: '*.weibo.*',
       editingIndex: 0,
       settings: settingsWith({ rules: [rule('*.weibo.*')] }),
-      tabState: tab(),
+      // ADR-044:草稿与存储一致 → 两维取自 `TabState`,故这里必须由
+      // `TabState` 说「0 号在生效」。原先的 `activeRuleIndex: null` 是真实
+      // service worker 不会产生的自相矛盾响应(命中却无生效者)。
+      tabState: tab({ activeRuleIndex: 0 }),
     });
     expect(status.kind).toBe('live');
     expect(status.tone).toBe('ok');
@@ -62,21 +65,36 @@ describe('§5.6 · computePatternStatus 的四种情况', () => {
       draftPattern: '*.com',
       editingIndex: 1,
       settings: settingsWith({ rules: [rule('*.weibo.*'), rule('*.com')] }),
-      tabState: tab(),
+      // ADR-044:遮蔽关系由 service worker 判定 —— 0 号生效、1 号被遮蔽。
+      tabState: tab({ activeRuleIndex: 0, shadowedRuleIndexes: [1] }),
     });
     expect(status.kind).toBe('shadowed');
     expect(status.tone).toBe('warn');
     expect(status.blockedBy).toEqual({ ordinal: 1, pattern: '*.weibo.*' });
   });
 
-  it('ADR-008:只有**排在前面**的规则能遮蔽 —— 后面的不算', () => {
+  it('ADR-008:只有**排在前面**的规则能遮蔽 —— 后面的不算(草稿干净,信 TabState)', () => {
     const status = computePatternStatus({
       draftPattern: '*.weibo.*',
       editingIndex: 0,
       settings: settingsWith({ rules: [rule('*.weibo.*'), rule('*.com')] }),
-      tabState: tab(),
+      // 两条都匹配 weibo.com,但 0 号靠前 → SW 判 0 号生效、1 号被遮蔽。
+      tabState: tab({ activeRuleIndex: 0, shadowedRuleIndexes: [1] }),
     });
     expect(status.kind).toBe('live');
+  });
+
+  it('ADR-008:只有**排在前面**的规则能遮蔽 —— 后面的不算(草稿脏,本地判定)', () => {
+    // 草稿脏 → TabState 无从回答,走本地的 ADR-008 首个命中胜。
+    // TabState 故意说「1 号生效」以证明本地路径没有误读它。
+    const status = computePatternStatus({
+      draftPattern: 'x.weibo.com',
+      editingIndex: 0,
+      settings: settingsWith({ rules: [rule('*.weibo.*'), rule('*.com')] }),
+      tabState: tab({ host: 'x.weibo.com', activeRuleIndex: 1 }),
+    });
+    expect(status.kind).toBe('live');
+    expect(status.blockedBy).toBeNull();
   });
 
   it('新建的规则会被追加到末尾 → 任何匹配当前页的既有规则都遮蔽它', () => {
@@ -171,9 +189,10 @@ describe('§5.6 · computePatternStatus 的四种情况', () => {
     }
   });
 
-  it('ADR-044:`activeRuleIndex` 不参与草稿 pattern 的判定 —— 草稿存储里没有', () => {
+  it('草稿**脏**时 `activeRuleIndex` 描述的是旧 pattern,不能照搬', () => {
     // TabState 说 0 号在生效,但用户已经把 0 号的 pattern 改成不匹配的了。
-    // 若盲信 TabState 会错报「生效中」。
+    // `activeRuleIndex` 是**存储索引**,它说的是改动前那个 pattern ——
+    // 照搬会错报「生效中」。这是 TabState 结构上无从回答的那一问。
     const status = computePatternStatus({
       draftPattern: 'x.com',
       editingIndex: 0,
@@ -181,6 +200,83 @@ describe('§5.6 · computePatternStatus 的四种情况', () => {
       tabState: tab({ activeRuleIndex: 0 }),
     });
     expect(status.kind).toBe('no-match');
+  });
+});
+
+/**
+ * 🔴 DESIGN.md:1016(ADR-044 契约块)点名 T6b 的两维状态行
+ * 「**两个视图都不自己算匹配** —— 真相来源唯一」。
+ *
+ * 下面这组断言就是那条约束的证据:草稿干净时,**只有 `TabState` 的
+ * `activeRuleIndex` / `shadowedRuleIndexes` 能决定两维** —— 为此故意让
+ * `settings.rules` 的本地匹配结果与 `TabState` **相反**,看谁赢。
+ * 本地判定若复活,这些断言全部变红。
+ */
+describe('🔴 ADR-044 · 草稿干净时两维取自 TabState,本模块不自己算匹配', () => {
+  it('本地 matchGlob 会说「不匹配」,但 TabState 说生效 → 信 TabState', () => {
+    // host 与 pattern 在本地看毫无关系(SW 可能用了更宽的 URL 判定)。
+    const status = computePatternStatus({
+      draftPattern: 'example.com',
+      editingIndex: 0,
+      settings: settingsWith({ rules: [rule('example.com')] }),
+      tabState: tab({ host: 'totally-other.test', activeRuleIndex: 0 }),
+    });
+    expect(status.kind).toBe('live');
+    expect(status.matchesCurrentPage).toBe(true);
+  });
+
+  it('本地看「该生效」,但 TabState 说被遮蔽 → 信 TabState,遮蔽者取自 activeRuleIndex', () => {
+    // 本地扫描看不到任何更靠前的命中者(0 号就是本条),若自己算必判 live。
+    const status = computePatternStatus({
+      draftPattern: 'weibo.com',
+      editingIndex: 0,
+      settings: settingsWith({
+        rules: [rule('weibo.com'), rule('*.weibo.*')],
+      }),
+      tabState: tab({ activeRuleIndex: 1, shadowedRuleIndexes: [0] }),
+    });
+    expect(status.kind).toBe('shadowed');
+    expect(status.blockedBy).toEqual({ ordinal: 2, pattern: '*.weibo.*' });
+  });
+
+  it('本地看「匹配」,但 TabState 两个字段都不含本条 → 信 TabState 判不匹配', () => {
+    const status = computePatternStatus({
+      draftPattern: '*.weibo.*',
+      editingIndex: 0,
+      settings: settingsWith({ rules: [rule('*.weibo.*')] }),
+      tabState: tab({ activeRuleIndex: null, shadowedRuleIndexes: [] }),
+    });
+    expect(status.kind).toBe('no-match');
+  });
+
+  it('只改了 mode/强度(pattern 未动)仍算干净 → 继续信 TabState', () => {
+    // 编辑视图改强度不碰 pattern,此时 TabState 依然权威。
+    const status = computePatternStatus({
+      draftPattern: '*.weibo.*',
+      editingIndex: 1,
+      settings: settingsWith({
+        rules: [rule('other.test'), rule('*.weibo.*')],
+      }),
+      tabState: tab({ activeRuleIndex: 1 }),
+    });
+    expect(status.kind).toBe('live');
+  });
+
+  it('🔴 主开关 OFF:TabState 两字段按设计归零,第一维只能本地取 → 仍判「匹配但不生效」', () => {
+    // compute-tab-state.ts 明文:主开关 OFF 时两字段同时归零态。
+    // 若照搬就会退化成 `○`「不匹配当前网站」—— 而 pattern 明明匹配。
+    const status = computePatternStatus({
+      draftPattern: '*.weibo.*',
+      editingIndex: 0,
+      settings: settingsWith({
+        masterEnabled: false,
+        rules: [rule('*.weibo.*')],
+      }),
+      tabState: tab({ activeRuleIndex: null, shadowedRuleIndexes: [] }),
+    });
+    expect(status.kind).toBe('shadowed');
+    expect(status.matchesCurrentPage).toBe(true);
+    expect(status.blockedBy).toBeNull();
   });
 });
 

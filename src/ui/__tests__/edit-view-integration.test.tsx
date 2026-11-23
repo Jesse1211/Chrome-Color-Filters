@@ -40,9 +40,10 @@ import {
   SETTINGS_KEY,
   SettingsRepository,
 } from '../../storage/settings-repository.js';
+import { computeTabState } from '../../background/compute-tab-state.js';
 import { RuleEditView } from '../RuleEditView.js';
 import { RuleListView, type ActionResult } from '../RuleListView.js';
-import { stubTabStatePort } from '../tab-state.js';
+import { type TabStatePort } from '../tab-state.js';
 import { usePopupSettings } from '../usePopupSettings.js';
 import { type PreviewSenderPort, createPreviewChannel } from '../preview-port.js';
 import { installPopupStyles } from './css-harness.js';
@@ -81,14 +82,38 @@ type Preview = ReturnType<typeof previewSpy>;
  * (非扩展环境会 throw),测它需要伪造整个 `chrome` 全局。
  * 这里复制的是**视图切换与回调分派的那段逻辑**,而数据层用的是真实仓储。
  */
+/**
+ * 🔴 **真·`GET_TAB_STATE` 替身:service worker 的 `computeTabState` 本体。**
+ *
+ * ADR-044(DESIGN.md:1016)规定 `activeRuleIndex` / `shadowedRuleIndexes` 是
+ * §5.6 两维状态行的**唯一真相来源**,「两个视图都不自己算匹配」。
+ * 用一个把这两个字段写死成 `null` / `[]` 的静态 stub,等于让整个接线测试
+ * 绕过那条契约 —— 状态行怎么错都测不出来。
+ *
+ * 故这里接的是 T5 的 `computeTabState` **本体**,输入是**当前存储里**那份
+ * settings:popup 每次写入后重问端口(`usePopupSettings.refreshTabState`),
+ * 拿到的就是 service worker 在真实 Chrome 里会算出的同一个答案。
+ * 两个 ADR-044 字段因此被真实地走了一遍,而不是被旁路。
+ *
+ * 仍不是 REAL_STACK_GATE(§8 第 8 条):真实 Chrome 里还隔着一层消息通道。
+ */
+function realTabStatePort(area: MemoryStorageArea): TabStatePort {
+  return async () => {
+    const settings = await persisted(area);
+    return computeTabState(settings, { id: 1, url: 'https://news.weibo.com/' });
+  };
+}
+
 function PopupUnderTest({
   repository,
   preview,
   locked = false,
+  tabStatePort,
 }: {
   readonly repository: SettingsRepository;
   readonly preview: Preview;
   readonly locked?: boolean;
+  readonly tabStatePort: TabStatePort;
 }) {
   const {
     settings,
@@ -101,11 +126,7 @@ function PopupUnderTest({
     moveRuleToTop,
   } = usePopupSettings({
     repository,
-    tabStatePort: stubTabStatePort({
-      tabId: 1,
-      injectable: true,
-      host: 'news.weibo.com',
-    }),
+    tabStatePort: tabStatePort,
   });
 
   const [view, setView] = useState<{ kind: 'list' } | { kind: 'edit'; index: number | null }>(
@@ -195,7 +216,11 @@ describe('ADR-022 · 列表 ⇄ 编辑双向导航', () => {
     const area = new MemoryStorageArea(seeded([{ pattern: '*.weibo.*' }]));
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-0')).toBeDefined();
@@ -216,7 +241,11 @@ describe('ADR-022 · 列表 ⇄ 编辑双向导航', () => {
     const area = new MemoryStorageArea(seeded([]));
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('add-rule')).toBeDefined();
@@ -237,7 +266,11 @@ describe('ADR-022 · 列表 ⇄ 编辑双向导航', () => {
     const area = new MemoryStorageArea(seeded([{ pattern: '*.weibo.*' }]));
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-0')).toBeDefined();
     });
@@ -256,7 +289,11 @@ describe('🔴 F20 · 点保存后规则持久化并立即生效', () => {
     const area = new MemoryStorageArea(seeded([]));
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('add-rule')).toBeDefined();
@@ -295,7 +332,11 @@ describe('🔴 F20 · 点保存后规则持久化并立即生效', () => {
     );
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-0')).toBeDefined();
@@ -331,7 +372,11 @@ describe('🔴 F20 · 点保存后规则持久化并立即生效', () => {
       reconcileRequests.push(Date.now());
     });
 
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
     await waitFor(() => {
       expect(screen.getByTestId('add-rule')).toBeDefined();
     });
@@ -351,7 +396,11 @@ describe('🔴 F20 · 点保存后规则持久化并立即生效', () => {
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
     const setSpy = vi.spyOn(area, 'set');
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('add-rule')).toBeDefined();
@@ -375,7 +424,11 @@ describe('🔴 ADR-049 · 预览不写 storage', () => {
     );
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-0')).toBeDefined();
@@ -403,7 +456,11 @@ describe('🔴 ADR-049 · 预览不写 storage', () => {
     );
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-0')).toBeDefined();
@@ -433,7 +490,11 @@ describe('🔴 S13 · 一键修复改变顺序 → 优先级确实改变', () =>
     );
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-1')).toBeDefined();
@@ -495,7 +556,11 @@ describe('🔴🔴 回归 · 一键修复后 editingIndex 跟随规则的新位�
     );
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-1')).toBeDefined();
@@ -567,7 +632,11 @@ describe('编辑视图内「删除」的完整行为', () => {
     );
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-0')).toBeDefined();
@@ -599,7 +668,12 @@ describe('🔒 ADR-051 / I2 · 锁定与预览', () => {
     const area = new MemoryStorageArea(seeded([{ pattern: '*.weibo.*' }]));
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} locked />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+        locked
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-0')).toBeDefined();
@@ -612,7 +686,12 @@ describe('🔒 ADR-051 / I2 · 锁定与预览', () => {
     const area = new MemoryStorageArea(seeded([{ pattern: '*.weibo.*' }]));
     const repository = new SettingsRepository({ area });
     const preview = previewSpy();
-    render(<PopupUnderTest repository={repository} preview={preview} locked />);
+    render(<PopupUnderTest
+        repository={repository}
+        preview={preview}
+        tabStatePort={realTabStatePort(area)}
+        locked
+      />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rule-row-0')).toBeDefined();

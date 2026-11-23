@@ -1078,7 +1078,7 @@ body {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  border: 1.5px solid #C3C7CE;
+  border: 1.5px solid var(--control-ring);
   background: var(--surface);
   flex: 0 0 auto;
   margin: 0;
@@ -1123,7 +1123,7 @@ body {
   height: 13px;
   border-radius: var(--radius-swatch);
   flex: 0 0 auto;
-  border: 1px solid rgba(0, 0, 0, .06);
+  border: 1px solid var(--swatch-edge);
 }
 
 /* ── 强度滑块(§5.5 / ADR-003) ── */
@@ -1149,8 +1149,8 @@ body {
   width: 17px;
   height: 17px;
   border-radius: 50%;
-  background: #FFFFFF;
-  border: 1px solid rgba(0, 0, 0, .14);
+  background: var(--control-knob);
+  border: 1px solid var(--control-knob-edge);
   box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
   cursor: pointer;
 }
@@ -1159,8 +1159,8 @@ body {
   width: 17px;
   height: 17px;
   border-radius: 50%;
-  background: #FFFFFF;
-  border: 1px solid rgba(0, 0, 0, .14);
+  background: var(--control-knob);
+  border: 1px solid var(--control-knob-edge);
   box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
   cursor: pointer;
 }
@@ -1256,7 +1256,7 @@ body {
 .edit__save {
   flex: 1 1 auto;
   background: var(--accent);
-  color: #FFFFFF;
+  color: var(--on-accent);
 }
 
 .edit__save:hover:not(:disabled) {

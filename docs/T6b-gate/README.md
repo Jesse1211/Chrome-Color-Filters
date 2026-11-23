@@ -26,7 +26,10 @@ node docs/T6b-gate/editview.cjs
 
 ## 结果
 
-**GATE PASS 34/34**(证据:`evidence/editview.json`)
+**GATE PASS 36/36**(证据:`evidence/editview.json`)
+
+> 返工第 2 轮新增 2 条断言:ADR-044 的 `activeRuleIndex` / `shadowedRuleIndexes`
+> **在真实栈里直接取值断言**(见下方「ADR-044 返工」)。
 
 覆盖 §6 T6b 的 REAL_STACK_GATE 六项,逐项结果:
 
@@ -45,7 +48,7 @@ node docs/T6b-gate/editview.cjs
 
 | 条款 | 结果 |
 |---|---|
-| **ADR-044 真实联调** | **PASS** — popup 发 `GET_TAB_STATE`,拿到 `{ tabId, injectable: true, host: 'en.wikipedia.org' }` |
+| **ADR-044 真实联调** | **PASS** — popup 发 `GET_TAB_STATE`,拿到 `{ tabId, injectable: true, host: 'en.wikipedia.org' }`;**且 §5.6 指定的两个字段已直接取值断言**:遮蔽场景下真实 SW 上报 `activeRuleIndex: 0` / `shadowedRuleIndexes: [1]`,一键修复后 `activeRuleIndex` 指向用户编辑的那条(`*.org`)且状态行变 `live`。⚠️ 上一轮只验了 `tabId`/`injectable`/`host` 三个字段,而 DESIGN.md:1016 指明的恰是另两个 —— 见下方「ADR-044 返工」 |
 | **ADR-049 从 popup 上下文成立** | **PASS** — 第 1 项即其证据。T4b 的真实栈门禁是从 **service worker** 上下文发起 `chrome.tabs.connect` 的;popup 的权限面不同,这是**另一件事**,此处首次验证 |
 | **F20 保存的语义** | **PASS** — 点保存后规则落盘为 `{pattern:'*.wikipedia.org', mode:'Grayscale', intensity:60}`(一次写入,ADR-061 立即落盘) |
 | **⚠️ 保存触发 reconcile(ADR-062)** | **PASS** — 保存后**重新导航**,新规则对首帧生效(`grayscale(0.6)`),证明声明式注册已更新 |
@@ -182,3 +185,78 @@ popup 既然是**后台(非可见)tab**,`page.click()` 就会一直等到
 6. **第四种不发送条件(锁定中)的真实栈断言**。单测已穷举
    (`pattern-status.test.ts` + `rule-edit-view.test.tsx`),
    真实栈需要先启动一个锁定,那属 T6c 的夹具;此处只验其余三种。
+
+---
+
+## 🔴 ADR-044 返工(第 2 轮)—— §5.6 两维状态行的真相来源被倒置
+
+### 评审指出的问题
+
+DESIGN.md:1016(ADR-044 契约块)点名:
+
+> `activeRuleIndex` 与 `shadowedRuleIndexes` 一起支撑 T6a 的被遮蔽淡化(ADR-032)
+> 与 **T6b 的两维状态行(§5.6)**,**两个视图都不自己算匹配** —— 真相来源唯一
+
+第 1 轮的 `src/ui/pattern-status.ts` 却**两维都在本地算**:
+`matchGlob(draftPattern, host)` 判第一维,一个本地的首个命中胜扫描判第二维,
+全程不读那两个字段。更糟的是模块头注写着「一律取自 `TabState`…**绝不另算**」,
+与代码相反;单测还用一个带「ADR-044」字样的用例把这个偏离**锁了进去**;
+本文档则据 `tabId`/`injectable`/`host` 三个字段报了「ADR-044 真实联调 PASS」——
+而 ADR 指定的那两个字段**一次都没被断言过**。
+
+即:一个绿色门禁盖在一处未上报的架构偏离之上。这正是 §8 第 1 条
+(「任务与 ADR 冲突时**停下并上报**」)与第 3 条(「不得编造依据」)要防的事。
+当时给出的「那条约束针对的是已持久化的规则」这一缩小解释,DESIGN.md 里并不存在。
+
+### 根因
+
+把问题当成了「`TabState` 回答不了草稿,所以本地算」,于是**一刀切**地全本地算。
+真正的分界线是**草稿脏不脏**:
+
+| 情形 | 真相来源 |
+|---|---|
+| 编辑既有规则、pattern 未改动(草稿**干净**) | **`TabState`**(ADR-044)—— SW 的 `resolveRule` 已经算过这条 |
+| 新建规则 / pattern 已改动(草稿**脏**) | 本地 `matchGlob` —— `activeRuleIndex` 是**存储索引**,描述的是旧 pattern,结构上无从回答 |
+
+第 1 轮把干净草稿也划进了「本地算」,而那恰恰是 `TabState` 能答、且 ADR 指定它答的那一格。
+
+### 修复(全部向后兼容)
+
+1. **`src/ui/pattern-status.ts`** —— 新增 `resolveDimensions()` 作为两维的唯一出口:
+   干净草稿走 `resolveFromTabState()`(读 `activeRuleIndex` / `shadowedRuleIndexes`,
+   遮蔽者由 `activeRuleIndex` 指出),脏草稿才落到 `findBlockerForDraft()`。
+   头注改成与代码一致,并把分界线写成表格。顺手去掉了 `findBlocker` 里
+   那个「存在只为被 `void` 掉」的 `draftPattern` 形参(评审 S4)。
+
+2. **`src/ui/usePopupSettings.ts`** —— 新增 `refreshTabState()`:
+   任何写入成功后(以及 `storage.onChanged` 回调时)**重新问一次 `GET_TAB_STATE`**。
+   这是让 1 成立的前提:那两个字段是**存储索引**,一键修复 / 保存 / 删除都会让它们失效。
+   正确做法是重问唯一真相来源,而**不是**在 UI 里推算新索引 —— 后者正是 ADR-044 禁止的。
+   (`repository.subscribe` 走 `storage.onChanged`,本窗口自己的写入不回调自己,故须显式刷新。)
+
+3. **测试夹具改成契约自洽**。原先多处 `TabState` 填 `activeRuleIndex: null` 却同时
+   断言「匹配且生效」—— 那是**真实 SW 不可能产生**的自相矛盾响应(页面命中了规则
+   却没有生效者)。修的是夹具,**断言一条没放宽**;另新增一组 5 条用例,
+   故意让本地匹配结果与 `TabState` **相反**,证明赢的是 `TabState`。
+
+4. **`edit-view-integration.test.tsx` 不再用静态 stub**:`tabStatePort` 换成
+   T5 的 `computeTabState` **本体**,输入是当前存储里那份 settings。
+   两个 ADR-044 字段因此被真实走过一遍,而不是被旁路。
+
+5. **真实栈补证**:`editview.cjs` 新增 2 条断言直接取这两个字段的值(见上表)。
+
+### ⚠️ 一处必须留在本地判定的例外(已在代码中记明)
+
+`compute-tab-state.ts` 明文规定(并有测试锁定)**主开关 OFF 时
+`activeRuleIndex` 与 `shadowedRuleIndexes` 同时归零态**,理由是「被遮蔽」
+在无人生效时是谎话。那两个字段因此**只编码第二维**;主开关 OFF 时它们对
+「这条 pattern 匹不匹配当前页」保持沉默。
+
+而 §5.6 的第一维是**页面与 pattern 的关系**,与主开关无关 —— 表格第二行
+(`◐` 匹配但不生效)正是「匹配 ✓ / 生效 ✗」这一格。若主开关 OFF 时照搬归零的
+字段,状态行会退化成 `○`「不匹配当前网站」,而 pattern 明明匹配。
+故主开关 OFF 时第一维取本地 `matchGlob`。
+
+这**不是**绕开 ADR-044,而是 `TabState` 在该状态下按设计不携带这一维的信息。
+对应用例:`pattern-status.test.ts` 的「主开关 OFF:TabState 两字段按设计归零,
+第一维只能本地取」。

@@ -92,6 +92,60 @@ describe('§5.1 设计 Token — 深色(OQ-05:按系统偏好适配,设计稿已
   });
 });
 
+/*
+ * 🔴 tokens.css 的规矩:「色值**只在此处定义一次**。组件一律引用 var(--token),
+ * 不得内联硬编码色值,否则深色模式(OQ-05)会出现**漏网的浅色残留**。」
+ *
+ * T6b 的编辑视图引入了 radio 灰环、滑块把手、色块发丝边、主按钮前景色 ——
+ * 这些是已有 token 覆盖不到的值。它们被收进 tokens.css 并在深浅两套里
+ * 各定义一次;下面这组用例守的就是「真的两套都有、且真的不同」。
+ */
+describe('🔴 T6b 控件 token — 深色模式不得留下浅色残留(OQ-05)', () => {
+  const CONTROL_TOKENS = ['--control-ring', '--control-knob'] as const;
+
+  it.each(CONTROL_TOKENS)('%s 深浅两套取值**不同**', (name) => {
+    document.documentElement.removeAttribute('data-theme');
+    const light = token(name).toUpperCase();
+    document.documentElement.setAttribute('data-theme', 'dark');
+    const dark = token(name).toUpperCase();
+
+    expect(light).not.toBe('');
+    expect(dark).not.toBe('');
+    expect(dark, `${name} 深浅同值 —— 深色模式会留下浅色残留`).not.toBe(light);
+  });
+
+  it('滑块把手在深色下不再是纯白(那正是「漏网的浅色残留」)', () => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    expect(token('--control-knob').toUpperCase()).not.toBe('#FFFFFF');
+  });
+
+  it('`--on-accent` 两套**故意同值** —— accent 上的前景色不随主题翻转', () => {
+    document.documentElement.removeAttribute('data-theme');
+    const light = token('--on-accent').toUpperCase();
+    document.documentElement.setAttribute('data-theme', 'dark');
+    expect(token('--on-accent').toUpperCase()).toBe(light);
+  });
+
+  it('🔴 T6b 新增的编辑视图 CSS 不内联硬编码色值', () => {
+    const css = readUiCss('popup.css');
+    // 取 `.option__radio` 之后的区段 —— 即 T6b 新增的那一块。
+    const t6bBlock = css.slice(css.indexOf('.option__radio'));
+    expect(t6bBlock.length).toBeGreaterThan(0);
+    for (const selector of [
+      '.option__radio',
+      '.option__swatch',
+      '.slider::-webkit-slider-thumb',
+      '.slider::-moz-range-thumb',
+      '.edit__save',
+    ]) {
+      expect(t6bBlock, `${selector} 不在 T6b 区段内`).toContain(selector);
+    }
+    // 十六进制字面量(#RGB / #RRGGBB)在这一区段内应当不存在。
+    const hexLiterals = t6bBlock.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
+    expect(hexLiterals, `发现硬编码色值:${hexLiterals.join(', ')}`).toEqual([]);
+  });
+});
+
 describe('§5.1 尺寸 — popup 360 × 452px(固定,OQ-06)', () => {
   it('token 值为 360px / 452px', () => {
     expect(token('--popup-width')).toBe('360px');

@@ -16,23 +16,38 @@
  * (ADR-066)。
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
- * ## 🔴 这里**不**重新实现匹配,但确实自己算一次
+ * ## 🔴 真相来源:`TabState` 优先,本地判定只在它无从回答时兜底
  *
- * ADR-044 要求「UI 不自己算匹配」,真相来源是 `GET_TAB_STATE` ——
- * 那条约束针对的是**已持久化的规则**:`activeRuleIndex` /
- * `shadowedRuleIndexes` 一律取自 `TabState`,本模块原样采信,绝不另算。
+ * DESIGN.md:1016(ADR-044 契约块)对本模块是**点名**的约束:
  *
- * 但编辑视图里有一个 `TabState` **结构上无法回答**的问题:
- * 用户**此刻正在输入框里敲的那个 pattern**(还没保存、service worker
- * 根本不知道它存在)匹不匹配当前页?这个问题必须在本地回答,否则:
+ * > `activeRuleIndex` 与 `shadowedRuleIndexes` 一起支撑 T6a 的被遮蔽淡化
+ * > (ADR-032)与 **T6b 的两维状态行(§5.6)**,**两个视图都不自己算匹配**
+ * > —— 真相来源唯一
+ *
+ * 故**只要 `TabState` 能回答,就必须由它回答**:草稿 pattern 与存储里的
+ * `rules[editingIndex].pattern` **相同**时(刚进编辑视图,或只改了 mode /
+ * 强度而没碰 pattern),这条规则对当前页的「匹配 / 生效 / 被遮蔽」
+ * service worker 的 `resolveRule` 已经算过了,答案就在 `activeRuleIndex` /
+ * `shadowedRuleIndexes` 里 —— 本模块**原样采信,不另算**。
+ *
+ * 唯一的例外是 `TabState` **结构上无法回答**的那一问:用户此刻正在输入框里
+ * 敲的、**与存储不同**的那个 pattern(还没保存,service worker 根本不知道它
+ * 存在)匹不匹配当前页?`activeRuleIndex` 是**存储索引**,它描述的是旧
+ * pattern,对草稿一言不发。而这一问必须有答案,否则:
  *
  * - 「pattern 改到不再匹配的那一刻发 `PREVIEW_CLEAR`」无从判定;
  * - 「在 A 站编辑针对 B 站的规则 → 绝不能把 B 站滤镜套到 A 站」无从判定 ——
  *   而 DESIGN.md 明文说那是「可见的 bug,比没反馈更糟」。
  *
- * 故本模块对**草稿 pattern** 调用领域层的 `matchGlob`(ADR-005/006 的
- * 同一个实现,不是另写一份),对**已存在的规则**则一律采信 `TabState`。
- * 两者的分界线就是「这条规则存储里有没有」。
+ * 所以分界线是**草稿脏不脏**:
+ *
+ * | 情形 | 两维状态的来源 |
+ * |---|---|
+ * | 编辑既有规则且 pattern 未改动(草稿干净) | **`TabState`**(ADR-044) |
+ * | 新建规则 / pattern 已改动(草稿脏) | 本地 `matchGlob`(TabState 无从回答) |
+ *
+ * 脏草稿的本地判定调用的是**领域层同一个 `matchGlob`**(ADR-005/006),
+ * 不是另写一份匹配器;`findBlockerForDraft` 复用 ADR-008 的「首个命中胜」。
  *
  * 纯 TypeScript + 领域层 —— 零 React、零 `chrome.*`。
  */
@@ -136,9 +151,13 @@ export function computePatternStatus(input: PatternStatusInput): PatternStatus {
     };
   }
 
-  // ── 2/3. 有没有 host 可比,比了匹不匹配 ──
-  const matches = host !== null && matchGlob(draftPattern, host);
-  if (!matches) {
+  // ── 2/3. 匹不匹配 ──
+  //
+  // 🔴 ADR-044:草稿干净(= 存储里就是这个 pattern)时,匹配与否由 `TabState`
+  //    回答 —— 本视图不自己算。只有脏草稿才落到本地 `matchGlob`。
+  const resolution = resolveDimensions({ draftPattern, editingIndex, settings, tabState, host });
+
+  if (!resolution.matches) {
     return {
       kind: 'no-match',
       tone: 'muted',
@@ -155,7 +174,10 @@ export function computePatternStatus(input: PatternStatusInput): PatternStatus {
   // 🔴 「生效」是两维中的第二维,它不只取决于匹配:
   //    主开关 OFF 时没有任何规则在生效(INV-8),此时显示「生效中」是谎话。
   //    §5.6 的第二行(匹配但不生效)正是为这一类情形准备的。
-  const blocker = findBlocker(draftPattern, { editingIndex, settings, host });
+  //
+  //    遮蔽者同样走 `resolveDimensions`:草稿干净时取自 `shadowedRuleIndexes`
+  //    (ADR-044),脏草稿才本地扫一遍(ADR-008 首个命中胜)。
+  const blocker = resolution.blockedBy;
 
   if (!settings.masterEnabled || blocker !== null) {
     return {
@@ -180,27 +202,108 @@ export function computePatternStatus(input: PatternStatusInput): PatternStatus {
   };
 }
 
+/** 一条规则的遮蔽者 —— 1 基序号(§5.6 文案是「第 1 条规则」)+ 它的 pattern。 */
+type Blocker = { readonly ordinal: number; readonly pattern: string } | null;
+
 /**
- * 找出遮蔽本条的那条规则(ADR-008:**首个命中胜**,列表顺序即优先级)。
+ * §5.6 两维的**唯一出口**:先问 `TabState`,问不出来才本地算。
+ *
+ * 🔴 ADR-044(DESIGN.md:1016)点名要求 T6b 的两维状态行**不自己算匹配**。
+ * 本函数就是那条约束的落点:
+ *
+ * - **草稿干净**(`editingIndex !== null` 且 `draftPattern` 与
+ *   `rules[editingIndex].pattern` 全等)→ 这条规则就是存储里那条,
+ *   service worker 已经为它算过 `resolveRule`,答案在 `activeRuleIndex` /
+ *   `shadowedRuleIndexes` 中,**原样采信**;
+ * - **草稿脏**(新建,或 pattern 被改过)→ `TabState` 的索引描述的是**旧**
+ *   pattern,对草稿无从回答,只能本地判定(见模块头注的表格)。
+ *
+ * 「生效」的第二维里 `masterEnabled` 的否决由调用方统一加(INV-8),
+ * 两条路径都不在这里重复判。
+ *
+ * ## 🔴 主开关 OFF 时 `TabState` 对**第一维**也无从回答
+ *
+ * `compute-tab-state.ts` 明文规定(并有测试锁定)主开关 OFF 时
+ * `activeRuleIndex` 与 `shadowedRuleIndexes` **同时归零态** ——
+ * 理由是「被遮蔽」在无人生效时是谎话。那两个字段因此**只编码第二维**;
+ * 主开关 OFF 时它们对「这条 pattern 匹不匹配当前页」保持沉默。
+ *
+ * 而 §5.6 的第一维是**页面与 pattern 的关系**,与主开关无关 ——
+ * 表格第二行(`◐` 匹配但不生效)正是「匹配 ✓ / 生效 ✗」这一格。
+ * 若主开关 OFF 时照搬归零的字段,状态行会退化成 `○`「不匹配当前网站」,
+ * 那是**错的**:pattern 明明匹配,不生效的原因是主开关而非不匹配。
+ *
+ * 故主开关 OFF 时走本地 `matchGlob` 取第一维 —— 这不是绕开 ADR-044,
+ * 而是 `TabState` 在该状态下按设计不携带这一维的信息。
+ */
+function resolveDimensions(ctx: {
+  readonly draftPattern: string;
+  readonly editingIndex: number | null;
+  readonly settings: FilterSettings;
+  readonly tabState: TabState | null;
+  readonly host: string | null;
+}): { readonly matches: boolean; readonly blockedBy: Blocker } {
+  const { draftPattern, editingIndex, settings, tabState, host } = ctx;
+  if (host === null) return { matches: false, blockedBy: null };
+
+  const stored = editingIndex === null ? undefined : settings.rules[editingIndex];
+  const draftIsClean = stored !== undefined && stored.pattern === draftPattern;
+
+  if (draftIsClean && tabState !== null && editingIndex !== null && settings.masterEnabled) {
+    return resolveFromTabState(editingIndex, settings, tabState);
+  }
+
+  // 脏草稿 —— TabState 无从回答(见模块头注)。
+  return {
+    matches: matchGlob(draftPattern, host),
+    blockedBy: findBlockerForDraft(editingIndex, settings, host),
+  };
+}
+
+/**
+ * 从 `TabState` 的两个契约字段读出两维(ADR-044 的真相来源)。
+ *
+ * - `activeRuleIndex === editingIndex` → 命中且**它就是生效的那条**;
+ * - `editingIndex ∈ shadowedRuleIndexes` → 命中但**被遮蔽**;
+ *   遮蔽者就是 `activeRuleIndex` 指的那条(ADR-008 首个命中胜 —— 生效的
+ *   那条必然排在所有被遮蔽者之前),§5.6 的琥珀框照它渲染;
+ * - 两者都不是 → `TabState` 说这条规则**没命中**当前页。
+ */
+function resolveFromTabState(
+  editingIndex: number,
+  settings: FilterSettings,
+  tabState: TabState,
+): { readonly matches: boolean; readonly blockedBy: Blocker } {
+  if (tabState.activeRuleIndex === editingIndex) {
+    return { matches: true, blockedBy: null };
+  }
+
+  if (tabState.shadowedRuleIndexes.includes(editingIndex)) {
+    const activeIndex = tabState.activeRuleIndex;
+    const blocker =
+      activeIndex !== null && settings.rules[activeIndex] !== undefined
+        ? { ordinal: activeIndex + 1, pattern: settings.rules[activeIndex].pattern }
+        : null;
+    return { matches: true, blockedBy: blocker };
+  }
+
+  return { matches: false, blockedBy: null };
+}
+
+/**
+ * 脏草稿的遮蔽者(ADR-008:**首个命中胜**,列表顺序即优先级)。
  *
  * 只看**排在本条之前**的规则 —— 后面的规则永远不可能抢先命中。
  * 新建(`editingIndex === null`)的规则会被追加到末尾,故**所有**既有
  * 规则都排在它前面。
  *
- * 返回 1 基序号(§5.6 的文案是「第 1 条规则」,给用户看的序号从 1 起)。
+ * ⚠️ 仅用于 `TabState` 无从回答的脏草稿;干净草稿走 `resolveFromTabState`。
  */
-function findBlocker(
-  draftPattern: string,
-  ctx: {
-    readonly editingIndex: number | null;
-    readonly settings: FilterSettings;
-    readonly host: string | null;
-  },
-): { readonly ordinal: number; readonly pattern: string } | null {
-  void draftPattern; // 本条是否匹配已由调用方判定,此处只找更靠前的命中者。
-  const { editingIndex, settings, host } = ctx;
-  if (host === null) return null;
-
+function findBlockerForDraft(
+  editingIndex: number | null,
+  settings: FilterSettings,
+  host: string,
+): Blocker {
   const limit = editingIndex === null ? settings.rules.length : editingIndex;
   for (let i = 0; i < limit; i++) {
     const rule = settings.rules[i];

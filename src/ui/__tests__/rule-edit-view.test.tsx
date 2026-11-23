@@ -109,11 +109,24 @@ const settingsWith = (overrides: Partial<FilterSettings> = {}): FilterSettings =
   ...overrides,
 });
 
+/**
+ * 默认的「可注入 + 默认规则正在生效」tab 状态。
+ *
+ * 🔴 `activeRuleIndex: 0` 不是随手填的:默认 harness 编辑的是
+ * `rules[0] = '*.weibo.*'`,默认 host 是 `weibo.com` —— 真实 service worker
+ * 的 `computeTabState` 对这组输入必然报 `activeRuleIndex: 0`。
+ * 而 ADR-044(DESIGN.md:1016「两个视图都不自己算匹配」)规定草稿未改动时
+ * 两维状态**取自 TabState**,故这个字段直接决定状态行与预览资格。
+ *
+ * 填 `null` 会构造出真实 SW 不会产生的**自相矛盾**响应(页面命中了规则却
+ * 没有生效者),测试便不再代表真实联调。覆盖 `host` 为别的站点时,
+ * 请**同时**覆盖 `activeRuleIndex`。
+ */
 const injectableTab = (overrides: Partial<TabState> = {}): TabState => ({
   tabId: 7,
   injectable: true,
   host: 'weibo.com',
-  activeRuleIndex: null,
+  activeRuleIndex: 0,
   shadowedRuleIndexes: [],
   ...overrides,
 });
@@ -420,7 +433,12 @@ describe('🔴 §5.6 · 两维状态行的四种情况', () => {
     renderEdit({
       settings: settingsWith({ rules: [rule('*.weibo.*'), rule('*.com')] }),
       editingIndex: 1,
-      tabState: injectableTab({ host: 'weibo.com', activeRuleIndex: 0 }),
+      // ADR-044:遮蔽关系由 SW 判定 —— 0 号生效、1 号(正在编辑的这条)被遮蔽。
+      tabState: injectableTab({
+        host: 'weibo.com',
+        activeRuleIndex: 0,
+        shadowedRuleIndexes: [1],
+      }),
     });
     const line = screen.getByTestId('status-line');
     expect(line.dataset.kind).toBe('shadowed');
@@ -438,7 +456,8 @@ describe('🔴 §5.6 · 两维状态行的四种情况', () => {
     renderEdit({
       settings: settingsWith({ rules: [rule('x.com')] }),
       editingIndex: 0,
-      tabState: injectableTab({ host: 'weibo.com' }),
+      // `x.com` 匹配不了 weibo.com → SW 报无命中(ADR-044)。
+      tabState: injectableTab({ host: 'weibo.com', activeRuleIndex: null }),
     });
     const line = screen.getByTestId('status-line');
     expect(line.dataset.kind).toBe('no-match');
@@ -511,7 +530,12 @@ describe('🔴 §5.6 · 被遮蔽解释框与一键修复', () => {
   const shadowedHarness = (extra: Partial<Harness> = {}): Harness => ({
     settings: settingsWith({ rules: [rule('*.weibo.*'), rule('*.com')] }),
     editingIndex: 1,
-    tabState: injectableTab({ host: 'weibo.com', activeRuleIndex: 0 }),
+    // ADR-044:遮蔽关系取自 SW —— 0 号生效,1 号(在编辑的这条)被遮蔽。
+    tabState: injectableTab({
+      host: 'weibo.com',
+      activeRuleIndex: 0,
+      shadowedRuleIndexes: [1],
+    }),
     ...extra,
   });
 
@@ -730,7 +754,8 @@ describe('🔴 四种不发送 PREVIEW_FILTER 的情况', () => {
     const { spy } = renderEdit({
       settings: settingsWith({ rules: [rule('bilibili.com')] }),
       editingIndex: 0,
-      tabState: injectableTab({ host: 'a-station.com' }),
+      // `bilibili.com` 匹配不了 a-station.com → SW 报无命中(ADR-044)。
+      tabState: injectableTab({ host: 'a-station.com', activeRuleIndex: null }),
     });
     dragSlider();
     expect(spy.filters()).toHaveLength(0);
@@ -754,7 +779,8 @@ describe('🔴 四种不发送 PREVIEW_FILTER 的情况', () => {
     const { spy } = renderEdit({
       settings: settingsWith({ rules: [rule('bilibili.com')] }),
       editingIndex: 0,
-      tabState: injectableTab({ host: 'a-station.com' }),
+      // `bilibili.com` 匹配不了 a-station.com → SW 报无命中(ADR-044)。
+      tabState: injectableTab({ host: 'a-station.com', activeRuleIndex: null }),
     });
     const slider = screen.getByTestId('intensity-slider') as HTMLInputElement;
     expect(slider.disabled).toBe(false);
@@ -947,6 +973,9 @@ describe('F20 / ADR-022 · 保存、删除与导航', () => {
     const { spy } = renderEdit({
       settings: settingsWith({ rules: [rule('a.com'), rule('*.weibo.*')] }),
       editingIndex: 1,
+      // `a.com` 匹配不了 weibo.com,故真实 SW 报 1 号生效(ADR-044)——
+      // 预览需可用,才能验证删除时确实发了 PREVIEW_CLEAR。
+      tabState: injectableTab({ activeRuleIndex: 1 }),
       onDelete,
       onBack,
     });
@@ -976,7 +1005,12 @@ describe('🔒 ADR-051 · 锁定中编辑视图全部控件禁用', () => {
     renderEdit({
       settings: settingsWith({ rules: [rule('*.weibo.*'), rule('*.com')] }),
       editingIndex: 1,
-      tabState: injectableTab({ host: 'weibo.com', activeRuleIndex: 0 }),
+      // ADR-044:遮蔽关系取自 SW,解释框才会渲染(一键修复按钮在框内)。
+      tabState: injectableTab({
+        host: 'weibo.com',
+        activeRuleIndex: 0,
+        shadowedRuleIndexes: [1],
+      }),
       locked: true,
     });
     expect((screen.getByTestId('pattern-input') as HTMLInputElement).disabled).toBe(
@@ -1008,7 +1042,12 @@ describe('🔒 ADR-051 · 锁定中编辑视图全部控件禁用', () => {
     renderEdit({
       settings: settingsWith({ rules: [rule('*.weibo.*'), rule('*.com')] }),
       editingIndex: 1,
-      tabState: injectableTab({ host: 'weibo.com', activeRuleIndex: 0 }),
+      // ADR-044:遮蔽关系取自 SW,解释框才会渲染(一键修复按钮在框内)。
+      tabState: injectableTab({
+        host: 'weibo.com',
+        activeRuleIndex: 0,
+        shadowedRuleIndexes: [1],
+      }),
       locked: true,
       onSave,
       onDelete,

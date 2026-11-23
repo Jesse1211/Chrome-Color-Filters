@@ -32,6 +32,28 @@
   --bad: #B42318;
   --bad-soft: #FEF3F2;
 
+  /*
+   * ── 表单控件(T6b 的 radio 环 / 滑块把手;设计稿 `.radio` / `.thumb`)──
+   *
+   * 这三个是**已有 token 覆盖不到**的值,故按本文件的规矩在此定义一次:
+   * - `--control-ring`:未选中 radio 的灰环、关态开关的底色。
+   *   它比 `--line` 深,需在 `--surface` 上明确可见,不能用 `--line` 代替。
+   * - `--control-knob`:滑块把手 / 开关滑块的**凸起面**。浅色下是白,
+   *   深色下必须跟着变暗,否则就是 OQ-05 说的「漏网的浅色残留」。
+   * - `--control-knob-edge`:把手与色块的那道发丝边,浅色压暗 / 深色提亮。
+   */
+  --control-ring: #C3C7CE;
+  --control-knob: #FFFFFF;
+  --control-knob-edge: rgba(0, 0, 0, .14);
+  --swatch-edge: rgba(0, 0, 0, .06);
+  /*
+   * `--accent` 上的前景色(主按钮文字)。两套主题下**都**是浅色 ——
+   * `--accent` 在深色模式下是 #6195F5,仍需浅色文字才够对比度,
+   * 故它不随主题翻转。定义成 token 是为了「不内联硬编码色值」这条规矩,
+   * 以及让「这里为什么不跟着变暗」有一处可读的答案。
+   */
+  --on-accent: #FFFFFF;
+
   --shadow: 0 1px 2px rgba(16, 18, 24, .06), 0 4px 16px rgba(16, 18, 24, .07);
 
   /* ── 尺寸(§5.1:360px 宽 × 452px 高,固定;OQ-06 已定为固定) ── */
@@ -81,6 +103,12 @@
     --bad: #F07167;
     --bad-soft: #2E1817;
 
+    /* 控件:把手跟着变暗,发丝边改为提亮(OQ-05 的浅色残留防线)。 */
+    --control-ring: #4A5059;
+    --control-knob: #C9CED6;
+    --control-knob-edge: rgba(0, 0, 0, .5);
+    --swatch-edge: rgba(255, 255, 255, .12);
+
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .35);
   }
 }
@@ -101,6 +129,12 @@
   --warn-soft: #2E2412;
   --bad: #F07167;
   --bad-soft: #2E1817;
+
+  /* 控件:把手跟着变暗,发丝边改为提亮(OQ-05 的浅色残留防线)。 */
+  --control-ring: #4A5059;
+  --control-knob: #C9CED6;
+  --control-knob-edge: rgba(0, 0, 0, .5);
+  --swatch-edge: rgba(255, 255, 255, .12);
 
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .35);
 }

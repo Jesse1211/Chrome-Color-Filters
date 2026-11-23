@@ -11,8 +11,8 @@
       "name": "取到目标页 tab(id + windowId)",
       "ok": true,
       "detail": {
-        "id": 446105680,
-        "windowId": 446105678
+        "id": 1964456643,
+        "windowId": 1964456641
       }
     },
     {
@@ -30,7 +30,7 @@
       "name": "🔴 GET_TAB_STATE 解析到目标页(wikipedia)而非 popup 自己",
       "ok": true,
       "detail": {
-        "tabId": 446105680,
+        "tabId": 1964456643,
         "injectable": true,
         "host": "en.wikipedia.org",
         "activeRuleIndex": null,
@@ -190,6 +190,16 @@
       }
     },
     {
+      "name": "🔴 ADR-044:真实 SW 上报 activeRuleIndex=0 / shadowedRuleIndexes=[1]",
+      "ok": true,
+      "detail": {
+        "activeRuleIndex": 0,
+        "shadowedRuleIndexes": [
+          1
+        ]
+      }
+    },
+    {
       "name": "🔴 5a. 被遮蔽 → `◐` warn 状态行 + 琥珀解释框(§5.6)",
       "ok": true,
       "detail": {
@@ -216,6 +226,19 @@
       "ok": true,
       "detail": {
         "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.741159%20-0.407208%200.666049%200%200%200.075098%200.585234%200.339668%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+      }
+    },
+    {
+      "name": "🔴 ADR-044:一键修复后 SW 的 activeRuleIndex 指向用户编辑的那条,状态行变「生效中」",
+      "ok": true,
+      "detail": {
+        "activeRuleIndex": 0,
+        "shadowedRuleIndexes": [
+          1
+        ],
+        "activePattern": "*.org",
+        "editingPattern": "*.org",
+        "statusKind": "live"
       }
     },
     {
@@ -329,8 +352,8 @@
   ],
   "pass": true,
   "summary": {
-    "passed": 34,
-    "total": 34,
+    "passed": 36,
+    "total": 36,
     "pass": true
   }
 }

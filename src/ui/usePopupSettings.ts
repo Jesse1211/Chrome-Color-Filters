@@ -98,6 +98,26 @@ export function usePopupSettings({
   const portRef = useRef(tabStatePort);
   portRef.current = tabStatePort;
 
+  /**
+   * 重新向 service worker 要一次 `TabState`(ADR-044)。
+   *
+   * 🔴 **为什么写入之后必须重问一次**
+   *
+   * `activeRuleIndex` / `shadowedRuleIndexes` 是**存储索引** —— 它们描述的是
+   * service worker 上次 `resolveRule` 时的那份 `rules`。任何改变规则顺序或
+   * 内容的写入(一键修复、保存、删除、改主开关)都会让这两个字段**失效**:
+   * §5.6 的一键修复把本条移到首位后,旧的 `TabState` 仍说「本条被遮蔽」。
+   *
+   * ADR-044 规定两个视图都不自己算匹配、真相来源唯一。那么当真相变了,
+   * 正确的做法是**重新去问那个唯一的真相来源**,而不是在 UI 里自己推算
+   * 新索引 —— 后者就是 ADR-044 要禁止的事。
+   */
+  const refreshTabState = useCallback(() => {
+    void portRef.current().then((s) => {
+      setTabState(s);
+    });
+  }, []);
+
   useEffect(() => {
     let alive = true;
 
@@ -113,15 +133,20 @@ export function usePopupSettings({
     });
 
     // INV-4:另一处(其他 popup / service worker)改了设置,本视图立即跟进。
+    //
+    // 🔴 设置变了 → `TabState` 的两个索引字段可能已失效,一并重问(见
+    //    `refreshTabState` 的注释)。
     const unsubscribe = repository.subscribe((next) => {
-      if (alive) setSettings(next);
+      if (!alive) return;
+      setSettings(next);
+      refreshTabState();
     });
 
     return () => {
       alive = false;
       unsubscribe();
     };
-  }, [repository]);
+  }, [repository, refreshTabState]);
 
   /**
    * 🔴 **这里曾经有一个「popup 拆除前 flush 防抖队列」的 effect —— 已删除。**
@@ -147,11 +172,21 @@ export function usePopupSettings({
       const result = await run();
       if (result.ok) {
         setSettings(result.value);
+        /*
+         * 🔴 ADR-044:写入改变了 `rules`,service worker 的
+         * `activeRuleIndex` / `shadowedRuleIndexes` 随之改变 —— 重新去问它。
+         *
+         * `repository.subscribe` 走 `storage.onChanged`,**本窗口自己的写入
+         * 不会回调自己**(见 `syncSettings` 的注释),故此处必须显式刷新,
+         * 否则 §5.6 的状态行会停在写入**之前**的那份索引上:
+         * 一键修复把本条移到首位后,状态行仍显示「被遮蔽」。
+         */
+        refreshTabState();
         return { ok: true };
       }
       return { ok: false, error: result.error };
     },
-    [],
+    [refreshTabState],
   );
 
   const toggleMaster = useCallback(
@@ -213,8 +248,11 @@ export function usePopupSettings({
   /**
    * §5.6 的一键修复 —— 把 `index` 移到最前(ADR-008:顺序即优先级)。
    *
-   * 读的是**当前 React 状态里的** `settings.rules`,与列表视图的拖拽
-   * (`reorderRules`)同一条写入路径与同一套校验。
+   * 🔴 读的是 `await repository.read()` —— **存储里那一份**,不是 React 状态
+   * 里的 `settings.rules`(INV-4:真相在存储)。若读 React 状态,另一个窗口
+   * 刚写入的改动会被本次 `replaceRules` 按旧快照覆盖掉。
+   *
+   * 写入与列表视图的拖拽(`reorderRules`)同一条路径、同一套校验。
    */
   const moveRuleToTop = useCallback(
     (index: number) =>

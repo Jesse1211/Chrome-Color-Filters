@@ -494,6 +494,31 @@ async function main() {
     await waitNotSkeleton(popup);
     await clickTestid(popup, 'rule-open-1');
 
+    /*
+     * 🔴 ADR-044 的两个指定字段,在**此处**取真实证据。
+     *
+     * DESIGN.md:1016 指明 `activeRuleIndex` / `shadowedRuleIndexes` 才是
+     * §5.6 两维状态行的真相来源。上一轮门禁只验了 `tabId`/`injectable`/`host`,
+     * 这两个字段**一次都没被断言过** —— 返工补上:此刻场景正是 0 号生效、
+     * 1 号被遮蔽,service worker 必须如实上报,popup 必须照它渲染。
+     */
+    const shadowTabState = await popup.evaluate(
+      async () => await chrome.runtime.sendMessage({ type: 'GET_TAB_STATE' }),
+    );
+    assert(
+      '🔴 ADR-044:真实 SW 上报 activeRuleIndex=0 / shadowedRuleIndexes=[1]',
+      shadowTabState &&
+        shadowTabState.activeRuleIndex === 0 &&
+        Array.isArray(shadowTabState.shadowedRuleIndexes) &&
+        shadowTabState.shadowedRuleIndexes.length === 1 &&
+        shadowTabState.shadowedRuleIndexes[0] === 1,
+      {
+        activeRuleIndex: shadowTabState && shadowTabState.activeRuleIndex,
+        shadowedRuleIndexes:
+          shadowTabState && shadowTabState.shadowedRuleIndexes,
+      },
+    );
+
     const shadowStatus = await probe(popup, 'status-line');
     const shadowBox = await probe(popup, 'shadow-box');
     assert(
@@ -526,6 +551,40 @@ async function main() {
       '🔴🔴 5c/S13. 一键修复 → **当前页面渲染立即变成该规则的滤镜**',
       afterFix !== 'grayscale(1)' && afterFix !== 'none',
       { filter: afterFix },
+    );
+    /*
+     * 🔴 ADR-044:写入改变了 `rules`,旧的索引字段随之失效 —— popup 在写入后
+     * 重问 `GET_TAB_STATE`(`usePopupSettings.refreshTabState`),状态行据**新**
+     * 索引从「被遮蔽」翻成「生效中」。
+     *
+     * ⚠️ 这里断言的**不是** `activeRuleIndex` 变了值。一键修复把用户编辑的
+     * 那条移到**首位**,而「首个命中胜」(ADR-008)下首位就是生效者 ——
+     * 故修复前后 `activeRuleIndex` 都是 `0`,变的是**它指向谁**:
+     * 修复前 0 号是 `*.wikipedia.org`,修复后 0 号是用户编辑的 `*.org`。
+     * 真正的证据是:`editingIndex` 也跟到了 0(onReindex),两者一致 →
+     * 状态行 `live`。若 popup 没重问 SW、或没跟随索引,此处就会停在 `shadowed`。
+     */
+    const fixedTabState = await popup.evaluate(
+      async () => await chrome.runtime.sendMessage({ type: 'GET_TAB_STATE' }),
+    );
+    const fixedStatus = await probe(popup, 'status-line');
+    const fixedPattern = await probe(popup, 'pattern-input');
+    assert(
+      '🔴 ADR-044:一键修复后 SW 的 activeRuleIndex 指向用户编辑的那条,状态行变「生效中」',
+      fixedTabState &&
+        fixedTabState.activeRuleIndex === 0 &&
+        storedAfterFix.rules[fixedTabState.activeRuleIndex].pattern === '*.org' &&
+        fixedPattern.value === '*.org' &&
+        fixedStatus.dataset.kind === 'live',
+      {
+        activeRuleIndex: fixedTabState && fixedTabState.activeRuleIndex,
+        shadowedRuleIndexes: fixedTabState && fixedTabState.shadowedRuleIndexes,
+        activePattern:
+          fixedTabState &&
+          storedAfterFix.rules[fixedTabState.activeRuleIndex].pattern,
+        editingPattern: fixedPattern.value,
+        statusKind: fixedStatus.dataset.kind,
+      },
     );
     results.cases.push({
       case: '5-shadow-fix',
