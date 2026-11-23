@@ -57,6 +57,34 @@ export default defineContentScript({
       // 不接这个订阅,下一次导航的同步阶段仍会按陈旧推测上色约 2ms
       // (实测,见 injector.ts 中 subscribeSettings 的注释)。
       subscribeSettings: (listener) => repo.subscribe(listener),
+
+      // ──────────────────────── T4b ────────────────────────
+
+      // 🔴 **实时预览接收端（ADR-049）**。
+      //
+      // 路由由 DESIGN.md §6 T4b 定死且「不得自行选择」：popup 用
+      // `chrome.tabs.connect(tabState.tabId, { name: 'preview' })` **直连**
+      // 本 content script，**不经 service worker 中转**（否则 T5 会被拖进
+      // 预览路径，而 T5 并非 T6b 的上游）。
+      //
+      // 📌 在**接收端**这一侧，`chrome.tabs.connect` 发起的连接表现为一次
+      //    `chrome.runtime.onConnect` —— 这不是「改走 runtime 通道」，
+      //    而是同一条直连在两端的不同名字。接收端没有、也不需要
+      //    `chrome.tabs.*`（content script 里压根拿不到那个 API）。
+      //
+      // 📌 此处不直写 `onConnect: chrome.runtime.onConnect`：`chrome` 在本项目的
+      //    `tsc` 配置下没有全局类型（实测 TS2304，ADR-066 的第三道门禁会报错），
+      //    且在非扩展上下文求值会抵—— 同 `background.ts` 里 `chromeRuntime()` 的理由。
+      //    按本仓约定，平台取用收束在 `globalThis` 取值的软失败辅助函数里。
+      preview: true,
+
+      // 🔴 **存活性（INV-5 / ADR-017）**：站点脚本摧掉注入物后自动恢复。
+      //
+      // 生产入口恒为 `true`。它在 `InjectorDeps` 里是可选项，只为让既有单测
+      // 与非浏览器宿主能不启动 observer —— **不是**给 ADR-017 的保证加开关
+      // （那是不允许的）。`tests/t4b-static-gates.test.ts` 有一条断言把守
+      // 本行必须存在。
+      liveness: true,
     });
 
     // 异步阶段的失败不得让 content script 抛到页面上(INV-1:不改变页面可观察行为,

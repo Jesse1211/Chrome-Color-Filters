@@ -1,0 +1,55 @@
+{
+  "assertions": [
+    {
+      "name": "无规则时页面未滞镜",
+      "ok": true,
+      "detail": {
+        "filter": "none",
+        "attrOn": false,
+        "attrOff": true
+      }
+    },
+    {
+      "name": "对照组初始即滤镜态",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "🔴 探针有效:摘掉属性后的**同步**快照显示滤镜确实消失",
+      "ok": true,
+      "detail": {
+        "beforeFilter": "grayscale(1)",
+        "syncAfterFilter": "none",
+        "syncAttrOn": false
+      }
+    },
+    {
+      "name": "🔴 微任务跑完后滤镜已恢复(INV-5)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    }
+  ],
+  "cases": [
+    {
+      "sync": {
+        "beforeFilter": "grayscale(1)",
+        "syncAfterFilter": "none",
+        "syncAttrOn": false
+      },
+      "after": {
+        "filter": "grayscale(1)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    }
+  ],
+  "pass": true
+}
