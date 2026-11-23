@@ -1,6 +1,13 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { SettingsRepository } from '../src/storage/index.js';
 import { Reconciler, defaultScriptingPort } from '../src/injection/index.js';
+import {
+  BackgroundCoordinator,
+  defaultActionPort,
+  defaultEventsPort,
+  defaultMessagingPort,
+  defaultTabsPort,
+} from '../src/background/index.js';
 
 /**
  * MV3 service worker 入口。
@@ -21,7 +28,18 @@ import { Reconciler, defaultScriptingPort } from '../src/injection/index.js';
  * **强制项(ADR-065)**:扩展更新会清除动态注册,漏了会导致
  * 每次更新后滤镜静默失效。
  *
- * 📌 后台协调与图标两态(ADR-019 / ADR-045)仍由 T5 实现,本文件不涉及。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 📌 **T5 的后台协调与图标两态在下方 `BackgroundCoordinator` 中,与上述
+ * 声明式注册并存** —— 两者是两件事,刻意都订阅仓储层变更:
+ *
+ * - `Reconciler`(T4a / ADR-062)→ 改**注册**,影响**下一次导航的首帧**(INV-3)
+ * - `BackgroundCoordinator`(T5 / ADR-013/014/019/044)→ 改**图标**、应答
+ *   popup 的 `GET_TAB_STATE`,影响**当下已打开的 tab**(INV-4 / INV-8)
+ *
+ * 职责不重叠:协调器**绝不**调用 `chrome.scripting.*`(注册的唯一写入者是
+ * `Reconciler`,两处都写会制造 ADR-064 所防的并发重复注册);
+ * `Reconciler` 也绝不碰 `chrome.action`。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
 export default defineBackground(() => {
   const repo = new SettingsRepository();
@@ -73,6 +91,28 @@ export default defineBackground(() => {
   // 🔴 这**不是** INV-3 的承担者 —— 首帧保证来自磁盘上已有的注册,
   //    不依赖本次 SW 启动做成任何事(ADR-062)。这里只负责「自愈」。
   void reconciler.request('startup');
+
+  // ══ T5:后台协调与图标状态 ══════════════════════════════════════════
+  //
+  // §6 T5 的四条职责(tab 导航解析、INV-4 多 tab 同步、ADR-019 图标两态、
+  // ADR-013 不可注入上报)全部在 `BackgroundCoordinator` 内,见该类的注释。
+  //
+  // 🔴 它与上面的 `reconciler` **共用同一个 `repo`**,于是共用同一次
+  // `chrome.storage` 读取路径与同一套订阅机制 —— 不存在第二份真相。
+  // §6 T5 注明「MV3 service worker 不可以是聚合的真相来源,真相在
+  // chrome.storage」:协调器**不持有设置快照**,每个事件回调都重新 read()。
+  //
+  // 📌 `start()` 幂等(内部 `#started` 守卫):SW 入口在某些时序下可能被
+  // 求值多次,装两套监听会让每个 tab 事件被处理两遍。
+  const coordinator = new BackgroundCoordinator({
+    tabs: defaultTabsPort(),
+    action: defaultActionPort(),
+    events: defaultEventsPort(),
+    messaging: defaultMessagingPort(),
+    readSettings: () => repo.read(),
+    subscribeSettings: (listener) => repo.subscribe(() => listener()),
+  });
+  coordinator.start();
 });
 
 /**

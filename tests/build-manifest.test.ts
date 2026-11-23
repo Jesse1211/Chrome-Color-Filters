@@ -213,6 +213,51 @@ describe.skipIf(!built)('T4a · service worker 含声明式注册逻辑(ADR-062/
   it('🔴 产物的 SW 写入 persistAcrossSessions 语义(拼写以源码为准)', () => {
     expect(swSource()).toContain('persistAcrossSessions');
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // T5:后台协调与图标状态,**与上面的 T4a 注册逻辑共存于同一个 SW**。
+  //
+  // 为什么必须在产物上验而不只在源码上验:T5 与 T4a 都写
+  // `entrypoints/background.ts`。若打包时其中一方被 tree-shake 掉
+  // (例如某次重构把协调器的构造移进了一个未被引用的分支),
+  // 源码级 grep(`tests/t5-static-gates.test.ts`)照样绿,
+  // 而真实扩展里图标永远不动 / popup 永远超时降级 ——
+  // 正是 §8 第 8 条警告的那类「mock 下看不见」的风险。
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it('🔴 T5 · 产物的 SW 调用 setIcon(ADR-019 图标两态的落点)', () => {
+    expect(swSource()).toContain('setIcon');
+  });
+
+  it('🔴 T5 · 产物的 SW 应答 GET_TAB_STATE(ADR-044 契约)', () => {
+    expect(swSource()).toContain('GET_TAB_STATE');
+  });
+
+  it('🔴 T5 · 产物的 SW 监听 tab 导航与激活(§6 T5 spec 第一条)', () => {
+    const sw = swSource();
+    expect(sw).toContain('onUpdated');
+    expect(sw).toContain('onActivated');
+  });
+
+  it('🔴 T5 · 产物中两态图标路径都在(ADR-045:两态是不同资源)', () => {
+    const sw = swSource();
+    expect(sw).toContain('icon/active/');
+    expect(sw).toContain('icon/inactive/');
+    for (const variant of ['active', 'inactive']) {
+      for (const size of [16, 32, 48, 128]) {
+        expect(
+          existsSync(resolve(OUT_DIR, `icon/${variant}/${size}.png`)),
+          `产物缺少 icon/${variant}/${size}.png`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('🔴 T5 · 不可注入判定进了产物(ADR-013)', () => {
+    // 商店 host 是该判定里最具辨识度的字面量 —— 它在,说明整条
+    // classifyUrl 链路没被摇掉。
+    expect(swSource()).toContain('chromewebstore.google.com');
+  });
 });
 
 describe('构建产物目录约定', () => {
