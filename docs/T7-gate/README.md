@@ -79,7 +79,7 @@ node docs/T6b-gate/editview.cjs     # Popup 编辑视图
 | **lock-e2e** | **PASS (42/42)** | 主开关 OFF 下启动锁定 → **ADR-057 原子开启主开关**且真实页面真的上色 → 改规则/关主开关/缩短/解锁**全被拒(`kind:'locked'`)**、延长**成功** → **真实进程退出 + 重启** → 锁定仍强制、剩余按绝对时间递减 → **真实等待到期** → 自动解锁、设置可改、UI 翻回 |
 | **persistence** | **PASS (13/13)** | 5 条规则经 UI 建立 + 一次经 UI 重排 → **完全退出 Chrome** → 规则与**顺序逐字完好**;ADR-025 键集未污染;重启后规则**真的仍在生效**(数据完好 ≠ 行为完好);ADR-062 注册跨重启存活 |
 | **inv7-capacity** | **PASS (12/12)** | 【回归】但**此前无任何真实栈门禁**覆盖:第 21 条被仓储层拒绝,结构化错误 `kind:'other'` + `reason:'capacity-exceeded'`(逐字核对 `errors.ts`),原 20 条**一字未动**(ADR-012);UI 容量提示文案逐字符合、「新建」入口禁用、`20/20` 计数;删一条即可再加(闭环) |
-| **visual-modes** | 🔴 **FAIL (34/40)** — 六红**均在 HN**,根因已闭合:**站点 CSP `img-src` 拦掉 data: URI 滤镜资源**,是**真实产品缺陷**,见下 | wikipedia 四模式**首次导航即全过**;Grayscale 真实网页 `maxSpread=0`(不受影响,CSS 内建函数);三辅助模式在 wikipedia 保有色彩且用内联 data: URI。截图 + 人类复核索引见 `evidence/visual-modes.md` |
+| **visual-modes** | 🔴 **FAIL**(committed 证据本轮为 **38/40**;上一轮同一 head 为 34/40)— 红灯**全部在 HN**,根因已闭合:**站点 CSP `img-src` 拦掉 data: URI 滤镜资源**,是**真实产品缺陷**,见下。⚠️ **条数不可当稳定指标**:HN 偶发返回不带 CSP 的 503/缓存响应,故红灯数逐轮浮动 —— 确定性版本见 `csp-matrix` | wikipedia 四模式**首次导航即全过**;Grayscale 真实网页 `maxSpread=0`(不受影响,CSS 内建函数);三辅助模式在 wikipedia 保有色彩且用内联 data: URI。截图 + 人类复核索引见 `evidence/visual-modes.md` |
 
 ### 🔴 `visual-modes` 的六条红灯:根因**已闭合** —— 站点 CSP 拦掉 `data:` URI 滤镜资源
 
