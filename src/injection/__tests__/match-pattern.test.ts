@@ -123,7 +123,25 @@ describe('globToMatchPatterns · 🔴 超集不变式(范围限定于会注册�
     'glob %s:若它会注册,则凡 matchGlob 命中的 host,match pattern 必须也命中',
     (glob) => {
       const conversion = globToMatchPatterns(glob);
-      expect(conversion.kind).not.toBe('invalid');
+
+      // 🔴 `invalid` 必须以**断言失败**的形式报出,而不是等到下面访问
+      //    `.patterns` 时抛 TypeError。
+      //
+      //    原先写的是 `expect(conversion.kind).not.toBe('invalid')` ——
+      //    它是纯运行时检查,**TypeScript 无法据此收窄联合类型**,于是
+      //    下面的 `conversion.patterns` 落在没有该字段的 `invalid` 分支上
+      //    (ADR-066 的 TS2339)。它当时能跑过只是因为 GLOBS 里恰好没有
+      //    非法 glob —— 一旦将来有,测试会**抛异常而不是断言失败**。
+      //
+      //    改用 `expect.fail()`:它的返回类型是 `never`,所以 TS 在此之后
+      //    真正把 `invalid` 从联合里排除掉,而失败时仍然是一条
+      //    带消息的断言失败(语义不降级)。非法 glob 本身的行为由
+      //    下方专门的 describe 钉死,不走超集不变式。
+      if (conversion.kind === 'invalid') {
+        expect.fail(
+          `glob "${glob}" 被判定为 invalid —— 本不变式的 GLOBS 里不该有非法 glob。`,
+        );
+      }
 
       // 🔴 `inexpressible` 刻意**不注册**,故不适用超集不变式。
       //    它由下一个 describe 单独钉死(恒不产出 pattern)。

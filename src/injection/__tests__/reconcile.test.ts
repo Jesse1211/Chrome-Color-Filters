@@ -183,9 +183,24 @@ describe('🔴 组合门禁:converter × reconcile —— 放宽的 glob 绝不�
     // 前面几条验的是纯函数 `desiredRegistrations`。这一条把 glob
     // **一路驱动到端口**,确保 reconcile 的 diff/plan 路径没有别的
     // 地方把全网 pattern 重新引进来。
+    //
+    // 三条规则各自扮演一个角色,缺一不可:
+    // - `*.baidu.*`(Grayscale@100)—— 尾部 `.*`,无有界超集 →
+    //   `inexpressible`。它与 `zhihu.com` **同组**(同一个
+    //   `(mode,intensity)` = 同一个 id `ccf-gray-100`),所以它顺带
+    //   钉死「同组内一条被跳过,不得把整组拖成全网、也不得让精确那条消失」。
+    // - `*weibo*`(RedGreen@70)—— 最长字面段 `weibo` 不含点号 →
+    //   同样 `inexpressible`,且它**独占一组**(`ccf-redgreen-70`),
+    //   于是钉死「整组都表达不出来时,该组不产出注册(而非产出全网注册)」。
+    //   📌 `mode` 必须是合法的 `FilterMode` 字面量:原先写的 `'R-G'`
+    //   不在 `FILTER_MODES` 里(ADR-066 的 TS2322),会让 `registrationId`
+    //   算出 `ccf-undefined-70` —— 这条规则就**没按预期构造**,它想验的
+    //   「独占一组且该组不注册」也就无从谈起。
+    // - `zhihu.com`(Grayscale@100)—— 纯字面 host,`exact`,**必然注册**。
+    //   它是下面那条非空性断言的来源:没有它,循环会在空集上空转(vacuous green)。
     const settings = settingsWith([
       { pattern: '*.baidu.*', mode: 'Grayscale', intensity: 100 },
-      { pattern: '*weibo*', mode: 'R-G', intensity: 70 },
+      { pattern: '*weibo*', mode: 'RedGreen', intensity: 70 },
       { pattern: 'zhihu.com', mode: 'Grayscale', intensity: 100 },
     ]);
     const result = await reconcile(port, settings);
@@ -200,8 +215,16 @@ describe('🔴 组合门禁:converter × reconcile —— 放宽的 glob 绝不�
       // 「根本没有注册」而空过(vacuous green)。
       expect(reg.css).toHaveLength(1);
     }
-    // 非空性:恰好注册了 zhihu 那一条,证明断言不是空集上成立的。
+    // 非空性:恰好注册了 zhihu 那一条,证明上面的循环不是在空集上成立的。
     expect([...port.registered.keys()]).toEqual(['ccf-gray-100']);
+    // 且那一条确实是 zhihu 的 exact pattern —— 钉死「注册的是对的东西」,
+    // 而不只是「注册了某个不含全网的东西」。
+    expect(port.registered.get('ccf-gray-100')!.matches).toEqual([
+      '*://zhihu.com/*',
+    ]);
+    // 🔴 `*weibo*` 独占的那一组确实**没有**注册 —— 若有人日后把
+    //    `inexpressible` 改回兜底成全网,这里会先炸。
+    expect(port.registered.has('ccf-redgreen-70')).toBe(false);
   });
 
   it('🔴 assertNoUnintendedAllUrls 会对伪造的全网注册抛错(断言本身有效)', () => {
