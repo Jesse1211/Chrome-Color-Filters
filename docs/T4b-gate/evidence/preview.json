@@ -13,7 +13,7 @@
       "name": "取到目标 tabId",
       "ok": true,
       "detail": {
-        "tabId": 1576962607
+        "tabId": 1894880887
       }
     },
     {
@@ -123,6 +123,42 @@
       "detail": {
         "portDead": true
       }
+    },
+    {
+      "name": "多端口:A 的预览生效(探针有效)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.1)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "多端口:B 接手后页面为 B 的值",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.3)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "🔴 陈旧端口 A 的 onDisconnect 不得擦掉 B 正在编辑的预览(ADR-049)",
+      "ok": true,
+      "detail": {
+        "expected": "grayscale(0.3)",
+        "got": "grayscale(0.3)",
+        "ruleValue": "grayscale(0.7)"
+      }
+    },
+    {
+      "name": "🔴 归属端口 B 断开 → 恢复规则值 0.7,不残留预览态",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.7)",
+        "attrOn": true,
+        "attrOff": false
+      }
     }
   ],
   "cases": [
@@ -142,6 +178,14 @@
       "case": "navigate-during-preview",
       "filter": "grayscale(0.7)",
       "portDead": true
+    },
+    {
+      "case": "stale-port-reap-during-active-preview",
+      "filter": "grayscale(0.3)"
+    },
+    {
+      "case": "owner-port-reap-restores-rule",
+      "filter": "grayscale(0.7)"
     }
   ],
   "pass": true

@@ -46,6 +46,16 @@ const OPEN_PORT = (tabId) => `
   'ok';
 `;
 
+// 同上,但带名字 —— 多端口场景需要**同时**持有两个端口。
+// (`chrome.tabs.connect` 每次调用都新建一个端口,两个端口会在同一个
+//  content script 里表现为两次 `chrome.runtime.onConnect`;这正是
+//  「两个窗口的 popup 连同一个 tab」在平台层面的形态。)
+const OPEN_NAMED_PORT = (tabId, slot) => `
+  globalThis.__ccfPorts = globalThis.__ccfPorts || {};
+  globalThis.__ccfPorts['${slot}'] = chrome.tabs.connect(${tabId}, { name: 'preview' });
+  'ok';
+`;
+
 async function waitFilter(page, pred, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
@@ -227,6 +237,78 @@ async function main() {
       portDead,
     });
     results.cases.push({ case: 'navigate-during-preview', filter: afterNav.filter, portDead });
+
+    // ── 并发条款:两个活端口并存时,陈旧端口的收尸不得打断正在进行的预览 ──
+    //
+    // 🔴 为什么这一格必须上真实栈:它的前提是**平台行为** ——
+    //    同一个 tab 上可以同时存在多个由 `chrome.tabs.connect` 建立的
+    //    预览端口,且 `onDisconnect` 的送达时刻**不受应用控制**。
+    //    假端口的单测能证明仲裁逻辑正确,却证明不了「两个端口真能并存」。
+    //
+    //    可达路径(非臆造):两个浏览器窗口各开一个 popup 连同一个 tab;
+    //    或 popup 关闭与重开重叠(旧端口尚未收尸,新端口已在拖动)。
+    //
+    //    修复前的实测表现:A 的收尸把 B 正在编辑的预览擦掉,
+    //    页面在用户拖动中途 snap 回规则值 grayscale(0.7)。
+    //
+    // 当前规则值为 Grayscale 70(上面那次 seed 改成的)。
+    await worker.evaluate(OPEN_NAMED_PORT(tabId, 'a'));
+    await worker.evaluate(OPEN_NAMED_PORT(tabId, 'b'));
+
+    // 窗口 A 的 popup 拖到 10。
+    await worker.evaluate(() => {
+      globalThis.__ccfPorts.a.postMessage({
+        type: 'PREVIEW_FILTER',
+        mode: 'Grayscale',
+        intensity: 10,
+      });
+    });
+    const multiA = await waitFilter(page, (p) => p.filter === 'grayscale(0.1)');
+    assert('多端口:A 的预览生效(探针有效)', multiA.filter === 'grayscale(0.1)', multiA);
+
+    // 窗口 B 的 popup 接手,正拖到 30 —— 用户此刻看着的就是这个。
+    await worker.evaluate(() => {
+      globalThis.__ccfPorts.b.postMessage({
+        type: 'PREVIEW_FILTER',
+        mode: 'Grayscale',
+        intensity: 30,
+      });
+    });
+    const multiB = await waitFilter(page, (p) => p.filter === 'grayscale(0.3)');
+    assert('多端口:B 接手后页面为 B 的值', multiB.filter === 'grayscale(0.3)', multiB);
+
+    // 🔴 旧端口 A 这才被收尸。
+    await worker.evaluate(() => {
+      globalThis.__ccfPorts.a.disconnect();
+    });
+    // 给足时间让(修复前会发生的)错误重绘有机会出现 —— 不能只测一瞬间,
+    // 否则「什么都没发生」与「来不及发生」无法区分。
+    await new Promise((r) => setTimeout(r, 1200));
+    const afterStaleReap = await page.evaluate(PROBE);
+    assert(
+      '🔴 陈旧端口 A 的 onDisconnect 不得擦掉 B 正在编辑的预览(ADR-049)',
+      afterStaleReap.filter === 'grayscale(0.3)',
+      { expected: 'grayscale(0.3)', got: afterStaleReap.filter, ruleValue: 'grayscale(0.7)' },
+    );
+    results.cases.push({
+      case: 'stale-port-reap-during-active-preview',
+      filter: afterStaleReap.filter,
+    });
+
+    // 归属者 B 自己断开 → 「不得残留」照常成立(修复没把它削弱成「永不撤除」)。
+    await worker.evaluate(() => {
+      globalThis.__ccfPorts.b.disconnect();
+    });
+    const afterOwnerReap = await waitFilter(page, (p) => p.filter === 'grayscale(0.7)');
+    assert(
+      '🔴 归属端口 B 断开 → 恢复规则值 0.7,不残留预览态',
+      afterOwnerReap.filter === 'grayscale(0.7)',
+      afterOwnerReap,
+    );
+    results.cases.push({
+      case: 'owner-port-reap-restores-rule',
+      filter: afterOwnerReap.filter,
+    });
 
     await page.close();
   } finally {
