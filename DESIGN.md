@@ -154,6 +154,7 @@ x.com         仅匹配 x.com
 | **ADR-058** | 锁定时长**不设任何上限**;但 UI **只提供预设按钮 + 带单位的自定义输入**(数字 + 分/时/天),**不接受裸时间戳** | 不设上限是产品决定(ADR-054)。带单位的输入让「秒/毫秒弄错」在界面层不可能发生,同时完全保留任意时长的能力 —— 零成本,不限制意图 |
 | **ADR-059** | 额外持久化 `maxSeenTime`(已观测到的最大时间戳);**时钟倒退时不缩短锁定**。**该字段不受锁定约束 —— 锁定期间必须继续推进**(INV-11 例外 b) | 改系统时钟可绕过锁定,这是已记录的局限(§4.1)。但时钟**倒退**会意外**延长**锁定(夏令时、NTP 校时),违反 INV-12 的反方向。单调下界只防意外延长,**不限制用户主动设置的任何时长** |
 | **ADR-050** | 不可注入页面上**全局主开关仍可用**,仅禁用规则编辑类控件。**🔒 锁定期间本条不适用 —— ADR-051 优先,主开关一并锁死** | 主开关是**全局**的,与当前页是什么无关,这是唯一的全局止血开关(ADR-027)。**但锁定期间该理由不成立** —— ADR-051 的全部前提就是「关滤镜是最需要被阻止的动作」,若锁定中仍可关,整个锁定功能形同虚设。两条 ADR 的交集(锁定 + 不可注入页)在首次打开 popup 时即可达,必须明确判定 |
+| **ADR-066** | **`COMPILE_CMD`(`tsc --noEmit`)是独立的第三道门禁**,与 `TEST_CMD`/`LINT_CMD` 并列,每个任务都必须跑 | 实测教训:T4a 第三轮 `npm test` 737 个全绿、`npm run lint` 零错误,但 `tsc --noEmit` 报两个类型错误(且干净 main 上退出码 0,证明是新引入)。**vitest 不做类型检查,eslint 未配类型感知规则** —— 一个 TypeScript 项目的验收门禁里没有编译检查是漏洞。其中一个错误有实质后果:`mode: 'R-G'` 不是合法 `FilterMode`,该测试的规则根本没按预期构造,断言可能空转。类型错误能让测试**看起来绿而实际空转**,这正是本账本要防的自欺 |
 | **ADR-062** | **首帧滤镜改为声明式注册**:service worker 用 `chrome.scripting.registerContentScripts()` 为每组 `(mode, intensity)` 注册一条带预生成 CSS 文件的 content script(`persistAcrossSessions: true`),**取代「content script 运行时查询该用什么滤镜」** | **这是零闪烁的根本解法,取代 ADR-060 的缓存思路。** 原架构内含「必须查询」,而查询必然异步 —— 闪烁是架构的必然结果而非实现缺陷(五次独立测量,失败位置从未移动)。声明式方案把异步工作**挪到规则创建时**(此刻 SW 必然活着、延迟免费),页面加载路径上**不再有任何查询**。关键机制(已核实 Chromium 源码 `extension_user_script_loader.cc`):持久化注册在**扩展加载时从磁盘 StateStore 恢复**,**不依赖 SW 先启动**。API 文档原文:`css` 文件「在页面的任何 DOM 被构建**或显示**之前」注入,且 **CSS 不受 `runAt` 约束** —— 比 `document_start` 的 JS 更早。**冷缓存失败因此消失:不再有缓存需要填充** |
 | **ADR-063** | CSS **构建时预生成** `public/filters/{mode}-{intensity}.css`,共 4 模式 × 101 档 = **404 个文件**;必须复用 `toColorMatrix` 而非另写一份公式 | `registerContentScripts` 的 `css` **只接受文件路径,不接受内联字符串**(w3c/webextensions#615 已立项但未实现)。预生成是唯一可行路径。取 101 档而非 5 的倍数,是为了**保留强度无级可调**(每文件仅一行,总计几 KB)。复用 `toColorMatrix` 以免 CSS 与 JS 两条路径漂移 |
 | **ADR-064** | 注册**按 `(mode, intensity)` 分组**,而非按 host;`reconcile()` 必须**幂等且基于 diff** | 相同滤镜设置的站点合并进同一条注册的 `matches` 数组,最坏 20 条、通常远少于此。注册的 match pattern 会对每次导航求值,少量注册携带多个 pattern 优于大量单 pattern 注册。幂等是因为 `reconcile()` 有四个触发点(`onInstalled`/`onStartup`/规则变更/`storage.onChanged`),可能并发 |
@@ -669,7 +670,7 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 
 **gate:**
 - **证明由 CLI 生成** —— 交付注明 `npx wxt@latest init` 及 WXT 版本号。手搓的直接驳回(ADR-035)
-- `TEST_CMD`(`npm test`)全绿、`LINT_CMD`(`npm run lint`)零错误
+- `TEST_CMD`(`npm test`)全绿、`LINT_CMD`(`npm run lint`)零错误、**`COMPILE_CMD`(`npm run compile`)退出码 0**(ADR-066)
 - `npm run build` 成功,产物在 `.output/chrome-mv3/`
 - 产物可在 `chrome://extensions` 加载,无 manifest 错误
 - 生成的 manifest 中:`host_permissions` 含 `<all_urls>`、`permissions` 含 `storage`、content script `run_at` 为 `document_start`
@@ -852,7 +853,7 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 > ⚠️ 不要对滤镜本身用 `cssInjectionMode: "ui"`(那是给 Shadow DOM 挂 UI 的,会破坏首帧前生效的保证)。
 
 **gate(先跑廉价的机械断言,再跑昂贵的真实 Chrome 项 —— 快速失败):**
-- `TEST_CMD` 全绿、`LINT_CMD` 零错误
+- `TEST_CMD` 全绿、`LINT_CMD` 零错误、**`COMPILE_CMD`(`npm run compile`)退出码 0**(ADR-066)
 - 注入/移除滤镜后,页面所有元素的 `getBoundingClientRect()` 逐一相等(INV-1 布局几何)
 - 页面自身 JS 读到的计算样式不受影响(INV-1)。**明确范围**:比对 `position`、`top/left/right/bottom`、`width/height`、`display`、`transform`、`z-index`、`overflow`,**排除注入目标自身的 `filter`**(那个属性必须变)
 - 移除滤镜后 DOM 恢复原状,无残留节点/属性/class
@@ -970,7 +971,7 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 **3. 非侵入(INV-9/ADR-026)** — 绝不读取、修改或外传页面内容。
 
 **gate(廉价机械项在前,真实 Chrome 项在后):**
-- `TEST_CMD` 全绿、`LINT_CMD` 零错误
+- `TEST_CMD` 全绿、`LINT_CMD` 零错误、**`COMPILE_CMD`(`npm run compile`)退出码 0**(ADR-066)
 - **`PREVIEW_FILTER` / `PREVIEW_CLEAR` 实现正确(ADR-049)**:
   - 收到 `PREVIEW_FILTER` 后页面滤镜立即变化,**且 storage 无写入**(spy 断言)
   - 收到 `PREVIEW_CLEAR` 后恢复按规则解析的结果
@@ -1015,7 +1016,7 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 > - service worker 可能处于休眠,popup 必须处理消息超时(降级为 `injectable:false, reason:'no-tab'`)
 注意:MV3 service worker 非持久化,随时可能被终止 —— **它不可以是聚合的真相来源**,真相在 `chrome.storage`。
 **gate:**
-- `TEST_CMD` 全绿、`LINT_CMD` 零错误
+- `TEST_CMD` 全绿、`LINT_CMD` 零错误、**`COMPILE_CMD`(`npm run compile`)退出码 0**(ADR-066)
 - 匹配同一规则的 3 个 tab:改规则后另外两个立即反映(INV-4)
 - 主开关 OFF → 所有 tab 滤镜消失、图标全灰、规则全部保留;ON → 全部恢复(INV-8, ADR-019)
 - 不可注入 URL(`chrome://settings`、应用商店、`file://`、新标签页)被正确识别,且 `reason` 字段取值正确
@@ -1043,7 +1044,7 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 含 §5.1 的设计 token(深浅两套)与 §5.2 的滤镜色块定义 —— 这两节是**共享基础**,由 T6a 建立,T6b 复用。
 
 **gate:**
-- `TEST_CMD` 全绿、`LINT_CMD` 零错误
+- `TEST_CMD` 全绿、`LINT_CMD` 零错误、**`COMPILE_CMD`(`npm run compile`)退出码 0**(ADR-066)
 - popup 尺寸 360×452px;配色 token 与 §5.1 **逐值一致**(断言计算后的颜色值)
 - 四个滤镜渐变色值与 §5.2 表格完全一致
 - **色块绝不单独出现,必须与文字名称并列**(ADR-030 硬性约束)
@@ -1086,7 +1087,7 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 **spec:** 在 T6a 的列表视图之上,实现锁定相关的全部 UI(§5.3 / §5.4 锁定中行)。
 
 **gate:**
-- `TEST_CMD` 全绿、`LINT_CMD` 零错误
+- `TEST_CMD` 全绿、`LINT_CMD` 零错误、**`COMPILE_CMD`(`npm run compile`)退出码 0**(ADR-066)
 - **未锁定时的计时器入口(ADR-058)**:预设时长按钮 + 自定义输入(**数字 + 单位下拉:分/时/天**)。
   **断言界面不接受裸时间戳** —— 带单位输入让「秒/毫秒弄错」在界面层不可能发生
 - **二次确认(ADR-056)—— 逐条断言文案存在**:
@@ -1131,7 +1132,7 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 **spec:** 实现编辑视图:模式输入 + 实时语法校验、四滤镜单选、强度滑块 + 实时预览、两维状态行、被遮蔽解释框、返回导航。
 
 **gate:**
-- `TEST_CMD` 全绿、`LINT_CMD` 零错误
+- `TEST_CMD` 全绿、`LINT_CMD` 零错误、**`COMPILE_CMD`(`npm run compile`)退出码 0**(ADR-066)
 - 四个滤镜单选,选中新的取消旧的(INV-2)
 - **无 Color Tint 选项,无 Hue 滑块**(ADR-028)
 - **无「使用当前网站」自动填充按钮(ADR-001)** —— 规则是用户手动输入的,不绑定当前 tab。
@@ -1228,6 +1229,7 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 |---|---|
 | `TEST_CMD` | `npm test` |
 | `LINT_CMD` | `npm run lint` |
+| **`COMPILE_CMD`** | **`npm run compile`**(`tsc --noEmit`) |
 | 开发 | `npm run dev` |
 | 构建 | `npm run build` |
 | 加载扩展 | `chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → `.output/chrome-mv3/` |
@@ -1266,4 +1268,8 @@ wxt.config.ts       ← manifest 配置(host_permissions 等)
 6. **INV-10 不可协商**。匹配实现必须线性时间。**不得**把通配符转译成可能回溯的正则(如把 `*` 直接换成 `.*` 后交给 `RegExp`)—— 那会把 ADR-005 消除的风险重新引入。
 7. **隐私底线**。`<all_urls>` 是强权限,ADR-026 禁止读取或外传页面内容,任何违反都是硬性失败。
 8. **REAL_STACK_GATE 必须在真实 Chrome 中跑。** jsdom/mock 下的绿灯**不构成**通过。本项目最核心的风险(containing block、FOUC、SPA 存活性)在 mock 下**全部不可见**。
-9. **必须申报 blindSpots。** 空的或敷衍的 blind-spot 申报等同于门禁失败。
+9. **类型错误等同于测试失败。** `npm run compile` 必须退出码 0(ADR-066)。
+   vitest 不做类型检查,所以「测试全绿」**不代表类型正确** ——
+   而类型错误能让测试看起来绿却实际空转(实测案例:一个非法的 `mode` 字面量
+   让整条规则没按预期构造)。
+10. **必须申报 blindSpots。** 空的或敷衍的 blind-spot 申报等同于门禁失败。
