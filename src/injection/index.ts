@@ -15,7 +15,16 @@
  * - `apply-filter.ts`   —— DOM 侧原语(属性 + CSS 变量,无节点注入)
  * - `fast-path-cache.ts`—— 同步快路径(ADR-060,**降级为过渡期双重保险**)
  * - `fast-path-store.ts` —— 快路径的底层存储装配
- * - `injector.ts`       —— 编排 + INV-8 短路
+ * - `injector.ts`       —— 编排 + INV-8 短路 + 渲染仲裁(T4b)
+ *
+ * **C. T4b 新增 —— 存活性 / 预览 / 隐私:**
+ * - `liveness.ts`         —— MutationObserver 恢复,开销有界(INV-5 / ADR-017)
+ * - `preview-contract.ts` —— `PREVIEW_FILTER` / `PREVIEW_CLEAR` 消息契约(ADR-049)
+ * - `preview-receiver.ts` —— 预览接收端 + `RenderArbiter`(唯一 DOM 写入点)
+ *
+ * 🔴 **`RenderArbiter` 是 T4b 的结构性约束**:三条路径(规则解析 / 预览覆盖 /
+ * 存活性恢复)都只能经它写 DOM,ADR-049 的「覆盖优先、底层不重绘」
+ * 因而是**结构**保证,不靠每个调用点记得判断。
  *
  * 🔴 **路径 B 不能删**:注册变更**不影响已打开的标签页**
  * (Chrome 既定行为:「取消注册不会移除已注入的样式」),
@@ -28,6 +37,9 @@ export * from './fast-path-cache.js';
 export * from './fast-path-store.js';
 export * from './filter-file-css.js';
 export * from './injector.js';
+export * from './liveness.js';
+export * from './preview-contract.js';
+export * from './preview-receiver.js';
 export * from './match-pattern.js';
 export * from './reconcile.js';
 export * from './reconciler.js';

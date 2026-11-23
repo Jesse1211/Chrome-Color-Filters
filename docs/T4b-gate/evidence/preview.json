@@ -1,0 +1,148 @@
+{
+  "assertions": [
+    {
+      "name": "规则态:grayscale(1)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "取到目标 tabId",
+      "ok": true,
+      "detail": {
+        "tabId": 874257510
+      }
+    },
+    {
+      "name": "🔴 PREVIEW_FILTER 经 chrome.tabs.connect 直连生效(ADR-049 路由成立)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.3)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "🔴 连续拖动每一步都渲染(不防抖,ADR-049)",
+      "ok": true,
+      "detail": [
+        {
+          "intensity": 80,
+          "filter": "grayscale(0.8)"
+        },
+        {
+          "intensity": 60,
+          "filter": "grayscale(0.6)"
+        },
+        {
+          "intensity": 40,
+          "filter": "grayscale(0.4)"
+        },
+        {
+          "intensity": 20,
+          "filter": "grayscale(0.2)"
+        },
+        {
+          "intensity": 5,
+          "filter": "grayscale(0.05)"
+        }
+      ]
+    },
+    {
+      "name": "🔴 预览值绝不落盘:storage 中规则仍为 intensity=100",
+      "ok": true,
+      "detail": {
+        "rules": [
+          {
+            "intensity": 100,
+            "mode": "Grayscale",
+            "pattern": "*.wikipedia.org"
+          }
+        ]
+      }
+    },
+    {
+      "name": "🔴 预览活动期间 onChanged 到达,页面不重绘(ADR-049 优先级)",
+      "ok": true,
+      "detail": {
+        "beforeChanged": "grayscale(0.05)",
+        "afterChanged": "grayscale(0.05)"
+      }
+    },
+    {
+      "name": "🔴 PREVIEW_CLEAR 后按 onChanged 带来的新值 0.7 渲染",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.7)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "断开前确处于预览态(探针有效)",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.741159%20-0.407208%200.666049%200%200%200.075098%200.585234%200.339668%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "🔴 端口断开(popup 关闭)→ 自动恢复规则值,无预览残留",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.7)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "导航前确处于预览态(探针有效)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.1)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "🔴 预览期间导航 → 新页面按**规则**值 0.7 渲染,不是预览值 0.1",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.7)",
+        "attrOn": true,
+        "attrOff": false
+      }
+    },
+    {
+      "name": "🔴 页面导航触发端口 onDisconnect(ADR-049 生命周期)",
+      "ok": true,
+      "detail": {
+        "portDead": true
+      }
+    }
+  ],
+  "cases": [
+    {
+      "case": "PREVIEW_FILTER",
+      "filter": "grayscale(0.3)"
+    },
+    {
+      "case": "PREVIEW_CLEAR",
+      "filter": "grayscale(0.7)"
+    },
+    {
+      "case": "onDisconnect",
+      "filter": "grayscale(0.7)"
+    },
+    {
+      "case": "navigate-during-preview",
+      "filter": "grayscale(0.7)",
+      "portDead": true
+    }
+  ],
+  "pass": true
+}

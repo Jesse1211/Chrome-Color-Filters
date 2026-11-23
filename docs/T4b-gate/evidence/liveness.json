@@ -1,0 +1,144 @@
+{
+  "cases": [
+    {
+      "case": "站点摘掉 data-ccf-on",
+      "broken": "grayscale(1)",
+      "restored": "grayscale(1)"
+    },
+    {
+      "case": "站点摘掉 --ccf-filter 变量",
+      "broken": "grayscale(1)",
+      "restored": "grayscale(1)"
+    },
+    {
+      "case": "站点塞上 data-ccf-off(压制属性)",
+      "broken": "grayscale(1)",
+      "restored": "grayscale(1)"
+    },
+    {
+      "case": "站点整体摘掉 style 属性",
+      "broken": "grayscale(1)",
+      "restored": "grayscale(1)"
+    },
+    {
+      "case": "SPA react.dev",
+      "urlBefore": "https://react.dev/",
+      "urlAfter": "https://react.dev/learn",
+      "navigated": true,
+      "filterBefore": "grayscale(1)",
+      "filterAfter": "grayscale(1)"
+    },
+    {
+      "case": "SPA vuejs.org",
+      "urlBefore": "https://vuejs.org/",
+      "urlAfter": "https://vuejs.org/guide/quick-start.html",
+      "navigated": true,
+      "filterBefore": "grayscale(1)",
+      "filterAfter": "grayscale(1)"
+    }
+  ],
+  "assertions": [
+    {
+      "name": "wikipedia 初始即滤镜态",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)",
+        "attrOn": false,
+        "attrOff": false,
+        "varValue": ""
+      }
+    },
+    {
+      "name": "站点摘掉 data-ccf-on → 自动恢复(INV-5)",
+      "ok": true,
+      "detail": {
+        "broken": "grayscale(1)",
+        "restored": "grayscale(1)"
+      }
+    },
+    {
+      "name": "站点摘掉 --ccf-filter 变量 → 自动恢复(INV-5)",
+      "ok": true,
+      "detail": {
+        "broken": "grayscale(1)",
+        "restored": "grayscale(1)"
+      }
+    },
+    {
+      "name": "站点塞上 data-ccf-off(压制属性) → 自动恢复(INV-5)",
+      "ok": true,
+      "detail": {
+        "broken": "grayscale(1)",
+        "restored": "grayscale(1)"
+      }
+    },
+    {
+      "name": "站点整体摘掉 style 属性 → 自动恢复(INV-5)",
+      "ok": true,
+      "detail": {
+        "broken": "grayscale(1)",
+        "restored": "grayscale(1)"
+      }
+    },
+    {
+      "name": "连续 20 次破坏全部恢复",
+      "ok": true,
+      "detail": {
+        "restoredCount": 20
+      }
+    },
+    {
+      "name": "react.dev 初始即滤镜态",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)",
+        "attrOn": true,
+        "attrOff": false,
+        "varValue": "grayscale(1)"
+      }
+    },
+    {
+      "name": "react.dev 站内跳转确实发生(探针有效)",
+      "ok": true,
+      "detail": {
+        "urlBefore": "https://react.dev/",
+        "urlAfter": "https://react.dev/learn"
+      }
+    },
+    {
+      "name": "react.dev 站内跳转后滤镜仍生效(INV-5)",
+      "ok": true,
+      "detail": {
+        "urlAfter": "https://react.dev/learn",
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "vuejs.org 初始即滤镜态",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)",
+        "attrOn": true,
+        "attrOff": false,
+        "varValue": "grayscale(1)"
+      }
+    },
+    {
+      "name": "vuejs.org 站内跳转确实发生(探针有效)",
+      "ok": true,
+      "detail": {
+        "urlBefore": "https://vuejs.org/",
+        "urlAfter": "https://vuejs.org/guide/quick-start.html"
+      }
+    },
+    {
+      "name": "vuejs.org 站内跳转后滤镜仍生效(INV-5)",
+      "ok": true,
+      "detail": {
+        "urlAfter": "https://vuejs.org/guide/quick-start.html",
+        "filter": "grayscale(1)"
+      }
+    }
+  ],
+  "pass": true
+}

@@ -47,17 +47,25 @@ import {
   hostFromUrl,
   resolveRule,
 } from '../domain/index.js';
-import {
-  type FilterTarget,
-  removeFilter,
-  syncFilter,
-} from './apply-filter.js';
+import { type FilterTarget } from './apply-filter.js';
 import {
   type SyncKeyValueStore,
   clearFastPath,
   readFastPath,
   writeFastPath,
 } from './fast-path-cache.js';
+import {
+  type OnConnectLike,
+  type PreviewReceiverHandle,
+  type RenderArbiter,
+  createRenderArbiter,
+  startPreviewReceiver,
+} from './preview-receiver.js';
+import {
+  type LivenessHandle,
+  type MutationObserverFactory,
+  startLiveness,
+} from './liveness.js';
 
 export interface InjectorDeps {
   /** 注入目标 —— 生产环境恒为 `document.documentElement`(T0 spike §1)。 */
@@ -85,6 +93,62 @@ export interface InjectorDeps {
   ) => () => void;
   /** 时钟,默认 `Date.now`(便于测 TTL 边界)。 */
   readonly clock?: () => number;
+
+  // ───────────────────────── T4b 新增(全部可选,向后兼容) ─────────────────────────
+
+  /**
+   * 预览接收端的接入点(**ADR-049**,T4b)。
+   *
+   * 传入 `chrome.runtime.onConnect` 即启用实时预览;不传则行为与 T4a 完全一致
+   * (`runInjector` 的所有既有调用点因此无需改动 —— 这是「additive」的字面含义)。
+   *
+   * 🔴 路由由 DESIGN.md §6 T4b **定死**:popup 用
+   * `chrome.tabs.connect(tabState.tabId, { name: 'preview' })` **直连**
+   * content script,**不经 service worker 中转**。在接收端这一侧,
+   * `chrome.tabs.connect` 发起的连接就表现为一次 `chrome.runtime.onConnect`
+   * —— 故这里要的正是 `onConnect`,而**不是** `onMessage`。
+   */
+  readonly onConnect?: OnConnectLike;
+
+  /**
+   * 预览接收端开关（T4b）。
+   *
+   * `true` 且未传 `onConnect` 时，从全局 `chrome.runtime.onConnect`
+   * 取用—— 这是生产入口（`entrypoints/content.ts`）走的路。
+   *
+   * 📌 为何不让入口直写 `onConnect: chrome.runtime.onConnect`：
+   *    `chrome` 在本项目的 `tsc` 配置下无全局类型（ADR-066 的
+   *    `--noEmit` 会报 TS2304），且在非扩展上下文求值会抛——
+   *    同 `entrypoints/background.ts` 里 `chromeRuntime()` 的理由。
+   *    按本仓已有约定，平台取用统一收束在 `globalThis` 取值的
+   *    软失败辅助函数里（见 `preview-receiver.ts` 的 `defaultOnConnect`）。
+   *
+   * 它是一个**路径**开关，不是对 ADR-049 保证的开关：生产入口恒为 `true`，
+   * 由 `tests/t4b-static-gates.test.ts` 的断言把守。
+   */
+  readonly preview?: boolean;
+
+  /**
+   * 存活性守护开关(**INV-5 / ADR-017**,T4b)。
+   *
+   * `false`(缺省)= 不启动 observer,行为与 T4a 一致。
+   * 生产环境(`entrypoints/content.ts`)传 `true`。
+   *
+   * 📌 这是一个**路径**开关,不是对 ADR-017 保证的开关:生产入口恒为 `true`,
+   * 它存在只为让既有单测与未来的非浏览器宿主能不启动 observer。
+   * 把 ADR 的保证藏在一个默认关闭的 flag 后面是不允许的,故见
+   * `tests/t4b-static-gates.test.ts` 中那条断言:生产入口必须开着它。
+   */
+  readonly liveness?: boolean;
+
+  /** 存活性 observer 工厂(测试注入用);缺省用全局 `MutationObserver`。 */
+  readonly observerFactory?: MutationObserverFactory;
+
+  /** 存活性速率上限:一个窗口内允许的恢复次数(见 `liveness.ts`)。 */
+  readonly maxRestoresPerWindow?: number;
+
+  /** 存活性速率窗口长度(毫秒)。 */
+  readonly livenessWindowMs?: number;
 }
 
 /** 一次解析的结果:应套用的 filter 值,`null` = 不套。 */
@@ -134,9 +198,30 @@ export interface InjectorRunResult {
 export function runInjector(deps: InjectorDeps): {
   readonly fastPathHit: boolean;
   readonly settled: Promise<InjectorRunResult>;
+  /**
+   * 渲染仲裁器 —— 本次运行中**唯一**的 DOM 写入点(T4b)。
+   *
+   * 暴露出来是为了让预览(ADR-049)与存活性(INV-5)挂在同一个真相上:
+   * 三条路径(规则解析 / 预览覆盖 / 存活性恢复)若各自直接写 DOM,
+   * ADR-049 的「覆盖优先、底层不重绘」就只能靠每个调用点记得判断 ——
+   * 那是会漏的。改为结构保证:谁都只能经过它。
+   */
+  readonly arbiter: RenderArbiter;
+  /** 预览接收端(未传 `onConnect` 时为 `null`)。 */
+  readonly preview: PreviewReceiverHandle | null;
+  /** 存活性守护(未开启时为 `null`)。 */
+  readonly liveness: LivenessHandle | null;
 } {
   const clock = deps.clock ?? Date.now;
   const host = hostFromUrl(deps.url);
+
+  // 🔴 T4b:仲裁器就地创建,随后**所有**对 target 的写入都走它。
+  //    初始底层值为 `null`,但注意它**不会**因此立刻把 `data-ccf-off` 写上去 ——
+  //    `createRenderArbiter` 只在 `setBase`/`setOverride`/`clearOverride`
+  //    被调用时才渲染。这一点对 INV-3 是**致命重要**的:
+  //    构造时就渲染 `null` 等于在首帧把预生成 CSS(ADR-063)压掉
+  //    (见 apply-filter.ts 对 SUPPRESS_ATTR 的实测记录:首帧 `filter: none`)。
+  const arbiter = createRenderArbiter(deps.target, null);
 
   // ── 同步阶段:首帧之前 ───────────────────────────────────────────────
   //
@@ -152,7 +237,9 @@ export function runInjector(deps: InjectorDeps): {
       fastPathHit = true;
       speculative = cached.filterValue;
       // 命中即刻应用 —— 与静态 CSS 同处首帧之前(INV-3)。
-      syncFilter(deps.target, speculative);
+      // 走仲裁器:此刻必然还没有预览覆盖(端口尚未连上),故等价于直接
+      // `syncFilter`,但保持了「唯一写入点」这条不变式。
+      arbiter.setBase(speculative);
     } else if (cached.kind === 'none') {
       // 明确「该 host 不匹配」:这也是一次有效命中,但**无需任何 DOM 写入**
       // (默认态本就是不滤镜)。记为命中是为了让 INV-3 的观测区分
@@ -196,12 +283,26 @@ export function runInjector(deps: InjectorDeps): {
   //    attribute MutationObserver 制造无意义回调),且 `null` 分支会显式
   //    设上 `data-ccf-off` —— 预生成 CSS(ADR-063)用裸 `html` 选择器,
   //    只摘自家属性压不掉它(见 apply-filter.ts)。
+  //    (T4b 起这一步经由 `arbiter.setBase`,它内部用的正是 `syncFilter`。)
   if (deps.subscribeSettings) {
     deps.subscribeSettings((settings) => {
       const next = decide(settings, deps.url);
 
-      // 先同步 DOM —— 用户看得见的那一半,优先于缓存簿记。
-      syncFilter(deps.target, next);
+      // 🔴 **ADR-049 的优先级条款就落在这一行**(T4b)。
+      //
+      //    `setBase` 在预览覆盖活动时**只更新底层值、不重绘**;
+      //    覆盖撤掉时才按这里存下的最新底层值渲染。
+      //
+      //    为什么必须如此:popup 的编辑视图里,滑块走预览通道(每次拖动都渲染),
+      //    而**别处**的变更(另一个窗口、T5 的同步、锁定到期)仍会经
+      //    `chrome.storage.onChanged` 到达这里。若它直接重绘,用户会看到
+      //    DESIGN.md 点名的那个 bug:
+      //    「拖到 70 → 旧的 50 迟到 → 页面闪回 50 再跳到 70」。
+      //
+      //    注意**缓存簿记照常进行**(下面几行):`onChanged` 带来的是
+      //    权威的规则变更,它该进快路径缓存;被压住的只有**重绘**。
+      //    预览值本身从不进入这条路径 —— 它压根不经过 storage(ADR-049)。
+      arbiter.setBase(next);
 
       if (host === null) return;
 
@@ -241,7 +342,20 @@ export function runInjector(deps: InjectorDeps): {
     // → 同步阶段什么都不画。
     if (!settings.masterEnabled) {
       if (host !== null) clearFastPath(deps.store, host);
-      removeFilter(deps.target);
+      // T4b:经仲裁器撤除(`setBase(null)` 内部即 `syncFilter(target, null)`,
+      // 等价于旧的 `removeFilter` 但保持唯一写入点)。
+      //
+      // 📌 主开关 OFF 时预览覆盖**不该**还活着:ADR-049 明文把
+      //    `masterEnabled == false` 列为 popup 侧的「一律不发送」情形
+      //    (INV-8:content script 根本没运行,没有接收方)。但接收端不能
+      //    依赖发送端守规矩 —— 若此刻仍有覆盖活动,`setBase` 会按 ADR-049
+      //    的优先级压住重绘,页面会停在预览色上,而 INV-8 要求的是
+      //    「主开关可彻底止血」。故这里**显式撤掉覆盖**,让主开关赢。
+      //    这不是违反 ADR-049 的优先级 —— 那条优先级裁决的是
+      //    「预览 vs 规则解析结果」,而 INV-8/ADR-027 的主开关凌驾一切
+      //    (decide() 第一行即是此意)。
+      arbiter.clearOverride();
+      arbiter.setBase(null);
       return {
         fastPathHit,
         speculative,
@@ -255,7 +369,13 @@ export function runInjector(deps: InjectorDeps): {
       resolved === null
         ? null
         : filterCssValue(resolved.rule.mode, resolved.rule.intensity);
-    syncFilter(deps.target, authoritative);
+    // T4b:同 `onChanged` 路径 —— 预览覆盖活动时只更新底层值、不重绘(ADR-049)。
+    //
+    // 这一格也是真实存在的时序:用户在 A 站打开 popup 进编辑视图并开始拖动,
+    // 此时**本页的异步权威读取**可能才刚返回(MV3 冷启动下
+    // `chrome.storage` 的首次读取是百毫秒级)。若它直接重绘,
+    // 刚拖出来的预览色会被规则色盖掉一帧。
+    arbiter.setBase(authoritative);
 
     if (host !== null) {
       // 🔴 ADR-025:回写的是 `(mode,intensity)` 这两个**用户设置值**,
@@ -279,5 +399,47 @@ export function runInjector(deps: InjectorDeps): {
     };
   })();
 
-  return { fastPathHit, settled };
+  // ── T4b:预览接收端(ADR-049) ──────────────────────────────────────
+  //
+  // 🔴 挂在**同步阶段之后、异步阶段之外**是有意的:接听端口不需要等设置读完。
+  //    popup 可能在页面刚开始加载时就已打开并连上来,此时若还没接听,
+  //    那次 `connect` 会直接失败(Chrome:无接收方 → 端口立即 disconnect),
+  //    表现为「第一下拖动没反应」。
+  //
+  // 📌 预览覆盖优先于底层值,所以即便此刻异步权威结果尚未返回,
+  //    用户拖动滑块也会立刻看到效果 —— 随后到达的权威结果走 `setBase`,
+  //    被优先级条款压住不重绘。这正是 ADR-049 想要的顺序。
+  const preview =
+    deps.onConnect === undefined && deps.preview !== true
+      ? null
+      : startPreviewReceiver({
+          arbiter,
+          // 未显式传入时由 `startPreviewReceiver` 从全局 `chrome.runtime`
+          // 取用（取不到则降级为不接入，不抛异常）。
+          ...(deps.onConnect ? { onConnect: deps.onConnect } : {}),
+        });
+
+  // ── T4b:存活性守护(INV-5 / ADR-017) ─────────────────────────────
+  //
+  // 🔴 `desired` 传的是 `arbiter.current` 而不是一个固定值 —— 恢复必须按
+  //    **当前**真相来,而当前真相可能是预览覆盖。否则会出现:
+  //    预览中站点脚本摘掉属性 → 我们按规则值恢复 → 用户拖动的预览色丢了。
+  const liveness = deps.liveness
+    ? startLiveness({
+        target: deps.target,
+        desired: () => arbiter.current(),
+        ...(deps.observerFactory
+          ? { observerFactory: deps.observerFactory }
+          : {}),
+        ...(deps.maxRestoresPerWindow !== undefined
+          ? { maxRestoresPerWindow: deps.maxRestoresPerWindow }
+          : {}),
+        ...(deps.livenessWindowMs !== undefined
+          ? { windowMs: deps.livenessWindowMs }
+          : {}),
+        ...(deps.clock ? { clock: deps.clock } : {}),
+      })
+    : null;
+
+  return { fastPathHit, settled, arbiter, preview, liveness };
 }
