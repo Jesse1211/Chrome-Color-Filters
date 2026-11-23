@@ -34,6 +34,17 @@ async function launch(userDataDir, opts = {}) {
       '--no-first-run',
       '--no-default-browser-check',
       '--window-size=1280,900',
+      // 🔴 不要访问操作系统密钥链(ADR-067)。
+      //
+      // Chrome 启动时会解锁 Chromium Safe Storage 来初始化它自己的 cookie
+      // 加密密钥 —— 与本扩展无关(我们只写 chrome.storage.local,扩展 API
+      // 根本碰不到 Safe Storage),但在 macOS 上会反复弹出钥匙串授权框打断
+      // 无人值守的 build。
+      //
+      // 这两个开关让 Chrome 用内存里的假密钥链。本项目的门禁不测 cookie、
+      // 不测密码、不测任何需要持久加密的东西,因此对验证结果零影响。
+      '--password-store=basic',
+      '--use-mock-keychain',
     ],
     defaultViewport: { width: 1280, height: 860 },
   });
