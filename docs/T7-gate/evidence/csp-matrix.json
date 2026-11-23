@@ -1,0 +1,492 @@
+{
+  "gate": "csp-matrix",
+  "assertions": [
+    {
+      "name": "[无 CSP(对照组:必须正常生效,证明仪器与 fixture 可信)] 仪器有效:OFF 基线恰好是判据色(fixture 不受 CSP 影响)",
+      "ok": true,
+      "detail": {
+        "base": [
+          102,
+          255,
+          51
+        ],
+        "expected": [
+          102,
+          255,
+          51
+        ],
+        "baseFilter": "none"
+      }
+    },
+    {
+      "name": "[img-src 放行 data:(wikipedia / MDN 的实际形态)] 仪器有效:OFF 基线恰好是判据色(fixture 不受 CSP 影响)",
+      "ok": true,
+      "detail": {
+        "base": [
+          102,
+          255,
+          51
+        ],
+        "expected": [
+          102,
+          255,
+          51
+        ],
+        "baseFilter": "none"
+      }
+    },
+    {
+      "name": "[🔴 img-src 不放行 data:(news.ycombinator.com 的实际形态)] 仪器有效:OFF 基线恰好是判据色(fixture 不受 CSP 影响)",
+      "ok": true,
+      "detail": {
+        "base": [
+          102,
+          255,
+          51
+        ],
+        "expected": [
+          102,
+          255,
+          51
+        ],
+        "baseFilter": "none"
+      }
+    },
+    {
+      "name": "[🔴 default-src 不放行 data: 且无 img-src(回退到 default-src)] 仪器有效:OFF 基线恰好是判据色(fixture 不受 CSP 影响)",
+      "ok": true,
+      "detail": {
+        "base": [
+          102,
+          255,
+          51
+        ],
+        "expected": [
+          102,
+          255,
+          51
+        ],
+        "baseFilter": "none"
+      }
+    },
+    {
+      "name": "[🔴 img-src 'none'(最严形态)] 仪器有效:OFF 基线恰好是判据色(fixture 不受 CSP 影响)",
+      "ok": true,
+      "detail": {
+        "base": [
+          102,
+          255,
+          51
+        ],
+        "expected": [
+          102,
+          255,
+          51
+        ],
+        "baseFilter": "none"
+      }
+    },
+    {
+      "name": "[Report-Only 不应拦截(只报告,不阻断)] 仪器有效:OFF 基线恰好是判据色(fixture 不受 CSP 影响)",
+      "ok": true,
+      "detail": {
+        "base": [
+          102,
+          255,
+          51
+        ],
+        "expected": [
+          102,
+          255,
+          51
+        ],
+        "baseFilter": "none"
+      }
+    },
+    {
+      "name": "[无 CSP(对照组:必须正常生效,证明仪器与 fixture 可信)] 仪器有效:CSP 拦截行为符合规范推演(expectBlocked=false)",
+      "ok": true,
+      "detail": {
+        "blocked": false,
+        "expected": false,
+        "viol": []
+      }
+    },
+    {
+      "name": "[无 CSP(对照组:必须正常生效,证明仪器与 fixture 可信)] 扩展侧无误:filter 属性仍是正确的 data: URI",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[无 CSP(对照组:必须正常生效,证明仪器与 fixture 可信)] 🔴 像素确实被滤镜变换了",
+      "ok": true,
+      "detail": {
+        "pixel": [
+          102,
+          173,
+          0
+        ],
+        "original": [
+          102,
+          255,
+          51
+        ],
+        "blocked": false
+      }
+    },
+    {
+      "name": "[img-src 放行 data:(wikipedia / MDN 的实际形态)] 仪器有效:CSP 拦截行为符合规范推演(expectBlocked=false)",
+      "ok": true,
+      "detail": {
+        "blocked": false,
+        "expected": false,
+        "viol": []
+      }
+    },
+    {
+      "name": "[img-src 放行 data:(wikipedia / MDN 的实际形态)] 扩展侧无误:filter 属性仍是正确的 data: URI",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[img-src 放行 data:(wikipedia / MDN 的实际形态)] 🔴 像素确实被滤镜变换了",
+      "ok": true,
+      "detail": {
+        "pixel": [
+          102,
+          173,
+          0
+        ],
+        "original": [
+          102,
+          255,
+          51
+        ],
+        "blocked": false
+      }
+    },
+    {
+      "name": "[🔴 img-src 不放行 data:(news.ycombinator.com 的实际形态)] 仪器有效:CSP 拦截行为符合规范推演(expectBlocked=true)",
+      "ok": true,
+      "detail": {
+        "blocked": true,
+        "expected": true,
+        "viol": [
+          {
+            "directive": "img-src",
+            "disposition": "enforce"
+          }
+        ]
+      }
+    },
+    {
+      "name": "[🔴 img-src 不放行 data:(news.ycombinator.com 的实际形态)] 扩展侧无误:filter 属性仍是正确的 data: URI",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[🔴 img-src 不放行 data:(news.ycombinator.com 的实际形态)] 🔴 像素确实被滤镜变换了",
+      "ok": false,
+      "detail": {
+        "pixel": [
+          102,
+          255,
+          51
+        ],
+        "original": [
+          102,
+          255,
+          51
+        ],
+        "blocked": true
+      }
+    },
+    {
+      "name": "[🔴 default-src 不放行 data: 且无 img-src(回退到 default-src)] 仪器有效:CSP 拦截行为符合规范推演(expectBlocked=true)",
+      "ok": true,
+      "detail": {
+        "blocked": true,
+        "expected": true,
+        "viol": [
+          {
+            "directive": "img-src",
+            "disposition": "enforce"
+          }
+        ]
+      }
+    },
+    {
+      "name": "[🔴 default-src 不放行 data: 且无 img-src(回退到 default-src)] 扩展侧无误:filter 属性仍是正确的 data: URI",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[🔴 default-src 不放行 data: 且无 img-src(回退到 default-src)] 🔴 像素确实被滤镜变换了",
+      "ok": false,
+      "detail": {
+        "pixel": [
+          102,
+          255,
+          51
+        ],
+        "original": [
+          102,
+          255,
+          51
+        ],
+        "blocked": true
+      }
+    },
+    {
+      "name": "[🔴 img-src 'none'(最严形态)] 仪器有效:CSP 拦截行为符合规范推演(expectBlocked=true)",
+      "ok": true,
+      "detail": {
+        "blocked": true,
+        "expected": true,
+        "viol": [
+          {
+            "directive": "img-src",
+            "disposition": "enforce"
+          }
+        ]
+      }
+    },
+    {
+      "name": "[🔴 img-src 'none'(最严形态)] 扩展侧无误:filter 属性仍是正确的 data: URI",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[🔴 img-src 'none'(最严形态)] 🔴 像素确实被滤镜变换了",
+      "ok": false,
+      "detail": {
+        "pixel": [
+          102,
+          255,
+          51
+        ],
+        "original": [
+          102,
+          255,
+          51
+        ],
+        "blocked": true
+      }
+    },
+    {
+      "name": "[Report-Only 不应拦截(只报告,不阻断)] 仪器有效:CSP 拦截行为符合规范推演(expectBlocked=false)",
+      "ok": true,
+      "detail": {
+        "blocked": false,
+        "expected": false,
+        "viol": [
+          {
+            "directive": "img-src",
+            "disposition": "report"
+          },
+          {
+            "directive": "img-src",
+            "disposition": "report"
+          }
+        ]
+      }
+    },
+    {
+      "name": "[Report-Only 不应拦截(只报告,不阻断)] 扩展侧无误:filter 属性仍是正确的 data: URI",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www"
+      }
+    },
+    {
+      "name": "[Report-Only 不应拦截(只报告,不阻断)] 🔴 像素确实被滤镜变换了",
+      "ok": true,
+      "detail": {
+        "pixel": [
+          102,
+          173,
+          0
+        ],
+        "original": [
+          102,
+          255,
+          51
+        ],
+        "blocked": false
+      }
+    },
+    {
+      "name": "🔴 根因锁定:「像素未变」⟺「CSP 的 img-src 拦了 data: URI」(全策略同步)",
+      "ok": true,
+      "detail": [
+        {
+          "csp": "none",
+          "transformed": true,
+          "blocked": false
+        },
+        {
+          "csp": "default-src 'self'; img-src 'self' data:",
+          "transformed": true,
+          "blocked": false
+        },
+        {
+          "csp": "default-src 'self'; img-src 'self' https://account.example.com",
+          "transformed": false,
+          "blocked": true
+        },
+        {
+          "csp": "default-src 'self'",
+          "transformed": false,
+          "blocked": true
+        },
+        {
+          "csp": "default-src 'self'; img-src 'none'",
+          "transformed": false,
+          "blocked": true
+        },
+        {
+          "csp": "default-src 'self'; img-src 'none'",
+          "transformed": true,
+          "blocked": false
+        }
+      ]
+    },
+    {
+      "name": "对照:Grayscale 在 img-src 'none' 下**照常生效**(CSS 内建函数,无外部资源)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)",
+        "pixel": [
+          208,
+          208,
+          208
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "policies": [
+        {
+          "policy": "无 CSP(对照组:必须正常生效,证明仪器与 fixture 可信)",
+          "csp": null,
+          "cspReportOnly": null,
+          "filterApplied": true,
+          "pixel": [
+            102,
+            173,
+            0
+          ],
+          "transformed": true,
+          "blocked": false,
+          "viol": []
+        },
+        {
+          "policy": "img-src 放行 data:(wikipedia / MDN 的实际形态)",
+          "csp": "default-src 'self'; img-src 'self' data:",
+          "cspReportOnly": null,
+          "filterApplied": true,
+          "pixel": [
+            102,
+            173,
+            0
+          ],
+          "transformed": true,
+          "blocked": false,
+          "viol": []
+        },
+        {
+          "policy": "🔴 img-src 不放行 data:(news.ycombinator.com 的实际形态)",
+          "csp": "default-src 'self'; img-src 'self' https://account.example.com",
+          "cspReportOnly": null,
+          "filterApplied": true,
+          "pixel": [
+            102,
+            255,
+            51
+          ],
+          "transformed": false,
+          "blocked": true,
+          "viol": [
+            {
+              "directive": "img-src",
+              "disposition": "enforce"
+            }
+          ]
+        },
+        {
+          "policy": "🔴 default-src 不放行 data: 且无 img-src(回退到 default-src)",
+          "csp": "default-src 'self'",
+          "cspReportOnly": null,
+          "filterApplied": true,
+          "pixel": [
+            102,
+            255,
+            51
+          ],
+          "transformed": false,
+          "blocked": true,
+          "viol": [
+            {
+              "directive": "img-src",
+              "disposition": "enforce"
+            }
+          ]
+        },
+        {
+          "policy": "🔴 img-src 'none'(最严形态)",
+          "csp": "default-src 'self'; img-src 'none'",
+          "cspReportOnly": null,
+          "filterApplied": true,
+          "pixel": [
+            102,
+            255,
+            51
+          ],
+          "transformed": false,
+          "blocked": true,
+          "viol": [
+            {
+              "directive": "img-src",
+              "disposition": "enforce"
+            }
+          ]
+        },
+        {
+          "policy": "Report-Only 不应拦截(只报告,不阻断)",
+          "csp": null,
+          "cspReportOnly": "default-src 'self'; img-src 'none'",
+          "filterApplied": true,
+          "pixel": [
+            102,
+            173,
+            0
+          ],
+          "transformed": true,
+          "blocked": false,
+          "viol": [
+            {
+              "directive": "img-src",
+              "disposition": "report"
+            },
+            {
+              "directive": "img-src",
+              "disposition": "report"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "pass": false
+}

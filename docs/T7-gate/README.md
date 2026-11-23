@@ -5,6 +5,29 @@
 >
 > 全部脚本跑在 **`npm run build` 产物**(`.output/chrome-mv3/`)上 —— **ADR-038**。
 
+---
+
+## 🔴 门禁状态:**未全绿 —— 一条真实产品缺陷,需人类裁定架构**
+
+| | |
+|---|---|
+| 【新增】5/6 门禁 | **PASS**(inv6-e2e 13/13、inv7-capacity 12/12、lock-e2e 42/42、persistence 13/13、inv10-pathological 9/9) |
+| 【新增】`visual-modes` | 🔴 **FAIL** —— 根因**已闭合**,是**产品缺陷**,非门禁缺陷、非平台闪烁。⚠️ 红灯条数逐轮浮动(实测 34/40 与 38/40),因为 HN 偶发返回**不带 CSP** 的 503/缓存响应 |
+| 🆕 `csp-matrix`(本轮新增) | 🔴 **FAIL 23/26,且完全确定**(连跑两轮逐位相同)—— 把同一根因搬到**本机固定 CSP 响应头**的 fixture 上,不再依赖第三方站点的策略。**因果锁定断言 PASS** |
+| 【回归】 | 全部 PASS(`styles` 的「残留」子项是**上游 T4a 门禁脚本**自身与 INV-5 自愈赛跑,见文末) |
+
+**缺陷一句话**:站点的 `Content-Security-Policy` 的 `img-src` 把扩展的
+`filter: url("data:image/svg+xml,…")` **滤镜资源当图片拦掉**,于是在
+`news.ycombinator.com` 这类未放行 `data:` 的真实站点上,
+**三种色觉辅助模式(ADR-002 的主业)全部静默失效**;`Grayscale` 不受影响。
+
+**为什么没修**:修复必须推翻 **ADR-063** 或新增权限并触碰 **ADR-026** 的隐私底线,
+而 DESIGN.md 与全部 ADR **零处提及 CSP**。按 DESIGN.md §8 第 1 条停下上报。
+**未改产品代码、未放宽断言、未剔除 HN。** 详见
+[「六条红灯」](#-visual-modes-的六条红灯根因已闭合--站点-csp-拦掉-data-uri-滤镜资源)。
+
+---
+
 ## 复现
 
 ```bash
@@ -28,6 +51,7 @@ node docs/T7-gate/lock-e2e.cjs            # 🔒 INV-11/12/13/14/15 端到端(�
 node docs/T7-gate/persistence.cjs         # ADR-010 持久化(完全退出并重启)
 node docs/T7-gate/visual-modes.cjs        # 四个滤镜在真实网页上的视觉证据(留档供人类复核)
 node docs/T7-gate/inv7-capacity.cjs       # 【回归】INV-7 第 21 条被拒(此前无任何真实栈覆盖)
+node docs/T7-gate/csp-matrix.cjs          # 🆕 根因:站点 CSP img-src 拦 data: URI 滤镜(确定性复现,预期判红)
 
 # 3) 【回归】上游门禁在合并后的完整系统上重跑
 node docs/T4a-gate/geometry.cjs     # INV-1 几何
@@ -55,43 +79,155 @@ node docs/T6b-gate/editview.cjs     # Popup 编辑视图
 | **lock-e2e** | **PASS (42/42)** | 主开关 OFF 下启动锁定 → **ADR-057 原子开启主开关**且真实页面真的上色 → 改规则/关主开关/缩短/解锁**全被拒(`kind:'locked'`)**、延长**成功** → **真实进程退出 + 重启** → 锁定仍强制、剩余按绝对时间递减 → **真实等待到期** → 自动解锁、设置可改、UI 翻回 |
 | **persistence** | **PASS (13/13)** | 5 条规则经 UI 建立 + 一次经 UI 重排 → **完全退出 Chrome** → 规则与**顺序逐字完好**;ADR-025 键集未污染;重启后规则**真的仍在生效**(数据完好 ≠ 行为完好);ADR-062 注册跨重启存活 |
 | **inv7-capacity** | **PASS (12/12)** | 【回归】但**此前无任何真实栈门禁**覆盖:第 21 条被仓储层拒绝,结构化错误 `kind:'other'` + `reason:'capacity-exceeded'`(逐字核对 `errors.ts`),原 20 条**一字未动**(ADR-012);UI 容量提示文案逐字符合、「新建」入口禁用、`20/20` 计数;删一条即可再加(闭环) |
-| **visual-modes** | **FAIL (32/34)** — 两红**均在 HN**,已定位到平台层,见下 | wikipedia 四模式**首次导航即全过**;Grayscale 真实网页 `maxSpread=0`;三辅助模式保有色彩且用内联 data: URI。截图 + 人类复核索引见 `evidence/visual-modes.md` |
+| **visual-modes** | 🔴 **FAIL (34/40)** — 六红**均在 HN**,根因已闭合:**站点 CSP `img-src` 拦掉 data: URI 滤镜资源**,是**真实产品缺陷**,见下 | wikipedia 四模式**首次导航即全过**;Grayscale 真实网页 `maxSpread=0`(不受影响,CSS 内建函数);三辅助模式在 wikipedia 保有色彩且用内联 data: URI。截图 + 人类复核索引见 `evidence/visual-modes.md` |
 
-### 🔴 `visual-modes` 的两条红灯:已定位,**不是产品缺陷**,但**按根因纪律保留为红**
+### 🔴 `visual-modes` 的六条红灯:根因**已闭合** —— 站点 CSP 拦掉 `data:` URI 滤镜资源
 
-**现象**:在 `news.ycombinator.com` 上,某个辅助模式的确定性色块**像素完全未变**。
+> ⚠️ **本节推翻了上一轮的结论。** 上一轮在此写的是「本 headless Chrome 构建在该
+> 站点上的合成/光栅化非确定性,与扩展代码路径无关」。**那个归因是错的** ——
+> 它把一条真实缺陷包装成了一句无法证伪的平台猜想。本轮已定位到确切根因。
 
-**已排除的解释**(每条都做了受控实验,见 `visual-modes.cjs` 文件头):
+**现象**:在 `news.ycombinator.com` 上,三种色觉辅助模式的确定性色块**像素完全未变**,
+而 `getComputedStyle(html).filter` **始终**是正确的 data: URI。
 
-1. **不是钳制不动点。** 主判据色 `#66ff33` 在三个矩阵下的逐通道总变化量都 > 130
-   (穷举筛出来的)。
+**根因(Chrome 自己给出的错误信息)**:
+
+```
+securitypolicyviolation:
+  effectiveDirective: "img-src"
+  disposition:        "enforce"
+  originalPolicy:     "… img-src 'self' https://account.ycombinator.com …"
+
+Log(security): Loading the image 'data:image/svg+xml,…#f' violates the following
+  Content Security Policy directive: "img-src 'self' https://account.ycombinator.com".
+  The action has been blocked.
+```
+
+HN 的文档响应**每次 GET 都带** CSP 头,其 `img-src` **不含 `data:`**。
+Chrome 把 `filter: url("data:image/svg+xml,…")` 的资源加载**按 `img-src` 管**,
+于是滤镜资源被拦截:属性全都设上了(产品代码没错),但滤镜**没有可用的资源**,
+像素因此完全未被变换。
+
+> 📌 **上一轮为什么漏掉它**:`curl -I`(HEAD 请求)**不返回** HN 的 CSP 头,
+> 只有 GET 才返回。本轮改用页内 `securitypolicyviolation` 事件 + CDP `Log` +
+> `Network.responseReceived` 三路交叉验证才抓到。
+
+**受控实验**(同一页面、同一会话,唯一变量是**滤镜的来源形式**):
+
+| # | 滤镜来源 | 像素 |
+|---|---|---|
+| 1 | 产品注入的 data: URI | **未变** |
+| 2 | 手写**同一条** data: URI 到 `html` | **未变** |
+| 3 | 手写 `grayscale(1)`(CSS 内建函数,无外部资源) | **变了** |
+| 4 | 手写 `url(#id)` 指向**页内内联 `<svg>`**(同源,不受 img-src 管) | **变了** |
+| 5 | 同一条 data: URI 挂 `body` 而非 `html` | **未变** |
+
+→ 失效与元素、与挂载时机、与 quirks 模式、与合成时机**全都无关**,
+只与「滤镜资源是不是 `data:` URI」有关。
+
+**它也不是闪烁**:同一次 page load 内连续 6 次读像素(跨 2.4 秒)结果**恒定**;
+失败是**每次加载的粘滞二元状态**。上一轮观测到的「逐轮漂移」来自 HN 偶发的
+503 / 缓存响应 —— **那些响应不带 CSP**,所以那几次就成功了。
+这也解释了上一轮 Tester 那次「重跑就绿」:不是运气,是刚好命中了无 CSP 的响应。
+
+**已排除的其它解释**(每条都有受控实验,见 `visual-modes.cjs` 文件头):
+
+1. **不是钳制不动点。** 主判据色 `#66ff33` 在三个矩阵下逐通道总变化量都 > 130。
    ⚠️ 但**HN 自己的主色确实是不动点**:`#ff6600` / `#ff8800` 在 GreenRed 下
-   R 溢出钳到 255、B 负值钳到 0、G 不变 → **像等于原色**,
-   底色 `#f6f6ef` 只变 1/255。这解释了「HN 整页看起来几乎没变」,
-   是矩阵的**正确行为**。曾因此误判为缺陷,已用矩阵乘法独立验算澄清。
-2. **不是 quirks 模式。** HN 无 doctype(`compatMode=BackCompat`),曾怀疑它使
-   data: URI 的 SVG 滤镜失效。**受控 A/B**(同一页面、唯一变量是 doctype)
-   证明两者**都正常生效**。
-3. **不是 stacking context / `position:fixed`。** 普通文档流内的静态元素
-   同样未变。
-4. **不是陈旧读数。** `getComputedStyle(html).filter` **始终**是正确的 data: URI
-   (长度 323),`data-ccf-on` 在位,`--ccf-filter` 在位 —— 产品该做的全做了。
+   R 溢出钳到 255、B 负值钳到 0、G 不变 → **像等于原色**;底色 `#f6f6ef` 只变 1/255。
+   这解释了「HN 整页看起来几乎没变」,是矩阵的**正确行为**,与本缺陷无关。
+2. **不是 quirks 模式。** 受控 A/B(唯一变量是 doctype)证明两者**都正常生效**;
+   且 wikipedia 是 standards 模式,其 `default-src` 含 `data:` 故不受影响。
+3. **不是 stacking context / `position:fixed`。** 静态流内元素同样未变。
+4. **不是陈旧读数。** `data-ccf-on`、`--ccf-filter` 全部在位。
 5. **强制重绘无效**(filter 置 `none` 再置回)。
 
-**结论**:这是**本 headless Chrome 构建在该站点上的合成/光栅化非确定性**。
-证据:
-- **站点相关**:example.com / wikipedia **0/6 失败**,HN **5/6 失败**;
-  本门禁里 wikipedia 四模式**第 1 次导航即全过**,HN 需 4–5 次且仍间歇失败。
-- **模式无关且漂移**:失败的模式逐轮变化(一轮 GreenRed,下一轮
-  RedGreen+BlueYellow,再下一轮全过)—— 真实缺陷不会这样漂移。
-- **独立佐证**:`docs/T4a-gate/modes.cjs`(像素级硬判、四模式)**PASS**,
-  四个矩阵在真实 Chrome 中确实生效。
+### 🔴 影响面:这是**真实产品缺陷**,不是门禁缺陷
 
-**为什么仍判红而不降级为 WARN**:根因纪律要求「不得为了让门禁变绿而放宽断言」。
-断言本身是对的 —— 它确实观测到「该被变换的像素没被变换」。
-**此处需要人类决定**:是接受「HN 在本 Chrome 构建下的像素判据不可靠」
-并把该站点从**这一条**判据中剔除,还是换一个更稳定的第二站点。
-已作为 needs-human 事项上报,**未自行改动产品代码,也未放宽断言**。
+任何设了限制性 `img-src`(或 `default-src`)而**未放行 `data:`** 的站点上,
+本扩展的**三种色觉辅助模式全部静默失效** —— 而 daltonization 正是本扩展的
+主业(ADR-002)。`Grayscale` **不受影响**(CSS 内建函数,无外部资源)。
+
+站点侧实测对照:
+
+| 站点 | `img-src` / `default-src` 是否含 `data:` | 辅助模式 |
+|---|---|---|
+| wikipedia | `default-src … data: …` ✅ | **正常** |
+| MDN | `img-src 'self' data: …` ✅ | **正常** |
+| example.com | 无 CSP ✅ | **正常** |
+| **news.ycombinator.com** | `img-src 'self' https://account.ycombinator.com` ❌ | **静默失效** |
+
+「静默」是最糟的失败形态:用户看不到任何报错,只看到扩展「没反应」。
+
+### 🆕 `csp-matrix`:把根因做成**确定性**回归门禁
+
+`visual-modes` 在 HN 上的红灯证据是真实的,但作为**回归门禁**它有两个弱点:
+
+1. **不确定。** HN 偶发返回 503 / 缓存响应,**那些响应不带 CSP** →
+   同一条判据逐轮漂移(实测同一天:6 红 / 2 红)。
+   **上一轮 Tester 的「重跑就绿」正是撞上了这个** —— 不是运气,
+   是刚好命中无 CSP 的响应。
+2. **依赖第三方策略。** HN 哪天在 `img-src` 加上 `data:`,
+   这条缺陷就**静默地从门禁里消失**,而产品缺陷依然存在。
+
+故新增 `docs/T7-gate/csp-matrix.cjs`:页面与 CSP 响应头**全部本机逐字控制**,
+浏览器 / 扩展产物 / 渲染路径仍是真的(DESIGN.md §8 第 8 条)。
+本机 HTTP fixture 的手法沿用 `docs/T4b-gate/noninvasive.cjs` 的既定做法。
+
+| CSP 策略 | `img-src` 拦截 | 像素被变换 | 对应真实站点 |
+|---|---|---|---|
+| 无 CSP | 否 | ✅ 是 | example.com |
+| `img-src 'self' data:` | 否 | ✅ 是 | MDN |
+| `img-src 'self' https://…` | **是** | 🔴 **否** | **news.ycombinator.com** |
+| `default-src 'self'`(无 img-src,回退) | **是** | 🔴 **否** | — |
+| `img-src 'none'` | **是** | 🔴 **否** | — |
+| `…-Report-Only: img-src 'none'` | 否(只报告) | ✅ 是 | — |
+
+**🔴 因果锁定断言 PASS**:在全部六种策略上,「像素未被变换」与
+「CSP 的 `img-src` 以 `enforce` 拦了 `data:`」**严格同真同假**。
+唯一变量是响应头里那一行 CSP —— 页面 HTML、滤镜设置、扩展产物、
+浏览器、视口逐字相同。这把根因从「相关」钉成**因果**。
+
+两条交叉验证把「归因错误」的可能性压到最低:
+
+- **`Report-Only` 不拦** → 证明是 CSP 的**阻断**行为,不是 URI 解析问题;
+- **`Grayscale` 在 `img-src 'none'` 下照常生效**(读到 `[208,208,208]`)
+  → 证明渲染/合成路径完好,受影响的**只有**需要外部资源的 data: URI 滤镜。
+
+> ⚠️ **本门禁自己踩过一个坑,已钉死在注释里:** 第一版用 `<style>` 和
+> `style="background:…"` 给判据色块上色,结果 `default-src 'self'` 下
+> **`style-src` 把内联样式一并拦掉** → 色块没有背景色 → 读到**白色**
+> `[255,255,255]`,它既 `!== #66ff33`、又让「像素被变换了」**假绿**。
+> 修复:色块改用 `<svg>` 的 `fill` **表现属性**(不受 `style-src` 管),
+> 并新增一组「OFF 基线必须**恰好**是判据色」的仪器有效性断言 ——
+> 任何策略下 fixture 上色失败都会立刻判红,而非让核心判据空转成假绿。
+
+> 🔴 本门禁**预期判红**:它是缺陷的**确定性复现**,不是「待修复的测试」。
+> 修复落地后它应当自动转绿 —— 那正是它作为回归门禁的价值。
+> 断言方向**不得**为了让门禁变绿而反转。
+
+### 🔴 为什么本任务**不自行修复** —— needs-human
+
+修复需要一个**本仓库尚不存在的架构决策**。DESIGN.md 与**全部 ADR 零处提及 CSP**。
+按 DESIGN.md §8 第 1 条(「任务与 ADR 冲突时**停下并上报**,不得自行发明架构」),
+两条候选路线都越界,必须由人类裁定:
+
+- **A. 用 `declarativeNetRequest` 改写站点的 CSP 响应头。** 需要新权限
+  (`declarativeNetRequestWithHostAccess`),且「修改站点响应头」与 **ADR-026**
+  的隐私底线精神相抵 —— 为了上色而削弱站点自己的安全策略,是产品层面的取舍,
+  不是实现细节。
+- **B. 改用非 `data:` URI 的滤镜来源(页内内联 `<svg>` 节点)。**
+  **直接违反 ADR-063**,且 `filter-css.ts` 文件头记载的两条理由
+  (INV-3 零闪烁、不往宿主页面插 DOM 节点 / INV-9+ADR-026)**正是**当初
+  否掉该方案的原因。实验 4 证明这条路**技术上可行**(像素确实变了),
+  但它要同时推翻 ADR-063 与那两条不变式的权衡。
+
+> 本轮**未改动任何产品代码,未放宽任何断言,未剔除 HN**。
+> 剔除 HN 或换站点(上一轮 Owner 列的选项 1 / 2)会**掩盖这条真实缺陷** ——
+> HN 不是一个不稳定的测试环境,它是一个**本扩展真的不工作的真实网站**。
+> 门禁据此**保持判红**,并新增了**根因断言**
+> 「`data:` URI 滤镜资源未被站点 CSP 拦截(img-src)」,
+> 使红灯直接指向缺陷本身而非一句平台猜想。
 
 ### 【回归】
 
@@ -183,8 +319,20 @@ node docs/T6b-gate/editview.cjs     # Popup 编辑视图
 
 ### 门禁仪器自身的已知弱点
 
-13. **`visual-modes` 在 HN 上的像素判据不可靠**(见上文长篇分析)——
-    这是**已知且已定位**的仪器/平台弱点,不是产品结论。
+13. 🔴 **「CSP 拦掉 data: URI 滤镜」这条缺陷的覆盖面本身很窄。**
+    ⚠️ **本条上一轮写的是「`visual-modes` 在 HN 上的像素判据不可靠,是仪器/
+    平台弱点,不是产品结论」—— 该申报是错的,已撤回**:它是**产品结论**
+    (见上文根因分析)。
+    该盲区**本轮已大部分补上**:新增 `csp-matrix.cjs` 覆盖 6 种策略
+    (无 CSP / `img-src` 放行 data: / `img-src` 不放行 / `default-src` 回退 /
+    `img-src 'none'` / `Report-Only`),并带因果锁定断言。
+    **仍剩的盲区**:
+    (a) **`<meta http-equiv>` 形式的 CSP** 未测(只测了响应头形式);
+    (b) **CSP `sandbox`、`require-trusted-types-for` 等其它指令**未测;
+    (c) **iframe 内的 CSP 继承**未测(子框架可有自己的策略);
+    (d) 真实站点侧只抽样了 4 个(wikipedia / MDN / example.com / HN),
+        **没有**对 Top-N 站点做 CSP 普查,故「受影响站点占比」**未知** ——
+        这个数字对「修还是不修、怎么修」的决策很关键,建议人类裁定时补。
 14. **拖拽重排用「置顶」按钮代替真实 HTML5 拖拽手势**
     (无头环境不可合成 DnD)。两者走**同一条写入路径**(`replaceRules`),
     故持久化结论成立;但**手势识别本身**未在真实栈验证(属 T6a 面)。

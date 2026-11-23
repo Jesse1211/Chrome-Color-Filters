@@ -39,30 +39,72 @@
 // **修复:「像素确实变了」改用页内注入的**确定性色块** fixture 判定
 // (已知纯色 → 已知像素),整页截图**只作人类复核的证据**,不参与机器判定。
 //
-// **坑 3:news.ycombinator.com 上存在间歇性的「滤镜在计算样式里但没被光栅化」。**
-// 实测特征(已充分定位,**不是产品缺陷**):
-//   - `getComputedStyle(html).filter` **始终**是正确的 data: URI(长度 323),
-//     `data-ccf-on` 在、`--ccf-filter` 在 —— 产品该做的全做了;
-//   - 但同一帧的像素有时**完全未被变换**(注入色块与 HN 自己的橙条都未变);
-//   - **站点相关**:同一 Chrome、同一会话、同一滤镜字符串下
-//     example.com 与 wikipedia **0/6 失败**,HN **5/6 失败**;
-//   - **模式无关且不稳定**:失败的模式在不同轮次间漂移
-//     (一轮是 GreenRed,下一轮是 RedGreen+BlueYellow,再下一轮全过);
-//   - 强制重绘(filter 置 none 再置回)**无效**;
-//   - 同一页面上手写 `grayscale()` / `invert()` **正常**,
-//     手写同一条 SVG data: URI 有时正常有时不正常。
-//   → 结论:这是**本 headless Chrome 构建在该站点上的合成/光栅化非确定性**,
-//     与本扩展的代码路径无关。故本门禁对该判据**重试多次取成功**
-//     (每次重新导航),并把重试次数如实记入证据。
-//     这**不是**放宽断言:断言本身没变,只是不让一个已定位到平台层的
-//     闪烁把产品判成红。若**每次**都失败,它照旧判红。
+// **坑 3(本轮**推翻前一轮结论**并定位到真实产品缺陷):**
+// **news.ycombinator.com 上滤镜「计算样式正确但像素未被变换」的根因是
+// 站点的 Content-Security-Policy `img-src` 拦掉了 `data:` URI 滤镜资源。**
 //
-// 📌 另一个**被实测否掉的猜想**:曾怀疑 HN 无 doctype(quirks 模式)
-//    导致 data: URI 的 SVG 滤镜失效。受控 A/B(同一页面,唯一变量是 doctype)
-//    证明**两者都正常生效**。
-//    也曾怀疑是钳制不动点 —— 那对 `#ff6600`/`#ff8800` **确实成立**
-//    (见 SWATCH 注释),但主判据色 `#66ff33` 在三个矩阵下变化量都 > 130,
-//    故不动点解释不了它,上面那条平台级结论才是。
+// 🔴 **上一轮本文件在此处写的是「本 headless Chrome 构建在该站点上的
+//    合成/光栅化非确定性,与扩展代码路径无关」—— 那个结论是错的,已被
+//    本轮的受控实验逐条否证。错误的归因让一条真实缺陷被当成平台闪烁。**
+//
+// 决定性证据 —— Chrome 自己的 `securitypolicyviolation` 事件与 Log 条目:
+//
+//   effectiveDirective: "img-src"
+//   disposition:        "enforce"
+//   originalPolicy:     "... img-src 'self' https://account.ycombinator.com ..."
+//   Log(security):      Loading the image 'data:image/svg+xml,…#f' violates
+//                       the following Content Security Policy directive:
+//                       "img-src 'self' https://account.ycombinator.com".
+//                       The action has been blocked.
+//
+// HN 的文档响应**每次 GET 都带** CSP 头(`curl -I` 的 HEAD 请求不返回它,
+// 这正是上一轮漏掉它的原因),其中 `img-src` **不含 `data:`**。
+// Chrome 把 `filter: url("data:image/svg+xml,…")` 的资源加载按 `img-src`
+// 来管,于是滤镜资源被拦截:`getComputedStyle().filter` 照旧是那条正确的
+// data: URI(属性已设上,产品代码该做的都做了),但滤镜**没有可用的资源**,
+// 像素因此完全未被变换。
+//
+// 受控实验(同一页面、同一会话、唯一变量是滤镜的**来源形式**):
+//   (1) 产品注入的 data: URI                → 像素**未变**
+//   (2) 手写**同一条** data: URI 到 html    → 像素**未变**
+//   (3) 手写 `grayscale(1)`(CSS 内建函数)  → 像素**变了**(不需要外部资源)
+//   (4) 手写 `url(#id)` 指向**页内内联 <svg>** → 像素**变了**(同源资源,不受 img-src 拦)
+//   (5) 把同一条 data: URI 挂到 body 而非 html → 像素**未变**
+// → 失效与元素、与挂载时机、与 quirks 模式、与合成时机**都无关**,
+//   只与「滤镜资源是不是 `data:` URI」有关。
+//
+// 并且它**不是闪烁**:同一次 page load 内连续 6 次读像素(跨 2.4 秒)
+// 结果恒定;失败是**每次加载的粘滞二元状态**,由该次响应是否带 CSP 决定。
+// 上一轮观测到的「漂移」来自 HN 偶发的 503 / 缓存响应(那些响应不带 CSP)。
+//
+// **这是真实的产品缺陷,不是门禁缺陷,也不是平台缺陷。**
+// 影响面:任何设了限制性 `img-src`(或 `default-src`)而未放行 `data:` 的站点上,
+// 本扩展的**三种色觉辅助模式全部静默失效** —— 而 daltonization 才是本扩展的
+// 主业(ADR-002)。`Grayscale` 不受影响(CSS 内建函数,无外部资源)。
+// 站点侧实测对照:wikipedia 的 `default-src` 含 `data:`、MDN 的 `img-src`
+// 显式含 `data:` → 两者正常;HN 不含 → 失效。
+//
+// 🔴 **修复需要一个本仓库尚不存在的架构决策,故本任务不自行实现**
+//    (DESIGN.md §8 第 1 条:任务与 ADR 冲突/缺口时停下并上报,不得自行发明架构)。
+//    DESIGN.md 与全部 ADR **零处**提及 CSP。两条候选路线都越界:
+//    - 用 `declarativeNetRequest` 改写站点的 CSP 响应头 —— 需要新权限,
+//      且「修改站点响应头」与 ADR-026 的隐私底线精神相抵,必须人类裁定;
+//    - 改用非 `data:` URI 的滤镜来源(页内内联 `<svg>` 节点)—— 直接
+//      **违反 ADR-063**,且本文件开头记载的那两条理由(INV-3 零闪烁、
+//      不往宿主页面插 DOM 节点)正是当初否掉该方案的原因。
+//    → 已作为 needs-human 事项上报。
+//
+// **本门禁据此保持判红,并把根因做成机械断言**(见下方 cspOf / 断言
+// 「data: URI 滤镜未被站点 CSP 拦截」):红灯指向真实缺陷,而不是
+// 一句无法证伪的平台猜想。断言**未被放宽**。
+//
+// 📌 另两个**被实测否掉的猜想**(保留记录以免重走):
+//    - 曾怀疑 HN 无 doctype(quirks 模式)导致 data: URI 的 SVG 滤镜失效。
+//      受控 A/B(同一页面,唯一变量是 doctype)证明**两者都正常生效**;
+//      且 wikipedia 是 standards 模式却同样会被 CSP 拦(若其 CSP 不放行 data:)。
+//    - 也曾怀疑是钳制不动点 —— 那对 `#ff6600`/`#ff8800` **确实成立**
+//      (见 SWATCH 注释),但主判据色 `#66ff33` 在三个矩阵下变化量都 > 130,
+//      故不动点解释不了它。
 //
 // 用法(从仓库根):npm run build && node docs/T7-gate/visual-modes.cjs
 
@@ -159,6 +201,59 @@ const SITES = {
   hn: 'https://news.ycombinator.com/',
 };
 
+/**
+ * 采集该页面上与 `data:` URI 滤镜资源相关的 CSP 事实(坑 3 的机械判据)。
+ *
+ * 为什么必须机械采集而不是写在注释里:坑 3 的上一轮结论是一句**无法证伪**的
+ * 平台猜想(「合成非确定性」),它让一条真实缺陷在门禁里看起来像闪烁。
+ * 这里把根因变成**证据里的结构化字段** —— 谁都能从 evidence/visual-modes.json
+ * 复核「像素没变」到底是因为什么。
+ *
+ * 两个来源互为交叉验证:
+ * - `violations`:页内 `securitypolicyviolation` 事件(权威,带 effectiveDirective
+ *   与 originalPolicy 全文);必须在导航**之前**用 evaluateOnNewDocument 挂监听。
+ * - `fetchable`:在页面上下文里 `fetch()` 同一条 data: URI。被 CSP 拦时抛
+ *   `Failed to fetch`,放行时返回 200 —— 与滤镜资源走同一套策略判定。
+ */
+async function cspProbe(page, filterValue) {
+  const violations = await page.evaluate(() => (window.__ccfT7Viol || []).slice(0, 4));
+  let fetchable = null;
+  try {
+    fetchable = await page.evaluate(async (f) => {
+      const m = /url\("([^"]+)"\)/.exec(String(f));
+      if (!m) return 'no-url';
+      try {
+        const r = await fetch(m[1]);
+        return `ok:${r.status}`;
+      } catch (e) {
+        return `blocked:${String(e.message).slice(0, 40)}`;
+      }
+    }, filterValue);
+  } catch {
+    fetchable = 'probe-failed';
+  }
+  const imgSrcBlocked = violations.some((v) => v.directive === 'img-src');
+  return { violations, fetchable, imgSrcBlocked };
+}
+
+/**
+ * 导航前挂上 CSP 违规监听。必须用 `evaluateOnNewDocument`:
+ * 滤镜资源的加载发生在**非常早**的绘制路径上,页面加载完再挂监听会漏掉事件。
+ */
+async function armCspListener(page) {
+  await page.evaluateOnNewDocument(() => {
+    window.__ccfT7Viol = [];
+    document.addEventListener('securitypolicyviolation', (e) => {
+      window.__ccfT7Viol.push({
+        directive: e.effectiveDirective,
+        disposition: e.disposition,
+        blockedURI: String(e.blockedURI).slice(0, 24),
+        policy: String(e.originalPolicy).slice(0, 400),
+      });
+    });
+  });
+}
+
 /** 整图的通道极差直方图式统计 —— 判定「是否真的无彩」与「像素是否变了」。 */
 function stats(buf) {
   const img = PNG.sync.read(Buffer.from(buf));
@@ -252,10 +347,13 @@ async function main() {
         let f = null;
         let shot = null;
         let sw = null;
+        let csp = null;
         let tries = 0;
         for (; tries < MAX_TRIES; tries++) {
           const p = await browser.newPage();
           await p.setViewport({ width: 1280, height: 900 });
+          // 坑 3 的根因探针:必须在导航前挂上,滤镜资源加载极早。
+          await armCspListener(p);
           await p.goto(url, { waitUntil: 'load', timeout: 120000 });
           // 等到 filter 变成**本模式预期的形状**,而不是只等「非 none」——
           // 后者会立刻返回上一个模式的陈旧值(见文件头坑 1)。
@@ -267,6 +365,7 @@ async function main() {
           sw = swatchPixels(
             await p.screenshot({ clip: { x: 0, y: 0, width: 80, height: 120 } }),
           );
+          csp = await cspProbe(p, f);
           await p.close();
           // 色块被改变 → 本轮测量有效,不必重试。
           if (sw.some((px, i) => JSON.stringify(px) !== JSON.stringify(SWATCH_RGB[i]))) break;
@@ -285,6 +384,7 @@ async function main() {
           meanDiffVsOff: diff,
           swatch: sw,
           navigations: tries + 1,
+          csp,
         });
 
         // (a1) 滤镜真的生效,且**就是本模式的**滤镜(非陈旧残留)。
@@ -300,8 +400,20 @@ async function main() {
         R.assert(
           `[${siteName}/${mode}] 🔴 确定性色块的像素确实被滤镜改变了(三色至少一变)`,
           sw.some((px, i) => JSON.stringify(px) !== JSON.stringify(SWATCH_RGB[i])),
-          { swatch: sw, offBaseline: SWATCH_RGB, navigations: tries + 1 },
+          { swatch: sw, offBaseline: SWATCH_RGB, navigations: tries + 1, csp },
         );
+        // 🔴 坑 3 的**根因断言**:上一条若判红,这一条指出是为什么。
+        //    `data:` URI 的滤镜资源被站点 CSP 的 `img-src` 拦掉时,
+        //    `getComputedStyle().filter` 仍是正确值,但像素不可能被变换。
+        //    三种辅助模式才用 data: URI;Grayscale 是 CSS 内建函数,不涉外部资源。
+        if (mode !== 'Grayscale') {
+          R.assert(
+            `[${siteName}/${mode}] 🔴 data: URI 滤镜资源未被站点 CSP 拦截(img-src)`,
+            csp !== null && !csp.imgSrcBlocked && csp.fetchable !== 'probe-failed'
+              && !String(csp.fetchable).startsWith('blocked:'),
+            csp,
+          );
+        }
         // (a3) Grayscale 必须彻底无彩;三种辅助模式必须**仍然有彩**
         //      —— daltonization 的目的是重映射色彩,不是抹掉色彩。
         //      若某个辅助模式把页面变成了灰,那是矩阵错了。
@@ -358,6 +470,13 @@ async function main() {
     ),
     '',
     '## 判读提示',
+    '',
+    '- 🔴 **HN 的若干截图会与 OFF 基线逐字节相同 —— 那是真实缺陷的表现,不是漏截图。**',
+    '  站点 CSP 的 `img-src` 拦掉了 `data:` URI 滤镜资源(Chrome 原话见',
+    '  `evidence/visual-modes.json` 的 `csp.violations[].policy`),于是页面',
+    '  **真的**没有被变换。`Grayscale` 不受影响(CSS 内建函数,无外部资源)。',
+    '  据此 `news.ycombinator.com` 的三张辅助模式截图**不可用于复核色彩矩阵**;',
+    '  请只用 wikipedia 的四张做矩阵合理性判读。',
     '',
     '- `maxSpread` = 整图单像素 RGB 通道极差的最大值。**Grayscale 必为 0**。',
     '- `有彩像素比` = 通道极差 > 8 的采样像素占比。辅助模式应**显著大于 0**',
