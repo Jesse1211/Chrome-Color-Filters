@@ -5,14 +5,14 @@
       "name": "🔴 仪器有效性:基线组有 ≥2 个有效 FCP 观测(否则判据空转)",
       "ok": true,
       "detail": {
-        "validFcpSamples": 3,
+        "validFcpSamples": 4,
         "rounds": 5,
         "raw": [
-          2620,
-          312,
+          2036,
+          344,
+          352,
           null,
-          884,
-          null
+          328
         ]
       }
     },
@@ -23,11 +23,11 @@
         "validFcpSamples": 4,
         "rounds": 5,
         "raw": [
-          360,
-          364,
-          null,
-          1328,
-          776
+          316,
+          404,
+          320,
+          388,
+          null
         ]
       }
     },
@@ -57,24 +57,24 @@
       "name": "🔴 INV-10:病态模式下首帧耗时未显著恶化(FCP 中位数 < 2× 基线)",
       "ok": true,
       "detail": {
-        "baselineFcp": 884,
-        "pathologicalFcp": 776,
-        "ratio": 0.878
+        "baselineFcp": 352,
+        "pathologicalFcp": 388,
+        "ratio": 1.102
       }
     },
     {
       "name": "🔴 INV-10:病态模式下首帧绝对耗时 < 5000ms(无灾难性回溯)",
       "ok": true,
       "detail": {
-        "pathologicalFcp": 776
+        "pathologicalFcp": 388
       }
     },
     {
       "name": "INV-10:病态模式下 DOMContentLoaded 未显著恶化(< 2× 基线)",
       "ok": true,
       "detail": {
-        "baselineDcl": 990.9000000953674,
-        "pathologicalDcl": 773.8000001907349
+        "baselineDcl": 340.80000019073486,
+        "pathologicalDcl": 388.7999997138977
       }
     },
     {
@@ -82,11 +82,11 @@
       "ok": true,
       "detail": {
         "registerMs": [
+          4,
           6,
-          9,
-          13,
-          8,
-          7
+          7,
+          11,
+          5
         ]
       }
     },
@@ -109,51 +109,51 @@
       "baseline": [
         {
           "label": "baseline",
-          "fcp": 2620,
-          "fp": 2620,
-          "domContentLoaded": 2590.6000003814697,
-          "responseEnd": 2141.800000190735,
+          "fcp": 2036,
+          "fp": 2036,
+          "domContentLoaded": 2012.5999999046326,
+          "responseEnd": 1847.8000001907349,
           "registerMs": 1,
           "registrations": 1,
           "filter": "grayscale(1)"
         },
         {
           "label": "baseline",
-          "fcp": 312,
-          "fp": 312,
-          "domContentLoaded": 309.2000002861023,
-          "responseEnd": 240.90000009536743,
-          "registerMs": 5,
+          "fcp": 344,
+          "fp": 344,
+          "domContentLoaded": 340.80000019073486,
+          "responseEnd": 277.80000019073486,
+          "registerMs": 8,
           "registrations": 1,
           "filter": "grayscale(1)"
         },
         {
           "label": "baseline",
-          "fcp": null,
-          "fp": null,
-          "domContentLoaded": 1274.9000000953674,
-          "responseEnd": 1239.1000003814697,
+          "fcp": 352,
+          "fp": 352,
+          "domContentLoaded": 351.6000003814697,
+          "responseEnd": 291.1000003814697,
           "registerMs": 3,
           "registrations": 1,
           "filter": "grayscale(1)"
         },
         {
           "label": "baseline",
-          "fcp": 884,
-          "fp": 884,
-          "domContentLoaded": 878.9000000953674,
-          "responseEnd": 816.0999999046326,
-          "registerMs": 7,
+          "fcp": null,
+          "fp": null,
+          "domContentLoaded": 289.8999996185303,
+          "responseEnd": 253,
+          "registerMs": 3,
           "registrations": 1,
           "filter": "grayscale(1)"
         },
         {
           "label": "baseline",
-          "fcp": null,
-          "fp": null,
-          "domContentLoaded": 990.9000000953674,
-          "responseEnd": 952.9000000953674,
-          "registerMs": 4,
+          "fcp": 328,
+          "fp": 328,
+          "domContentLoaded": 328.69999980926514,
+          "responseEnd": 264.09999990463257,
+          "registerMs": 7,
           "registrations": 1,
           "filter": "grayscale(1)"
         }
@@ -161,51 +161,51 @@
       "pathological": [
         {
           "label": "pathological",
-          "fcp": 360,
-          "fp": 296,
-          "domContentLoaded": 360,
-          "responseEnd": 319,
+          "fcp": 316,
+          "fp": 316,
+          "domContentLoaded": 1418.8000001907349,
+          "responseEnd": 1403.5999999046326,
+          "registerMs": 4,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "pathological",
+          "fcp": 404,
+          "fp": 404,
+          "domContentLoaded": 402.59999990463257,
+          "responseEnd": 338.8999996185303,
           "registerMs": 6,
           "registrations": 1,
           "filter": "grayscale(1)"
         },
         {
           "label": "pathological",
-          "fcp": 364,
-          "fp": 364,
-          "domContentLoaded": 361.80000019073486,
-          "responseEnd": 288.09999990463257,
-          "registerMs": 9,
+          "fcp": 320,
+          "fp": 320,
+          "domContentLoaded": 316.19999980926514,
+          "responseEnd": 256.30000019073486,
+          "registerMs": 7,
+          "registrations": 1,
+          "filter": "grayscale(1)"
+        },
+        {
+          "label": "pathological",
+          "fcp": 388,
+          "fp": 388,
+          "domContentLoaded": 388.7999997138977,
+          "responseEnd": 325.7999997138977,
+          "registerMs": 11,
           "registrations": 1,
           "filter": "grayscale(1)"
         },
         {
           "label": "pathological",
           "fcp": null,
-          "fp": 780,
-          "domContentLoaded": 778.2000002861023,
-          "responseEnd": 728.2000002861023,
-          "registerMs": 13,
-          "registrations": 1,
-          "filter": "grayscale(1)"
-        },
-        {
-          "label": "pathological",
-          "fcp": 1328,
-          "fp": 1328,
-          "domContentLoaded": 1326.5999999046326,
-          "responseEnd": 1261.5,
-          "registerMs": 8,
-          "registrations": 1,
-          "filter": "grayscale(1)"
-        },
-        {
-          "label": "pathological",
-          "fcp": 776,
-          "fp": 776,
-          "domContentLoaded": 773.8000001907349,
-          "responseEnd": 708.3000001907349,
-          "registerMs": 7,
+          "fp": null,
+          "domContentLoaded": 299.80000019073486,
+          "responseEnd": 265.80000019073486,
+          "registerMs": 5,
           "registrations": 1,
           "filter": "grayscale(1)"
         }
@@ -213,10 +213,10 @@
     },
     {
       "medians": {
-        "baselineFcp": 884,
-        "pathologicalFcp": 776,
-        "baselineDcl": 990.9000000953674,
-        "pathologicalDcl": 773.8000001907349
+        "baselineFcp": 352,
+        "pathologicalFcp": 388,
+        "baselineDcl": 340.80000019073486,
+        "pathologicalDcl": 388.7999997138977
       }
     }
   ],

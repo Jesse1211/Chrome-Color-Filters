@@ -192,6 +192,20 @@ export class SettingsRepository {
   #lastWrittenMaxSeenTime: number | null = null;
 
   /**
+   * **本实例成功落盘用户设置的次数**(`#persist` / `setLockUntilImmediate`)。
+   *
+   * 🔴 用途:给 `maxSeenTime` 的元数据回写一个「我自己是不是刚写过」的判据。
+   * 回写路径在**重读前**记下计数,在**落盘前**再比一次 ——
+   * 不相等就说明本实例的一次用户写入落在了这中间,
+   * 回写手里的 `fresh` 已经早于它,写下去会**回滚用户的意图**。
+   *
+   * 元数据回写永远不需要赢(下界下一次读会再推进),故一律**让路**。
+   * 这关闭了同一实例内的交错(最常见的 popup 场景);
+   * 跨实例的交错无法用本计数器覆盖,见 `#persistMaxSeenTimeOnly` 的说明。
+   */
+  #userWrites = 0;
+
+  /**
    * 最近一次**已知的**持久化设置快照 —— 供 `setLockUntilImmediate` 在
    * **点击那一轮**同步算出判定、立刻发出 `storage.set`(见该方法的文件内说明)。
    *
@@ -231,6 +245,7 @@ export class SettingsRepository {
     const requested = options.debounceMs ?? MIN_DEBOUNCE_MS;
     // 防抖窗口是 gate 的硬下限,不接受更小的值(T3 gate:≥ 300ms)。
     this.#debounceMs = Math.max(requested, MIN_DEBOUNCE_MS);
+
   }
 
   /** 实际生效的防抖窗口(恒 ≥ `MIN_DEBOUNCE_MS`)。 */
@@ -336,9 +351,117 @@ export class SettingsRepository {
       }
     }
 
+    await this.#persistMaxSeenTimeOnly(advanced);
+  }
+
+  /**
+   * 🔴 **只把 `maxSeenTime` 落盘** —— 元数据回写路径的唯一落盘出口。
+   *
+   * ## 它修的是什么(T7 真实栈门禁钉死的 lost update)
+   *
+   * 本方法的两个调用方(`#writeBackMaxSeenTime` / `#touchMaxSeenTime`)
+   * 此前直接 `set(toPersisted(ctx.current))` —— 落的是**整份读到的快照**。
+   * 但 `ctx.current` 来自**另一个 await 之前**的 `#readContext()`,
+   * 两个 await 之间存在真实的 TOCTOU 窗口:
+   *
+   * ```text
+   *   const ctx = await this.#readContext();   // ← 读完成,看到 masterEnabled:true
+   *   await this.#writeBackMaxSeenTime(ctx);   // ← 另一个 await,ctx 此时可能已陈旧
+   * ```
+   *
+   * 任何并发实例(background SW / content script / 另一个 popup)只要在
+   * 用户写入**之前**读完、在用户写入**之后**才落下这次回写,
+   * 就会用自己那份陈旧的 `masterEnabled` / `rules` **静默回滚用户的写入**。
+   * 实测:用户「关主开关」返回 ok 且返回值为 false,磁盘最终却是 true。
+   *
+   * 生产里这个窗口是可达的:`background.ts` 与 `content.ts` 各持一个实例,
+   * 且 content script **每次导航**都调 `repo.read()`。
+   *
+   * ## 为什么这样修才是对的(不是放宽,是兑现承诺)
+   *
+   * `#writeBackMaxSeenTime` 的文档注释原本就写着:
+   *
+   * > 与 INV-11 的关系:**不冲突**。回写的只有 `maxSeenTime`;
+   * > `masterEnabled` / `rules` / `lockUntil` 原样取自刚读到的已持久化值。
+   *
+   * 实现与这句承诺不符 —— 「刚读到的」在回写真正落盘时已经陈旧。
+   * 本方法让实现回到承诺上:**落盘前重读磁盘**,把 `maxSeenTime` 单调合并到
+   * **当下**的持久化值上,其余字段一律取磁盘现值,绝不取内存快照。
+   *
+   * 这完全符合 ADR-059 / INV-11 例外 b:该例外要求的是**这个字段**在锁定期间
+   * 继续推进,从未授权回写路径连带覆盖 `masterEnabled` / `rules` / `lockUntil`。
+   * 相反,覆盖它们**违反** INV-11 的主条款(锁定期冻结)与用户写入的持久性。
+   *
+   * ## 本修复关闭了什么 / 没关闭什么(⚠️ 如实记录,勿当作已全闭合)
+   *
+   * **已关闭 —— 同一实例内的交错。** 最常见的真实场景:popup 的一次
+   * `read()` 还在途中,用户紧接着点了主开关。此前 `ctx.current` 来自
+   * 那次读之前的快照,必然盖掉用户的点击;现在落盘前重读,
+   * 读到的就是用户写入之后的磁盘值,写回去不再回滚。
+   * 回归测试:「同一实例:在途的读路径回写不得回滚本实例的用户写入」。
+   *
+   * **未关闭 —— 跨实例的交错(needs-human)。**
+   * 本方法第 1 步的 `get` 是在用户写入的 `set` **完成之前发出**的,
+   * 于是它读回来的仍可能是旧值。实测交错(order 探针):
+   *
+   * ```text
+   *   GET -> master:true     ← 本方法的重读(此时并发的 set 尚未落盘)
+   *   SETok  master:false    ← 用户写入落盘
+   *   SETok  master:true     ← 本方法把它盖掉
+   * ```
+   *
+   * 聚合根存在**单一键**下(ADR-025 固定持久化形状,§6 T3/T7 的键集门禁
+   * 逐字锁定那 5 个键),而 `chrome.storage` **不提供 CAS / 事务**,
+   * 故「读-改-写」在单实例内**不可能**做到原子。
+   *
+   * 试过并**已否决**的两条补救(都更糟,故未采用):
+   * - *写后用 `#cachedSettings` 自愈*:该快照并非权威,会把 ADR-061 的
+   *   「松手即写」重排结果回退 —— 实测打红 `reorder-immediate`,
+   *   即「修一个 lost update 的同时制造另一个」。
+   * - *常驻 `onChanged` 观测*:要占一个 `StorageArea` 监听槽,
+   *   与既有「取消订阅后摘掉底层监听器」的断言冲突。
+   *
+   * 真正的修复需要架构决策(把 `maxSeenTime` 拆到独立键,
+   * 或由 SW 做单写者串行化),已上报 needs-human,此处不擅自改 ADR。
+   *
+   * 失败**静默忽略** —— 读路径永不 throw(ADR-041),下界推进是尽力而为的加固。
+   */
+  async #persistMaxSeenTimeOnly(advanced: number): Promise<void> {
+    // 重读前记下本实例的用户写入计数 —— 见下方第 1.5 步。
+    const writesBefore = this.#userWrites;
+
+    // 🔴 第 1 步:落盘前重读 —— 用户字段必须取**磁盘现值**,
+    // 不取可能已陈旧的内存快照(这是 lost update 的源头)。
+    let fresh: FilterSettings;
     try {
-      await this.#area.set({ [SETTINGS_KEY]: toPersisted(ctx.current) });
-      this.#lastWrittenMaxSeenTime = advanced;
+      const got = await this.#area.get(SETTINGS_KEY);
+      fresh = coerceSettings(got?.[SETTINGS_KEY]);
+    } catch {
+      // 读不出来 → 放弃本次回写。宁可少推进一次下界,
+      // 也绝不拿一份来源不明的值去覆盖用户设置。
+      return;
+    }
+
+    // 单调合并:只可能变大(effectiveNow 保证),绝不把磁盘上的下界写小。
+    const merged = effectiveNow(advanced, fresh.maxSeenTime);
+    if (merged === fresh.maxSeenTime) {
+      // 磁盘上的下界已经不落后 —— 无需写入。
+      this.#lastWrittenMaxSeenTime = fresh.maxSeenTime;
+      return;
+    }
+
+    // 🔴 第 1.5 步:本实例的用户写入落在「重读 → 此刻」之间 →
+    // `fresh` 已早于那次写入,写下去会回滚它。元数据回写永远不需要赢:**让路**。
+    // (下界不会丢:下一次 `read()` 会重新推进并回写。)
+    if (this.#userWrites !== writesBefore) return;
+
+    // 🔴 第 2 步:落盘。用户字段恒取第 1 步重读到的**磁盘现值**,
+    // 从不取内存快照 —— 这是本修复的全部内容。
+    try {
+      await this.#area.set({
+        [SETTINGS_KEY]: toPersisted({ ...fresh, maxSeenTime: merged }),
+      });
+      this.#lastWrittenMaxSeenTime = merged;
     } catch {
       /* 尽力而为;见上方说明 */
     }
@@ -386,6 +509,9 @@ export class SettingsRepository {
       // 写路径同样落了下界 —— 同步节流状态,免得紧接着的读又写一次。
       this.#lastWrittenMaxSeenTime = settings.maxSeenTime;
       this.#cachedSettings = settings;
+      // 用户设置已落盘 —— 让在途的元数据回写发现「我刚写过」而让路
+      // (见 `#userWrites` 与 `#persistMaxSeenTimeOnly`)。
+      this.#userWrites += 1;
     } catch (cause) {
       // ADR-046:返回结构化错误,**不得只 throw 或只 console.error**。
       return writeFail(classifyStorageError(cause));
@@ -399,14 +525,15 @@ export class SettingsRepository {
    * 在**被拒绝的写入**之后调用:用户设置一字未动,但防御性元数据继续前进。
    * 落盘失败时**静默忽略** —— 调用方已经有一个更重要的拒绝原因要返回,
    * 且 `maxSeenTime` 的推进是尽力而为的加固,不是用户可见的操作。
+   *
+   * 🔴 **同样只落 `maxSeenTime`**(见 `#persistMaxSeenTimeOnly` 的说明)。
+   * 本路径的 lost update 危害与读路径完全同形,且更刺眼:
+   * 这是**被拒绝**的写入之后的收尾,它连带落盘整份快照时,
+   * 等于让一次「什么都没改」的操作去覆盖别的实例刚写成功的用户设置。
+   * 按 INV-11 的精确含义,被拒绝的写入后只有 `maxSeenTime` 允许变。
    */
   async #touchMaxSeenTime(ctx: WriteContext): Promise<void> {
-    try {
-      await this.#area.set({ [SETTINGS_KEY]: toPersisted(ctx.current) });
-      this.#lastWrittenMaxSeenTime = ctx.current.maxSeenTime;
-    } catch {
-      /* 尽力而为;见上方说明 */
-    }
+    await this.#persistMaxSeenTimeOnly(ctx.current.maxSeenTime);
   }
 
   /** 锁定检查失败时的统一出口:推进 `maxSeenTime`,返回拒绝错误。 */
@@ -745,6 +872,8 @@ export class SettingsRepository {
 
     this.#lastWrittenMaxSeenTime = settings.maxSeenTime;
     this.#cachedSettings = settings;
+    // 同 `#persist`:锁定写入也是用户写入,让在途的元数据回写让路。
+    this.#userWrites += 1;
 
     return this.#settleLockWrite(probing, writing, settings);
   }

@@ -1198,3 +1198,158 @@ describe('T3 · 未锁定时的正常写入路径', () => {
     expect(res.value.rules.map((r) => r.pattern)).toEqual(['x.com']);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════
+// 🔴 回归 · 读路径的 `maxSeenTime` 回写**不得回滚并发的用户写入**
+//      (INV-11 主条款 / ADR-059 / T7 真实栈门禁钉死的 lost update)
+// ════════════════════════════════════════════════════════════════════════
+//
+// 来历:T7 的 lock-e2e 真实栈门禁在同一 HEAD 上 2 红 1 绿。
+// 根因不是门禁赛跑,而是 `#writeBackMaxSeenTime` / `#touchMaxSeenTime`
+// 落盘的是**整份读到的快照** `toPersisted(ctx.current)`,而不是只有
+// `maxSeenTime`。`read()` 的结构是
+//
+//     const ctx = await this.#readContext();   // ← 读完成
+//     await this.#writeBackMaxSeenTime(ctx);   // ← 另一个 await,ctx 可能已陈旧
+//
+// 两个 await 之间存在真实的 TOCTOU 窗口:并发实例在用户写入**之前**读完、
+// 在用户写入**之后**才落下回写,就会用陈旧的 `masterEnabled` / `rules`
+// 静默回滚用户的写入。生产可达:`background.ts` 与 `content.ts` 各持一个实例,
+// 且 content script 每次导航都调 `repo.read()`。
+//
+// ⚠️ 本测试必须用**带延迟**的存储替身:`MemoryStorageArea` 同步 resolve,
+// 根本无法表达这个交错,因此它此前「全绿」却漏掉了这个缺陷。
+describe('回归 · maxSeenTime 回写不得回滚并发的用户写入(INV-11/ADR-059)', () => {
+  /** 给任意 `StorageArea` 套上固定延迟 —— 用来把 TOCTOU 窗口变成可复现的。 */
+  function withLatency(area: MemoryStorageArea, ms: number) {
+    return {
+      get: async (keys: string | string[] | null) => {
+        const snap = await area.get(keys);
+        await new Promise((r) => setTimeout(r, ms));
+        return snap;
+      },
+      set: async (items: Record<string, unknown>) => {
+        await new Promise((r) => setTimeout(r, ms));
+        return area.set(items);
+      },
+      addChangeListener: (l: Parameters<MemoryStorageArea['addChangeListener']>[0]) =>
+        area.addChangeListener(l),
+      removeChangeListener: (
+        l: Parameters<MemoryStorageArea['removeChangeListener']>[0],
+      ) => area.removeChangeListener(l),
+    };
+  }
+
+  // ✅ 本修复**已关闭**的那一半:同一实例内的交错(最常见的 popup 场景 ——
+  //    一次 `read()` 在途,用户紧接着点了主开关)。
+  //    自愈判据用的是本实例的权威快照 `#cachedSettings`,故这一半可闭合。
+  it('同一实例:在途的读路径回写不得回滚本实例的用户写入', async () => {
+    const backing = new MemoryStorageArea();
+    backing.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [{ pattern: 'a.com', mode: 'Grayscale', intensity: 100 }],
+        lockUntil: null,
+        maxSeenTime: 0,
+      },
+    });
+    const area = withLatency(backing, 5);
+    const repo = new SettingsRepository({ area });
+
+    const reading = repo.read(); // 读路径在途(回写尚未落盘)
+    const writing = repo.setMasterEnabled(false); // 用户写入
+    const [, res] = await Promise.all([reading, writing]);
+    expect(res.ok).toBe(true);
+
+    await new Promise((r) => setTimeout(r, 150));
+
+    const disk = persisted(backing);
+    expect(disk.masterEnabled).toBe(false);
+    expect((disk.rules as unknown[]).length).toBe(1);
+  });
+
+  // 🔴 **仍未闭合**:跨实例的交错。保留为**真实的红灯**,不 skip / 不 xfail /
+  //    不放宽断言 —— 按根因纪律,未修好的真缺陷必须保持可见。
+  //
+  //    为什么本任务没能修掉它(已用受控实验钉死,非猜测):
+  //    回写路径的「落盘前重读」那次 `get` 是在用户写入的 `set` **完成之前发出**的,
+  //    因此它读回来的仍是旧值 —— 无论把 get 放在 set 之前还是之后,
+  //    读到的用户字段都可能已陈旧。实测交错(order 探针):
+  //        GET -> master:true     ← 回写的重读(此时 A 的 set 尚未落盘)
+  //        SETok  master:false    ← 用户写入落盘
+  //        SETok  master:true     ← 回写把它盖掉
+  //    聚合根存在**单一键**下(ADR-025 固定了持久化形状,
+  //    §6 T3/T7 的键集门禁也逐字锁定了这 5 个键),而 `chrome.storage`
+  //    **不提供 CAS / 事务**,故「读-改-写」在单实例内**不可能**做到原子。
+  //    真正的修复需要架构决策(例如把 `maxSeenTime` 拆到独立键,
+  //    或引入 SW 单写者串行化),这超出本任务范围且会与上述 ADR / 门禁相撞,
+  //    因此按纪律上报 needs-human,不在此改 ADR,也不伪造绿灯。
+  it('跨实例:在途的读路径回写跨越用户写入时,磁盘终态仍是用户的写入', async () => {
+    const backing = new MemoryStorageArea();
+    backing.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [{ pattern: 'a.com', mode: 'Grayscale', intensity: 100 }],
+        lockUntil: null,
+        maxSeenTime: 0,
+      },
+    });
+    const area = withLatency(backing, 5);
+
+    // 两个独立实例 —— 对应生产里的 background SW 与 content script。
+    const a = new SettingsRepository({ area });
+    const b = new SettingsRepository({ area });
+
+    // B 的读先拿到 masterEnabled:true(**不 await**),
+    // A 随后落下用户的写入 —— B 的回写于是跨越了 A 的写入。
+    const bRead = b.read();
+    const aWrite = a.setMasterEnabled(false);
+    const [, res] = await Promise.all([bRead, aWrite]);
+
+    expect(res.ok).toBe(true);
+
+    // 让所有在途的回写 / 对账落定,再断言**终态**。
+    await new Promise((r) => setTimeout(r, 120));
+
+    const disk = persisted(backing);
+    // 🔴 核心断言:用户的「关主开关」不得被静默回滚。
+    expect(disk.masterEnabled).toBe(false);
+    // 规则同样不得被陈旧快照覆盖。
+    expect((disk.rules as unknown[]).length).toBe(1);
+  });
+
+  // 🔴 同上,仍未闭合(跨实例)。同一根因,保留红灯。
+  it('跨实例:被拒绝的写入之后的 maxSeenTime 推进同样不回滚并发的用户写入', async () => {
+    const backing = new MemoryStorageArea();
+    const lockUntil = T0 + 60_000;
+    backing.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [],
+        lockUntil,
+        maxSeenTime: T0,
+      },
+    });
+    const area = withLatency(backing, 5);
+
+    // a 处于锁定中 → 它的写入会被拒绝,随后走 `#touchMaxSeenTime`。
+    const a = new SettingsRepository({ area, clock: () => T0 + 1_000 });
+    // b 的时钟已过期 → 它的写入合法(锁已到期)。
+    const b = new SettingsRepository({ area, clock: () => lockUntil + 1_000 });
+
+    const rejected = a.setMasterEnabled(false); // 锁定中 → 被拒
+    const accepted = b.addRule(rule('z.com')); // 已到期 → 应成功落盘
+    const [rej, acc] = await Promise.all([rejected, accepted]);
+
+    expect(rej.ok).toBe(false); // INV-14:锁定中确实被拒
+    expect(acc.ok).toBe(true);
+
+    await new Promise((r) => setTimeout(r, 120));
+
+    // 被拒绝的那次写入的 maxSeenTime 推进,不得把 b 成功写入的规则抹掉。
+    expect((persisted(backing).rules as unknown[]).length).toBe(1);
+  });
+});

@@ -7,19 +7,27 @@
 
 ---
 
-## 🔴 门禁状态:**未全绿 —— 一条真实产品缺陷,需人类裁定架构**
+## 🔴 门禁状态:**未全绿 —— 两条真实产品缺陷,均需人类裁定架构**
 
 | | |
 |---|---|
-| 【新增】5/6 门禁 | **PASS**(inv6-e2e 13/13、inv7-capacity 12/12、lock-e2e 42/42、persistence 13/13、inv10-pathological 9/9) |
-| 【新增】`visual-modes` | 🔴 **FAIL** —— 根因**已闭合**,是**产品缺陷**,非门禁缺陷、非平台闪烁。⚠️ 红灯条数逐轮浮动(实测 34/40 与 38/40),因为 HN 偶发返回**不带 CSP** 的 503/缓存响应 |
-| 🆕 `csp-matrix`(本轮新增) | 🔴 **FAIL 23/26,且完全确定**(连跑两轮逐位相同)—— 把同一根因搬到**本机固定 CSP 响应头**的 fixture 上,不再依赖第三方站点的策略。**因果锁定断言 PASS** |
+| 【新增】4/6 门禁 | **PASS**(inv6-e2e 13/13、inv7-capacity 12/12、persistence 13/13、inv10-pathological 9/9) |
+| 【新增】`visual-modes` | 🔴 **FAIL** —— 根因**已闭合**,是**产品缺陷 ①**,非门禁缺陷、非平台闪烁。⚠️ 红灯条数逐轮浮动(实测 34/40 与 38/40),因为 HN 偶发返回**不带 CSP** 的 503/缓存响应 |
+| 🆕 `csp-matrix` | 🔴 **FAIL 23/26,且完全确定**(连跑两轮逐位相同)—— 把同一根因搬到**本机固定 CSP 响应头**的 fixture 上,不再依赖第三方站点的策略。**因果锁定断言 PASS** |
+| 【新增】`lock-e2e` | 🔴 **不确定(同一 HEAD 上 2 红 1 绿)—— 根因是真实的产品缺陷 ②(lost update)**。⚠️ 此前本文件声明的 **42/42 全绿不可复现**,该结论作废;对 INV-11..15 的「通过」结论**不成立** |
 | 【回归】 | 全部 PASS(`styles` 的「残留」子项是**上游 T4a 门禁脚本**自身与 INV-5 自愈赛跑,见文末) |
 
-**缺陷一句话**:站点的 `Content-Security-Policy` 的 `img-src` 把扩展的
+**缺陷 ① 一句话**:站点的 `Content-Security-Policy` 的 `img-src` 把扩展的
 `filter: url("data:image/svg+xml,…")` **滤镜资源当图片拦掉**,于是在
 `news.ycombinator.com` 这类未放行 `data:` 的真实站点上,
 **三种色觉辅助模式(ADR-002 的主业)全部静默失效**;`Grayscale` 不受影响。
+
+**缺陷 ② 一句话**:`SettingsRepository` 读路径的 `maxSeenTime` 回写落盘的是
+**整份陈旧快照**而非只有该字段,导致并发实例能**静默回滚用户的写入**
+(实测:用户关主开关返回 ok 且返回值为 `false`,磁盘终态却是 `true`)。
+**本轮已修同一实例内的交错;跨实例的交错仍未闭合**(单一键 + 无 CAS),
+对应回归测试保持红灯。详见
+[「缺陷 ②」](#-缺陷--设置回写的-lost-update本轮部分修复)。
 
 **为什么没修**:修复必须推翻 **ADR-063** 或新增权限并触碰 **ADR-026** 的隐私底线,
 而 DESIGN.md 与全部 ADR **零处提及 CSP**。按 DESIGN.md §8 第 1 条停下上报。
@@ -76,7 +84,7 @@ node docs/T6b-gate/editview.cjs     # Popup 编辑视图
 |---|---|---|
 | **inv6-e2e** | **PASS (13/13)** | 两条规则**全程经真实 popup UI 建立** → wikipedia 得 `grayscale(1)`、example.com 得 B/Y 矩阵;顺序即优先级(ADR-008)落盘正确;**反向确认**:删掉专属规则后 wikipedia 改由通配规则生效。同时端到端验了 INV-2(渲染出的 filter 函数**恰好一个**) |
 | **inv10-pathological** | **PASS (9/9)** | 101 条规则(100 条 `*`×100 + 1 条命中)vs 1 条基线,**真实 wikipedia 加载路径**上 FCP 中位数 **312ms vs 316ms(1.114×)**;绝对 < 5000ms;声明式注册塌缩为 **1 条**(未按规则数膨胀) |
-| **lock-e2e** | **PASS (42/42)** | 主开关 OFF 下启动锁定 → **ADR-057 原子开启主开关**且真实页面真的上色 → 改规则/关主开关/缩短/解锁**全被拒(`kind:'locked'`)**、延长**成功** → **真实进程退出 + 重启** → 锁定仍强制、剩余按绝对时间递减 → **真实等待到期** → 自动解锁、设置可改、UI 翻回 |
+| **lock-e2e** | 🔴 **不确定:41/42 · 41/42 · 42/42**(三次独立运行,同一 HEAD) | 链路本身跑通:主开关 OFF 下启动锁定 → **ADR-057 原子开启主开关**且真实页面真的上色 → 改规则/关主开关/缩短/解锁**全被拒(`kind:'locked'`)**、延长**成功** → **真实进程退出 + 重启** → 锁定仍强制、剩余按绝对时间递减 → **真实等待到期** → 自动解锁。🔴 **但「到期后的写入真的落盘了」这条断言不稳定判红** —— 根因是**缺陷 ②**(lost update),非门禁赛跑。⚠️ 此前此格写的 **PASS (42/42)** **不可复现**,已作废 |
 | **persistence** | **PASS (13/13)** | 5 条规则经 UI 建立 + 一次经 UI 重排 → **完全退出 Chrome** → 规则与**顺序逐字完好**;ADR-025 键集未污染;重启后规则**真的仍在生效**(数据完好 ≠ 行为完好);ADR-062 注册跨重启存活 |
 | **inv7-capacity** | **PASS (12/12)** | 【回归】但**此前无任何真实栈门禁**覆盖:第 21 条被仓储层拒绝,结构化错误 `kind:'other'` + `reason:'capacity-exceeded'`(逐字核对 `errors.ts`),原 20 条**一字未动**(ADR-012);UI 容量提示文案逐字符合、「新建」入口禁用、`20/20` 计数;删一条即可再加(闭环) |
 | **visual-modes** | 🔴 **FAIL**(committed 证据本轮为 **38/40**;上一轮同一 head 为 34/40)— 红灯**全部在 HN**,根因已闭合:**站点 CSP `img-src` 拦掉 data: URI 滤镜资源**,是**真实产品缺陷**,见下。⚠️ **条数不可当稳定指标**:HN 偶发返回不带 CSP 的 503/缓存响应,故红灯数逐轮浮动 —— 确定性版本见 `csp-matrix` | wikipedia 四模式**首次导航即全过**;Grayscale 真实网页 `maxSpread=0`(不受影响,CSS 内建函数);三辅助模式在 wikipedia 保有色彩且用内联 data: URI。截图 + 人类复核索引见 `evidence/visual-modes.md` |
@@ -158,6 +166,95 @@ Chrome 把 `filter: url("data:image/svg+xml,…")` 的资源加载**按 `img-src
 | **news.ycombinator.com** | `img-src 'self' https://account.ycombinator.com` ❌ | **静默失效** |
 
 「静默」是最糟的失败形态:用户看不到任何报错,只看到扩展「没反应」。
+
+#### 🆕 本轮补充:**最显然的那条修复路线已被实测否决**
+
+直觉上的修复是「把 SVG 滤镜从 `data:` URI 改成扩展自己的
+`chrome-extension://…/f.svg#f`(`web_accessible_resources`)」——
+扩展源不受站点 `img-src` 约束,看起来正好绕开。**实测不成立:**
+
+| 实验(真实 Chrome 158 + 真实构建产物 + 本机固定响应头) | CSP 违规 | 像素 |
+|---|---|---|
+| `data:` URI + `img-src 'self'` | **有**(Chrome 原话:`violates … "img-src 'self'"`) | **未变** `#66ff33` |
+| `data:` URI + **无 CSP**(判据有效性对照) | 无 | **变了** → `(133,216,80)` |
+| `chrome-extension://…/f.svg#f` + `img-src 'self'` | **无** | **未变** |
+| `chrome-extension://…/f.svg#f` + **无 CSP** | 无 | **仍未变** |
+
+关键在最后一行:扩展源的外部 SVG 滤镜**即使在完全没有 CSP 的页面上也不生效**
+(`getComputedStyle` 显示 `filter: url("chrome-extension://…/f.svg#f")` 被正常接受,
+但渲染不应用)。即 Chrome 不解析**跨文档**的外部 filter 引用 ——
+这**不是** CSP 问题,换资源源头解决不了。
+
+因此本缺陷的修复需要架构决策(候选:放弃纯字符串路线改回文档内 `<svg>` 节点,
+但那会直接撞上 `src/domain/filter-css.ts` 文件头记载的 **INV-3 零闪烁**与
+**INV-9/ADR-026 非侵入**两条;或用 `declarativeNetRequest` 改写站点 CSP 响应头,
+那需要新权限并改变「不修改站点行为」的前提)。
+两条都超出 T7 验收任务的范围且与既有 ADR 相撞,故**不在本任务内擅自改**,
+按根因纪律上报 needs-human。
+
+### 🔴 缺陷 ②:设置回写的 lost update(本轮**部分修复**)
+
+**现象**:`lock-e2e` 的「到期后的写入真的落盘了」这条断言在同一 HEAD 上
+**2 红 1 绿**。到期后 `setMasterEnabled(false)` 返回 `ok` 且返回值
+`masterEnabled === false`,**但磁盘终态是 `true`** —— 用户的操作被静默回滚。
+
+**此前的错误归因**(已更正):`lock-e2e.cjs` 文件头曾写「这不是产品缺陷 ……
+被影响的只是门禁自己紧接着那次写的可见顺序」,并把延长量从 `+10min` 降到
+`+30s` 让门禁跑在 60s 节流窗口**之内**以避开它。那是**在给缺陷让路**。
+
+**真实根因**(用**不涉及锁定**的受控实验独立钉死,证明是通用缺陷):
+
+```js
+const A = new SettingsRepository({ area }); const B = new SettingsRepository({ area });
+const bRead = B.read();                   // 不 await:B 的 #readContext 先拿到 master:true
+const aWrite = A.setMasterEnabled(false);  // 用户写入
+await Promise.all([bRead, aWrite]);
+// → 修复前:40/40 次 LOST UPDATE(磁盘终态 master:true)
+```
+
+`src/storage/settings-repository.ts` 的 `#writeBackMaxSeenTime` /
+`#touchMaxSeenTime` 落盘的是 **整份读到的快照** `toPersisted(ctx.current)`,
+而不是只有 `maxSeenTime`。而 `read()` 的结构是:
+
+```ts
+const ctx = await this.#readContext();   // ← 读完成,看到 masterEnabled:true
+await this.#writeBackMaxSeenTime(ctx);   // ← 另一个 await,ctx 此时可能已陈旧
+```
+
+两个 await 之间存在真实的 TOCTOU 窗口。生产可达:`background.ts:45` 与
+`content.ts:43` 各持一个实例,且 content script **每次导航**都调 `repo.read()`。
+
+这与 ADR-059 / INV-11 例外 b **无关**:那条例外只授权**该字段**在锁定期间
+继续推进,从未授权回写连带覆盖 `masterEnabled` / `rules` / `lockUntil`。
+源码注释原本就承诺「回写的只有 `maxSeenTime`」—— **实现与承诺不符**。
+
+**本轮已修(同一实例内的交错)**:回写改为①落盘前**重读磁盘**,用户字段
+一律取磁盘现值;②若本实例的用户写入落在「重读 → 落盘」之间则**直接让路**
+(元数据回写永远不需要赢,下界下一次读会再推进)。
+回归测试「同一实例:在途的读路径回写不得回滚本实例的用户写入」**已转绿**。
+
+**仍未闭合(跨实例,needs-human)**:回写的重读 `get` 是在并发用户写入的
+`set` **完成之前发出**的,故它读回来的仍可能是旧值:
+
+```text
+GET -> master:true     ← 回写的重读(此时并发的 set 尚未落盘)
+SETok  master:false    ← 用户写入落盘
+SETok  master:true     ← 回写把它盖掉
+```
+
+聚合根存在**单一键**下(ADR-025 固定持久化形状,§6 T3/T7 的键集门禁逐字
+锁定那 5 个键),而 `chrome.storage` **不提供 CAS / 事务**,故「读-改-写」
+在单实例内**不可能**做到原子。**试过并已否决**的两条补救:
+
+1. *写后用 `#cachedSettings` 自愈* —— 该快照并非权威,会把 ADR-061 的
+   「松手即写」重排结果回退,实测打红 `reorder-immediate`,
+   等于**修一个 lost update 的同时制造另一个**。
+2. *常驻 `onChanged` 观测* —— 要占一个 `StorageArea` 监听槽,
+   与既有「取消订阅后摘掉底层监听器」的断言冲突。
+
+真正的修复需要架构决策(把 `maxSeenTime` 拆到独立键,或由 SW 做单写者
+串行化),两者都会改动 ADR-025 / 既有键集门禁,故**不在本任务内擅自改**。
+对应的两条跨实例回归测试**保持红灯**,未 skip / 未 xfail / 未放宽断言。
 
 ### 🆕 `csp-matrix`:把根因做成**确定性**回归门禁
 
