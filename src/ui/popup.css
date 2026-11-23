@@ -852,3 +852,437 @@ body {
 .lock-modal__ok:hover {
   filter: brightness(1.08);
 }
+
+/* ═══════════════════════ 编辑视图(T6b · §5.5 / §5.6 / §5.7) ═══════════════════════ */
+
+/*
+ * 视觉层权威:仓内 `docs/design/popup-mockup.html` 的
+ * `.ehead / .back / .ebody / .field / .lab / .inp / .status / .shadowbox /
+ *  .opts / .opt / .radio / .srow / input[type=range] / .sval / .livehint /
+ *  .pulse / .erow / .btn` 一族(ADR-042),尺寸与色值逐项对齐。
+ *
+ * **行为与文案以 §5.5–§5.7 和 ADR 为准,冲突时 ADR 胜。**
+ */
+
+.edit__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 15px;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.edit__back {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 3px 5px;
+  margin-left: -5px;
+  border-radius: 5px;
+  font-family: inherit;
+}
+
+.edit__back:hover {
+  background: var(--accent-soft);
+}
+
+.edit__title {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink);
+}
+
+.edit__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 15px;
+}
+
+.field {
+  margin-bottom: 17px;
+}
+
+.field--last {
+  margin-bottom: 4px;
+}
+
+.field__label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+  letter-spacing: .01em;
+}
+
+/* ── 网址模式输入框(ADR-033:等宽) ── */
+
+.pattern-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  /* ADR-033:`*` 与 `.` 需一眼分清;等宽也暗示此处须按格式书写。 */
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.4;
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* §5.5:语法错误时**输入框描红**(设计稿的 `.inp.err`)。 */
+.pattern-input--invalid {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.pattern-input:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* ── §5.6 状态行(两个独立维度) ── */
+
+.status {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.status__icon {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/*
+ * §5.6 的「色」列 —— 四种 tone 对应 §5.1 的四个语义 token。
+ * 色值只在 `tokens.css` 定义一次,这里只引用(深色模式自动适配)。
+ */
+.status--ok {
+  color: var(--ok);
+}
+
+.status--warn {
+  color: var(--warn);
+}
+
+.status--muted {
+  color: var(--muted);
+}
+
+.status--bad {
+  color: var(--bad);
+}
+
+.status__char,
+.status code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+/* ── §5.6 被遮蔽时追加的解释框(琥珀底) ── */
+
+.shadow-box {
+  margin-top: 7px;
+  padding: 8px 10px;
+  background: var(--warn-soft);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--warn);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.shadow-box b {
+  font-weight: 600;
+}
+
+.shadow-box__pattern {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+/* 一键修复 —— 可点击(§5.6)。是按钮以便键盘可达(ADR-043 的同一理由)。 */
+.shadow-box__fix {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--warn);
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 600;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.shadow-box__fix:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* ── 四滤镜单选(§5.5 / ADR-002 / ADR-030) ── */
+
+.options {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--surface);
+}
+
+.option:last-child {
+  border-bottom: none;
+}
+
+.option:hover {
+  background: var(--surface-2);
+}
+
+/*
+ * 选中态同时改**底色 + 字重 + radio 环**,不只改颜色 ——
+ * 目标用户含色觉异常者(ADR-030 的同一理由)。
+ */
+.option--on {
+  background: var(--accent-soft);
+}
+
+/*
+ * 原生 radio 的视觉:照搬设计稿 `.radio` / `.opt.on .radio`
+ * (15px 圆、1.5px 灰环;选中时 4.5px 强调色环)。
+ * 用 `appearance:none` 而非隐藏元素 —— 它必须留在 tab 序列里且能接 focus 态。
+ */
+.option__radio {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid #C3C7CE;
+  background: var(--surface);
+  flex: 0 0 auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.option__radio:checked {
+  border-color: var(--accent);
+  border-width: 4.5px;
+}
+
+.option__radio:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.option__text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ADR-030:名称是色块的必备同伴 —— 色块绝不单独承载语义。 */
+.option__name {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.option--on .option__name {
+  font-weight: 550;
+}
+
+.option__desc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* §5.2 的双色渐变条。渐变值由 `swatchGradient()` 内联,表外的值不存在。 */
+.option__swatch {
+  width: 26px;
+  height: 13px;
+  border-radius: var(--radius-swatch);
+  flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, .06);
+}
+
+/* ── 强度滑块(§5.5 / ADR-003) ── */
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.slider {
+  flex: 1 1 auto;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  margin: 0;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, .14);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+  cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, .14);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+  cursor: pointer;
+}
+
+.slider:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+/* §5.1:百分比用 tabular-nums。 */
+.slider__value {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+/* ── §5.7 实时预览提示行 ── */
+
+.preview-hint {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/*
+ * §5.7:预览不可用时提示行**置灰并改文案**,滑块仍可改值。
+ * 置灰即「比 muted 更弱」—— 用透明度而非换一个色 token,
+ * 以免在深色模式下与 `--muted` 撞色后看不出差别。
+ */
+.preview-hint--off {
+  opacity: .62;
+}
+
+.preview-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  /* 可用时是绿点(§5.7:绿点脉冲);不可用时同样置灰,见下。 */
+  background: var(--muted);
+  flex: 0 0 auto;
+}
+
+.preview-dot--pulse {
+  background: var(--ok);
+  animation: preview-pulse 2s ease-in-out infinite;
+}
+
+@keyframes preview-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: .35;
+  }
+}
+
+/* §5.7:`prefers-reduced-motion` 时关闭脉冲动画。 */
+@media (prefers-reduced-motion: reduce) {
+  .preview-dot--pulse {
+    animation: none;
+  }
+}
+
+/* ── 底栏:保存 / 删除(§5.5) ── */
+
+.edit__foot {
+  display: flex;
+  gap: 9px;
+  padding: 12px 15px;
+  border-top: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.edit__save,
+.edit__delete {
+  padding: 9px;
+  border-radius: var(--radius-control-sm);
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+}
+
+.edit__save {
+  flex: 1 1 auto;
+  background: var(--accent);
+  color: #FFFFFF;
+}
+
+.edit__save:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+/* §5.5:语法错误(含空 pattern,F20)时保存按钮禁用。 */
+.edit__save:disabled {
+  background: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
+  filter: none;
+}
+
+.edit__delete {
+  flex: 0 0 auto;
+  background: none;
+  color: var(--bad);
+  padding: 9px 14px;
+}
+
+.edit__delete:hover:not(:disabled) {
+  background: var(--bad-soft);
+}
+
+.edit__delete:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}

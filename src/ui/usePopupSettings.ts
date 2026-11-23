@@ -29,6 +29,32 @@ export interface PopupSettingsState {
   readonly deleteRule: (index: number) => Promise<ActionResult>;
   readonly reorderRules: (rules: readonly FilterRule[]) => Promise<ActionResult>;
   /**
+   * 保存一条规则(**T6b 接入点** · ADR-021 / F20)。
+   *
+   * `index === null` → 新建,走 `addRule`(容量上限由仓储层守,INV-7);
+   * 否则走 `updateRule(index, rule)`(ADR-021:模式 / 强度 / 网址均可改)。
+   *
+   * 🔴 分派放在这里而不是组件里,是为了让编辑视图只认识「保存」这一个动作 ——
+   * 新建与修改的差别是**数据层**的事(一个有索引、一个没有),
+   * 不该泄漏成界面上的两个按钮。
+   *
+   * 🔴 **一次写入,立即落盘**(ADR-061:写入立即落盘不做防抖)。
+   * 滑块拖动期间**完全不碰存储**(ADR-049 的预览通道),
+   * 所以这里不存在「连续高频写入」这个要防抖的对象。
+   */
+  readonly saveRule: (
+    index: number | null,
+    rule: FilterRule,
+  ) => Promise<ActionResult>;
+  /**
+   * 把某条规则移到最上面(**T6b** §5.6 的一键修复 · ADR-008 顺序即优先级)。
+   *
+   * 走 `replaceRules`(**无延迟**,同 `reorderRules` 的 ADR-061 理由)。
+   * 索引越界或已在首位时是 no-op,返回成功 —— 用户点一个「已经满足」的
+   * 修复按钮不该看到报错条。
+   */
+  readonly moveRuleToTop: (index: number) => Promise<ActionResult>;
+  /**
    * 把一次**本窗口自己**完成的写入结果同步进 React 状态(T6c 接入点)。
    *
    * 仓储层的 `subscribe` 走 `storage.onChanged`,它只在**别处**改动时触发;
@@ -163,6 +189,51 @@ export function usePopupSettings({
     [apply, repository],
   );
 
+  /**
+   * 🔴 **保存一条规则(T6b)**:新建 → `addRule`,编辑 → `updateRule`。
+   *
+   * ⚠️ 全程经仓储层(INV-14 / ADR-055):锁定检查、pattern 校验、
+   * 容量上限(INV-7)都在那一层。绕过它直接写 `chrome.storage.*`
+   * 会把锁变成假锁,也会让第 21 条规则悄悄写进去。
+   *
+   * ⚠️ 走 `addRule` / `updateRule`(**立即落盘**),不走
+   * `reorderRulesDebounced` —— ADR-061:滑块已改走预览通道、不写存储,
+   * 防抖**失去了服务对象**;点保存是一次性动作。
+   */
+  const saveRule = useCallback(
+    (index: number | null, rule: FilterRule) =>
+      apply(() =>
+        index === null
+          ? repository.addRule(rule)
+          : repository.updateRule(index, rule),
+      ),
+    [apply, repository],
+  );
+
+  /**
+   * §5.6 的一键修复 —— 把 `index` 移到最前(ADR-008:顺序即优先级)。
+   *
+   * 读的是**当前 React 状态里的** `settings.rules`,与列表视图的拖拽
+   * (`reorderRules`)同一条写入路径与同一套校验。
+   */
+  const moveRuleToTop = useCallback(
+    (index: number) =>
+      apply(async () => {
+        const current = await repository.read();
+        const rules = [...current.rules];
+        const target = rules[index];
+        // 越界 / 已在首位 → 什么都不做,但报告成功:
+        // 一个「已经满足」的修复点击不该弹红色报错条(ADR-046 的同一精神)。
+        if (target === undefined || index === 0) {
+          return { ok: true as const, value: current };
+        }
+        rules.splice(index, 1);
+        rules.unshift(target);
+        return repository.replaceRules(rules);
+      }),
+    [apply, repository],
+  );
+
   /** 见 `PopupSettingsState.syncSettings`。 */
   const syncSettings = useCallback((next: FilterSettings) => {
     setSettings(next);
@@ -176,6 +247,8 @@ export function usePopupSettings({
       toggleMaster,
       deleteRule,
       reorderRules,
+      saveRule,
+      moveRuleToTop,
       syncSettings,
     }),
     [
@@ -185,6 +258,8 @@ export function usePopupSettings({
       toggleMaster,
       deleteRule,
       reorderRules,
+      saveRule,
+      moveRuleToTop,
       syncSettings,
     ],
   );

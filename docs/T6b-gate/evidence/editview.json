@@ -1,0 +1,336 @@
+{
+  "assertions": [
+    {
+      "name": "基线:目标页初始无滤镜(探针有效)",
+      "ok": true,
+      "detail": {
+        "baseline": "none"
+      }
+    },
+    {
+      "name": "取到目标页 tab(id + windowId)",
+      "ok": true,
+      "detail": {
+        "id": 446105680,
+        "windowId": 446105678
+      }
+    },
+    {
+      "name": "popup 以列表视图启动(ADR-022)",
+      "ok": true,
+      "detail": {
+        "view": "list"
+      }
+    },
+    {
+      "name": "popup 收到 GET_TAB_STATE 响应(ADR-044 真实联调)",
+      "ok": true
+    },
+    {
+      "name": "🔴 GET_TAB_STATE 解析到目标页(wikipedia)而非 popup 自己",
+      "ok": true,
+      "detail": {
+        "tabId": 446105680,
+        "injectable": true,
+        "host": "en.wikipedia.org",
+        "activeRuleIndex": null,
+        "shadowedRuleIndexes": []
+      }
+    },
+    {
+      "name": "ADR-020:新建视图输入框为空、Grayscale @ 100%",
+      "ok": true,
+      "detail": {
+        "pattern": "",
+        "intensity": "100%"
+      }
+    },
+    {
+      "name": "🔴 F20:空 pattern → 保存禁用",
+      "ok": true,
+      "detail": {
+        "text": "✕请输入网址模式,例如 *.weibo.*",
+        "disabled": false,
+        "value": null,
+        "dataset": {
+          "testid": "status-line",
+          "kind": "empty",
+          "tone": "bad"
+        }
+      }
+    },
+    {
+      "name": "🔴 非法字符 → 保存禁用 + 状态行指出该字符",
+      "ok": true,
+      "detail": {
+        "kind": "illegal-character",
+        "char": "#"
+      }
+    },
+    {
+      "name": "非法时输入框描红(data-invalid=true)",
+      "ok": true
+    },
+    {
+      "name": "🔴 §5.6:匹配且生效 → kind=live / tone=ok",
+      "ok": true,
+      "detail": {
+        "testid": "status-line",
+        "kind": "live",
+        "tone": "ok"
+      }
+    },
+    {
+      "name": "§5.7:预览提示行可用",
+      "ok": true
+    },
+    {
+      "name": "🔴🔴 1. 拖滑块 → 真实页面逐帧实时预览(ADR-049 从 popup 上下文成立)",
+      "ok": true,
+      "detail": [
+        {
+          "intensity": 80,
+          "filter": "grayscale(0.8)"
+        },
+        {
+          "intensity": 55,
+          "filter": "grayscale(0.55)"
+        },
+        {
+          "intensity": 30,
+          "filter": "grayscale(0.3)"
+        }
+      ]
+    },
+    {
+      "name": "🔴 预览期间 storage 零写入:规则列表仍为空",
+      "ok": true,
+      "detail": {
+        "rules": []
+      }
+    },
+    {
+      "name": "🔴🔴 2. 不保存**关闭 popup** → 页面恢复原状(onDisconnect 路径)",
+      "ok": true,
+      "detail": {
+        "filter": "none"
+      }
+    },
+    {
+      "name": "2b 前置:预览已生效(探针有效)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.45)"
+      }
+    },
+    {
+      "name": "🔴🔴 2b. 不保存点「返回」(popup 未关)→ 页面恢复(主动 PREVIEW_CLEAR)",
+      "ok": true,
+      "detail": {
+        "filter": "none",
+        "popupStillOpen": true
+      }
+    },
+    {
+      "name": "ADR-022:返回后回到列表视图",
+      "ok": true
+    },
+    {
+      "name": "🔴 3a. pattern 不匹配当前页 → 提示行置灰,reason=pattern-mismatch",
+      "ok": true,
+      "detail": {
+        "testid": "preview-hint",
+        "available": "false",
+        "reason": "pattern-mismatch"
+      }
+    },
+    {
+      "name": "🔴🔴 3. 在 A 站编辑针对 B 站的规则 → A 站**绝不**被 B 站滤镜影响",
+      "ok": true,
+      "detail": {
+        "filter": "none"
+      }
+    },
+    {
+      "name": "§5.7:预览不可用时**滑块仍可改值**",
+      "ok": true,
+      "detail": {
+        "value": "20"
+      }
+    },
+    {
+      "name": "保存成功 → 返回列表视图(ADR-022)",
+      "ok": true
+    },
+    {
+      "name": "🔴 F20:点保存后规则**持久化**(一次写入,ADR-061 立即落盘)",
+      "ok": true,
+      "detail": {
+        "rules": [
+          {
+            "intensity": 60,
+            "mode": "Grayscale",
+            "pattern": "*.wikipedia.org"
+          }
+        ]
+      }
+    },
+    {
+      "name": "⚠️ 保存触发 reconcile(ADR-062):**重新导航**后新规则对首帧生效",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.6)"
+      }
+    },
+    {
+      "name": "5 前置:0 号规则先命中(grayscale(1))",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "🔴 5a. 被遮蔽 → `◐` warn 状态行 + 琥珀解释框(§5.6)",
+      "ok": true,
+      "detail": {
+        "status": {
+          "testid": "status-line",
+          "kind": "shadowed",
+          "tone": "warn"
+        },
+        "box": "第 1 条规则 *.wikipedia.org 排在前面,已先命中。把这条移到最上面 ↑"
+      }
+    },
+    {
+      "name": "🔴🔴 5b/S13. 一键修复 → 顺序改变(落盘)",
+      "ok": true,
+      "detail": {
+        "rules": [
+          "*.org",
+          "*.wikipedia.org"
+        ]
+      }
+    },
+    {
+      "name": "🔴🔴 5c/S13. 一键修复 → **当前页面渲染立即变成该规则的滤镜**",
+      "ok": true,
+      "detail": {
+        "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.741159%20-0.407208%200.666049%200%200%200.075098%200.585234%200.339668%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+      }
+    },
+    {
+      "name": "🔴🔴 2c. 预览中点「删除」→ 规则消失 + 页面恢复 + 回到列表视图",
+      "ok": true,
+      "detail": {
+        "view": "list",
+        "rules": [
+          "*.wikipedia.org"
+        ],
+        "beforeDelete": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.93529%20-0.101802%200.166512%200%200%200.018774%200.896309%200.084917%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+        "afterDelete": "grayscale(1)"
+      }
+    },
+    {
+      "name": "4 前置:预览已生效(探针有效)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(0.15)"
+      }
+    },
+    {
+      "name": "🔴🔴 4. 预览期间导航 → 端口断开,新页面按**规则**渲染(非预览值)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "主开关 OFF 前置:页面无滤镜(INV-8)",
+      "ok": true,
+      "detail": {
+        "filter": "none"
+      }
+    },
+    {
+      "name": "🔴 主开关 OFF 期间页面始终无滤镜(预览不可能把它点亮)",
+      "ok": true,
+      "detail": {
+        "filter": "none"
+      }
+    },
+    {
+      "name": "ADR-013:不可注入页 → popup 显示琥珀说明条",
+      "ok": true,
+      "detail": {
+        "text": "⚠此页面不支持滤镜。Chrome 不允许扩展修改内部页面、应用商店和 PDF 查看器。"
+      }
+    },
+    {
+      "name": "🔴 ADR-050:不可注入页上主开关**仍可用**",
+      "ok": true
+    }
+  ],
+  "cases": [
+    {
+      "case": "1-live-preview",
+      "dragSeen": [
+        {
+          "intensity": 80,
+          "filter": "grayscale(0.8)"
+        },
+        {
+          "intensity": 55,
+          "filter": "grayscale(0.55)"
+        },
+        {
+          "intensity": 30,
+          "filter": "grayscale(0.3)"
+        }
+      ]
+    },
+    {
+      "case": "2-close-popup",
+      "filter": "none"
+    },
+    {
+      "case": "2b-back-button",
+      "filter": "none",
+      "popupStillOpen": true
+    },
+    {
+      "case": "3-cross-site",
+      "filter": "none"
+    },
+    {
+      "case": "save-persist-reconcile",
+      "filter": "grayscale(0.6)"
+    },
+    {
+      "case": "5-shadow-fix",
+      "filter": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.741159%20-0.407208%200.666049%200%200%200.075098%200.585234%200.339668%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+      "order": [
+        "*.org",
+        "*.wikipedia.org"
+      ]
+    },
+    {
+      "case": "2c-delete",
+      "beforeDelete": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='0.93529%20-0.101802%200.166512%200%200%200.018774%200.896309%200.084917%200%200%200%200%201%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
+      "afterDelete": "grayscale(1)"
+    },
+    {
+      "case": "4-navigate",
+      "filter": "grayscale(1)"
+    },
+    {
+      "case": "master-off",
+      "filter": "none"
+    }
+  ],
+  "pass": true,
+  "summary": {
+    "passed": 34,
+    "total": 34,
+    "pass": true
+  }
+}
