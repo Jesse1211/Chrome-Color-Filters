@@ -20,7 +20,6 @@ import {
   filterCssValue,
 } from '../../domain/index.js';
 import {
-  type FilterTarget,
   type OnConnectLike,
   type PreviewPortLike,
   type SyncKeyValueStore,
@@ -32,31 +31,13 @@ import {
   createRenderArbiter,
   currentFilterValue,
   isFilterApplied,
-  isFilterSuppressed,
   runInjector,
   startPreviewReceiver,
   writeFastPath,
 } from '../index.js';
+import { makeFilterTarget } from './filter-target-double.js';
 
-function makeTarget(): FilterTarget & {
-  attrs: Map<string, string>;
-  props: Map<string, string>;
-} {
-  const attrs = new Map<string, string>();
-  const props = new Map<string, string>();
-  return {
-    attrs,
-    props,
-    setAttribute: (n, v) => void attrs.set(n, v),
-    removeAttribute: (n) => void attrs.delete(n),
-    hasAttribute: (n) => attrs.has(n),
-    style: {
-      setProperty: (n, v) => void props.set(n, v),
-      removeProperty: (n) => void props.delete(n),
-      getPropertyValue: (n) => props.get(n) ?? '',
-    },
-  };
-}
+const makeTarget = makeFilterTarget;
 
 /** 记录每一次读写的假同步存储 —— gate 的「storage 无写入」spy 断言靠它。 */
 function makeStore(): SyncKeyValueStore & {
@@ -298,25 +279,26 @@ describe('🔴 gate · 收到 PREVIEW_CLEAR 后恢复按规则解析的结果', 
     expect(arbiter.hasOverride()).toBe(false);
   });
 
-  it('🔴 规则结果为「不上色」时,PREVIEW_CLEAR 后压制属性回到位', () => {
-    // 新架构(ADR-062)下「不上色」必须由 `data-ccf-off` 显式压制,
-    // 只摘 `data-ccf-on` 压不掉预生成的裸 `html` CSS(见 apply-filter.ts)。
+  it('🔴 规则结果为「不上色」时,PREVIEW_CLEAR 后回到无滤镜态', () => {
+    // 🔴 ADR-069:「不上色」就是**没有 `ccf-on` class** —— 预生成 CSS 的
+    //    选择器也是 `html.ccf-on`,摘掉 class 它一并失效,无需压制属性。
     const target = makeTarget();
     const arbiter = createRenderArbiter(target, null);
     arbiter.setBase(null);
-    expect(isFilterSuppressed(target)).toBe(true);
+    expect(isFilterApplied(target)).toBe(false);
 
     const port = makePort();
     attachPreviewPort(port, arbiter);
 
     port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 50 });
-    expect(isFilterSuppressed(target)).toBe(false);
     expect(isFilterApplied(target)).toBe(true);
 
     port.send({ type: 'PREVIEW_CLEAR' });
 
     expect(isFilterApplied(target)).toBe(false);
-    expect(isFilterSuppressed(target)).toBe(true);
+    // 🔴 ADR-069:「不上色」= 没有 ccf-on class,且不残留注入物。
+    expect(target.classes.size).toBe(0);
+    expect(target.children).toEqual([]);
   });
 
   it('未处于预览态时收到 PREVIEW_CLEAR 是 no-op(零重绘)', () => {
@@ -365,7 +347,9 @@ describe('🔴 gate · 端口断开(popup 关闭)自动恢复,页面不残留预
     port.disconnect();
 
     expect(isFilterApplied(target)).toBe(false);
-    expect(isFilterSuppressed(target)).toBe(true);
+    // 🔴 ADR-069:「不上色」= 没有 ccf-on class,且不残留注入物。
+    expect(target.classes.size).toBe(0);
+    expect(target.children).toEqual([]);
   });
 
   it('断开后迟到的 PREVIEW_FILTER 被忽略(不复活预览态)', () => {
@@ -600,7 +584,9 @@ describe('🔴 gate · 预览活动期间收到 onChanged,页面不重绘;PREVIE
 
     expect(run.arbiter.hasOverride()).toBe(false);
     expect(isFilterApplied(target)).toBe(false);
-    expect(isFilterSuppressed(target)).toBe(true);
+    // 🔴 ADR-069:「不上色」= 没有 ccf-on class,且不残留注入物。
+    expect(target.classes.size).toBe(0);
+    expect(target.children).toEqual([]);
   });
 });
 
@@ -632,8 +618,8 @@ describe('🔴 存活性(INV-5)守护的是**当前**真相 —— 含预览覆�
     onConnect.connect(port);
     port.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: 70 });
 
-    // 站点脚本把注入物摘掉。
-    target.removeAttribute('data-ccf-on');
+    // 站点脚本把注入物摘掉(ADR-069:class + 变量)。
+    target.classList.remove('ccf-on');
     target.style.removeProperty('--ccf-filter');
     fire!();
 
@@ -815,7 +801,9 @@ describe('🔴 ADR-049 · 两个活端口并存时,陈旧端口的收尸不得�
 
     expect(arbiter.hasOverride()).toBe(false);
     expect(isFilterApplied(target)).toBe(false);
-    expect(isFilterSuppressed(target)).toBe(true);
+    // 🔴 ADR-069:「不上色」= 没有 ccf-on class,且不残留注入物。
+    expect(target.classes.size).toBe(0);
+    expect(target.children).toEqual([]);
   });
 
   it('🔴 预览值仍绝不落盘 —— 多端口并发下亦然(storage spy)', async () => {
@@ -879,13 +867,13 @@ describe('🔴 ADR-049 · 两个活端口并存时,陈旧端口的收尸不得�
 // ─────────── 边界:intensity === 0 ───────────
 //
 // 为什么要钉这条:PREVIEW_FILTER 的 intensity 取值域是 0..100(ADR-003 收敛),
-// 而 `null` 是「不上色」的哨兵值(走 data-ccf-off 压制,见 apply-filter.ts)。
+// 而 `null` 是「不上色」的哨兵值(ADR-069:摘掉 ccf-on class)。
 // 强度 0 与「无滤镜」在视觉上一样,实现上却必须是**两种**状态:
-// 前者是 identity 滤镜(覆盖活动),后者是压制。混同会让「拖到 0」
-// 变成「覆盖消失」,于是底层规则色会冒出来 —— 可见 bug。
+// 前者是 identity 滤镜(class 在位、覆盖活动),后者是 class 不在位。
+// 混同会让「拖到 0」变成「覆盖消失」,于是底层规则色会冒出来 —— 可见 bug。
 
 describe('🔴 边界 · intensity 0 的预览是 identity 滤镜,不是「无滤镜」', () => {
-  it('预览 0 渲染为 grayscale(0) 且覆盖活动,与压制态区分', () => {
+  it('预览 0 渲染为强度 0 的 identity 滤镜且覆盖活动,与「无滤镜」区分', () => {
     const target = makeTarget();
     const arbiter = createRenderArbiter(target, null);
     arbiter.setBase(GRAY_100);
@@ -895,22 +883,23 @@ describe('🔴 边界 · intensity 0 的预览是 identity 滤镜,不是「无�
     port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 0 });
 
     expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 0));
+    // 🔴 class **在位**(identity 滤镜仍是「上色态」),这正是与
+    //    「无滤镜」的可观察区别。
     expect(isFilterApplied(target)).toBe(true);
-    expect(isFilterSuppressed(target)).toBe(false);
     expect(arbiter.hasOverride()).toBe(true);
   });
 
-  it('底层「不上色」时预览 0 也必须解除压制(否则拖到 0 看不出在预览)', () => {
+  it('底层「不上色」时预览 0 也必须开闸(否则拖到 0 看不出在预览)', () => {
     const target = makeTarget();
     const arbiter = createRenderArbiter(target, null);
     arbiter.setBase(null);
-    expect(isFilterSuppressed(target)).toBe(true);
+    expect(isFilterApplied(target)).toBe(false);
 
     const port = makePort();
     attachPreviewPort(port, arbiter);
     port.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: 0 });
 
-    expect(isFilterSuppressed(target)).toBe(false);
+    // 🔴 ADR-069:开闸 = 加 class。强度 0 是 identity 滤镜,仍是上色态。
     expect(isFilterApplied(target)).toBe(true);
     expect(currentFilterValue(target)).toBe(filterCssValue('RedGreen', 0));
   });

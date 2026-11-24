@@ -11,8 +11,10 @@
  * - `scripting-port.ts`  —— 唯一接触 `chrome.scripting` 的地方
  *
  * **B. JS content script —— 已打开页面的实时更新:**
- * - `filter.css`        —— 静态样式表(门控 + CSS 变量)
- * - `apply-filter.ts`   —— DOM 侧原语(属性 + CSS 变量,无节点注入)
+ * - `filter.css`        —— 静态样式表(`html.ccf-on` 门控 + CSS 变量)
+ * - `apply-filter.ts`   —— DOM 侧原语(ADR-069:class 开关 + SVG 定义就位)
+ * - `svg-filter-def.ts` —— 同文档 `<svg><filter>` 的同步注入(ADR-069/070),
+ *                          根治 `data:` URI 被站点 CSP `img-src` 拦掉的静默失效
  * - `fast-path-cache.ts`—— 同步快路径(ADR-060,**降级为过渡期双重保险**)
  * - `fast-path-store.ts` —— 快路径的底层存储装配
  * - `injector.ts`       —— 编排 + INV-8 短路 + 渲染仲裁(T4b)
@@ -33,6 +35,7 @@
  * 注册管的是**下一次导航**,那才是 INV-3 的路径。
  */
 export * from './apply-filter.js';
+export * from './svg-filter-def.js';
 export * from './fast-path-cache.js';
 export * from './fast-path-store.js';
 export * from './filter-file-css.js';

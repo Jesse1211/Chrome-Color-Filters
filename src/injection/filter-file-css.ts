@@ -1,6 +1,6 @@
 /**
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * 预生成滤镜 CSS 文件的**内容与命名**(ADR-063)—— 单一真相源。
+ * 预生成滤镜 CSS 文件的**内容与命名**(ADR-063 / **ADR-069/070**)—— 单一真相源。
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
  * `chrome.scripting.registerContentScripts()` 的 `css` 字段**只接受文件路径,
@@ -13,6 +13,66 @@
  * 保留 ADR-003 的「强度无级可调」—— 每文件仅一行,总计几 KB。
  *
  * ───────────────────────────────────────────────────────────────────────────
+ * ## 🔴 ADR-069:选择器是 `html.ccf-on`,值是**同文档 fragment 引用**
+ * ───────────────────────────────────────────────────────────────────────────
+ *
+ * ```css
+ * html.ccf-on { filter: url("#ccf-{slug}-{intensity}") !important; }
+ * ```
+ *
+ * 两处都是 ADR-069 拍板的规格,**不是示意**:
+ *
+ * ### 1. `url("#...")` 指向同文档,不是 `data:` URI
+ *
+ * 上一版把整个 SVG 内联进 `data:image/svg+xml,...`。**T7 实测否了它**:
+ * `data:` URI 的 SVG 被浏览器归类为**图片资源**,受站点 CSP 的 `img-src`
+ * 管辖。在不放行 `data:` 的站点上三个色觉矫正滤镜**静默失效** ——
+ * 像素与关闭态完全相同、无任何报错。确定性复现于 `img-src 'self'` /
+ * 无 `img-src` 的 `default-src` / `img-src 'none'` 三种策略;真实 Chrome 在
+ * news.ycombinator.com 捕获到 `{directive:'img-src', blockedURI:'data'}`。
+ *
+ * **同文档 `url("#id")` 引用不产生资源加载,CSP 无从拦截。**
+ * 被引用的 `<filter>` 由 content script 在 `document_start` 的同步段内注入
+ * (见 `svg-filter-def.ts`)。
+ *
+ * ### 2. 选择器**带 `.ccf-on` class** —— 这是前向引用问题的消除手段
+ *
+ * 本文件由 Chrome 在首帧之前注入,**早于** content script 建出 SVG 节点。
+ * 看似前向引用,但 class 门控让该问题**根本不存在**:注入时 `html` 还没有
+ * `ccf-on`,规则不匹配任何元素,浏览器压根不去解析那个 `url("#...")`;
+ * 等 class 加上去时 `#ccf-…` 已在 DOM 里,filter 值是新算出来的。
+ * **即使某个引擎缓存了「找不到」也不受影响** —— 消除不确定性,不是赌对。
+ *
+ * ### ⚠️ 这与上一轮那次失败的「属性门控」**不是**同一件事
+ *
+ * 本文件的选择器曾一度被写成 `html[data-ccf-on]`,真实 Chrome 逐帧录屏
+ * 当场推翻:coldCache 3/3 站点首帧仍有未滤镜的彩色帧,探针显示属性要到
+ * `readyState=complete` 才设上。**那次的根因是属性要等异步 storage 读完**,
+ * 门控把 JS 重新放回了页面加载的关键路径。
+ *
+ * ADR-069 的 class 不等任何异步结果:它与 SVG 注入同处 `document_start` 的
+ * **同一个同步段**,期间解析器与渲染都停着。实测对照 ——
+ * 同步 fragment 路径 **0 次闪烁**,异步 storage 路径 **4 次中闪 1 次**。
+ * **异步等待才是闪烁根源,JS 本身不是。**
+ *
+ * ### 附带收益:不再需要压制规则
+ *
+ * 裸 `html` 时代,「JS 判定本页不该上色」必须靠一条更高特异度的
+ * `html[data-ccf-off] { filter: none }` 去压(因为裸 `html` 无条件生效)。
+ * 现在**摘掉 class 就等于撤除**,`filter.css` 里那整组压制规则已删除。
+ * ADR-069 原文:「开关滤镜只需切换 class,不增删样式表」。
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * ## 🔴 ADR-070:四个滤镜统一走 SVG,灰阶不例外
+ * ───────────────────────────────────────────────────────────────────────────
+ *
+ * 灰阶也用 `feColorMatrix`,不再用 CSS 内置 `grayscale()`。灰阶本身就是一个
+ * 颜色矩阵,用内置函数只是巧合可行;若灰阶走内置函数、另三个走 SVG,
+ * **两条注入路径会各自演化**,又多一类「只在某条路径上出现的 bug」——
+ * 本次 CSP 缺陷恰好只打中 SVG 路径而灰阶无恙,正是这种分裂的代价。
+ * 统一后本文件 404 个产物的结构完全一致。
+ *
+ * ───────────────────────────────────────────────────────────────────────────
  * ## 🔴 为什么本模块必须复用 `filterCssValue`(ADR-063 的强制项)
  * ───────────────────────────────────────────────────────────────────────────
  *
@@ -23,93 +83,33 @@
  * | 预生成 CSS 文件(声明式注册) | **下一次导航**的首帧 | 本模块 |
  * | JS content script(`apply-filter.ts`) | **已打开**的页面(实时更新) | `filterCssValue` |
  *
- * 若本模块另写一份矩阵公式,两条路径就会产出**不同的颜色**:同一个站点,
- * 首帧是 A 色、JS 跑完变成 B 色 —— 一次用户可见的跳变,且因为两边各自
- * 「自测通过」,这种漂移极难被发现。ADR-063 为此明文禁止另写公式。
+ * 若本模块另写一份 id 构词法或矩阵公式,两条路径就会产出**不同的引用**:
+ * 同一个站点,首帧引用 `#ccf-gray-50`、JS 却建了个 `#ccf-grayscale-50`
+ * 的节点 —— 结果是首帧**无滤镜**(引用不到),且因为两边各自「自测通过」,
+ * 这种漂移极难被发现。ADR-063 为此明文禁止另写公式。
  *
- * 故本模块**只做字符串拼装**,滤镜值一律取自
- * `filterCssValue(mode, intensity)`(它内部复用 `toColorMatrix`,
- * 见 `src/domain/filter-css.ts`)。
- *
- * ───────────────────────────────────────────────────────────────────────────
- * ## 🔴 选择器是**裸 `html`**,**绝不可**加属性门控 —— 实测血的教训
- * ───────────────────────────────────────────────────────────────────────────
- *
- * ADR-063 的原文就是 `html { filter: ... !important; }`,无条件生效。
- * **这不是示意,是规格。**
- *
- * 本轮曾一度把选择器写成 `html[data-ccf-on]`(门控属性由 JS 路径设置),
- * 理由听起来很有道理:主开关 OFF 时不上色、被超集多匹配进来的站点不误伤。
- * **真实 Chrome 实测当场推翻了它** —— 逐帧录屏显示 coldCache 场景
- * 3/3 站点仍有未滤镜的彩色帧。探针进一步定位到属性设上的时刻:
- *
- * ```
- * raf1               attr=false  computed=none          ← 首帧:CSS 到场但不选中任何元素
- * ready:interactive  attr=false  computed=none
- * ready:complete     attr=true   computed=grayscale(1)  ← JS 终于设上属性,太晚了
- * ```
- *
- * **门控属性把 JS 重新放回了页面加载的关键路径上** —— 而 ADR-062 的全部
- * 收益恰恰是「页面加载路径上**不再有任何查询**」。加了门控,预生成 CSS
- * 就退化成一张「等 JS 发话」的样式表,与旧架构的缺陷**一模一样**:
- * 闪烁的位置、原因都没变。
- *
- * ## 那两个「理由」各自的正确解法(都不需要门控)
- *
- * 1. **INV-8 / ADR-027(主开关 OFF 不上色)** —— 解法是**根本不注册**。
- *    `desiredRegistrations()` 在 `masterEnabled === false` 时返回空集,
- *    `reconcile()` 据此 unregister 全部。磁盘上没有注册 → 浏览器无从注入 →
- *    首帧自然不上色。真实 Chrome 已实测确认(主开关 OFF 时
- *    `getRegisteredContentScripts()` 返回 `[]`)。
- *    **用「注册与否」表达开关,而不是用「样式表选不选中」表达。**
- *
- * 2. **超集多匹配的误伤** —— 解法是**把放宽限定为有界**,而不是加门控。
- *
- *    🔴 **本轮更正了这里原先的论证。** 原注释说多匹配只是
- *    「INV-1 的一个极窄切面」,因此拿 INV-3 换它是亏本交易。
- *    **对有界放宽而言这是对的,对无界兜底而言是错的** ——
- *    `match-pattern.ts` 当时会把表达不出来的 glob(如 ADR-006 的旗舰例子
- *    `*.baidu.*`)兜底成 `*://* / *`,与本文件的裸 `html` 组合起来,
- *    一条规则就会给**整个互联网**的首帧上色。那不是「极窄切面」,
- *    而是对 DESIGN.md §1 匹配语义第 4 条(「无规则命中 → 不套滤镜」)
- *    的无界违反。
- *
- *    正确解法已在 `match-pattern.ts` 落地:放宽**必须有界**
- *    (多匹配集合限于同一注册域的其他子域);无界时返回 `inexpressible`
- *    → **不注册**,该 glob 由 JS 路径 + ADR-060 快路径承接首帧。
- *    `reconcile.ts` 的 `assertNoUnintendedAllUrls()` 把这条钉死。
- *
- *    门控仍然不是解法:它会牺牲**全部**站点的首帧保证(实测证明
- *    ADR-062 收益当场归零),而有界放宽的代价只是同域子域的短暂上色。
- *    且 ADR-018 把零闪烁定为**硬性不变式**,不可被这样折价。
- *    有界多匹配的兜底在 JS 路径:见下。
+ * 故本模块**只做字符串拼装**,滤镜值一律取自 `filterCssValue(mode, intensity)`
+ * (它内部经 `svgFilterId` 构造 id),文件名短名取自同一个
+ * `FILTER_MODE_SLUGS`(ADR-069 后它住在领域层,因为它同时决定
+ * CSS 的 `url("#id")` 与 SVG 的 `<filter id>`)。
  *
  * ───────────────────────────────────────────────────────────────────────────
- * ## 为什么文件里写死 filter 值,而不是 `var(--ccf-filter)`
+ * ## INV-8 / ADR-027(主开关 OFF 不上色)仍由「注册与否」表达
  * ───────────────────────────────────────────────────────────────────────────
  *
- * `src/injection/filter.css`(JS 路径用的静态样式表)用的是
- * `filter: var(--ccf-filter)`,变量由 JS 赋值。那是因为那张表是**一张**表,
- * 要服务所有 `(mode,intensity)` 组合。
+ * 不是靠选择器。`desiredRegistrations()` 在 `masterEnabled === false` 时
+ * 返回空集,`reconcile()` 据此 unregister 全部。磁盘上没有注册 →
+ * 浏览器无从注入 → 首帧自然不上色。真实 Chrome 已实测确认
+ * (主开关 OFF 时 `getRegisteredContentScripts()` 返回 `[]`)。
  *
- * 预生成文件正相反:它**每个组合一个**,值在构建时就确定了。写死才能
- * 做到「首帧前完全不依赖 JS」—— 若写 `var(--ccf-filter)`,首帧时变量
- * 尚未被 JS 赋值,`filter` 解析为无效值,**等于没有滤镜**。
- * 这与上面的属性门控是同一个错误的两种写法。
+ * **超集多匹配的误伤**同样不靠选择器:放宽**必须有界**(多匹配集合限于
+ * 同一注册域的其他子域),无界时返回 `inexpressible` → **不注册**,
+ * 该 glob 由 JS 路径 + ADR-060 快路径承接首帧。见 `match-pattern.ts` 与
+ * `reconcile.ts` 的 `assertNoUnintendedAllUrls()`。
  *
- * ## 两条路径如何共存(谁在什么时候赢)
- *
- * 两张表的主规则特异度不同:预生成文件是 `html`(0,0,1),
- * `filter.css` 是 `html[data-ccf-on]`(0,1,1)—— **后者更高**。于是:
- *
- * - **首帧**:只有预生成文件生效(JS 尚未设属性)→ 滤镜已就位(INV-3);
- * - **JS 跑完后**:`html[data-ccf-on]` 特异度更高而胜出,承接实时更新
- *   (改强度、关主开关、规则变更)。两者的值由同一个 `filterCssValue`
- *   算出,所以交接时**像素不跳变**。
- * - **JS 判定本站不该上色**(超集多匹配 / 主开关刚被关):预生成文件仍在
- *   生效,故必须有一条**更高特异度**的规则把它压回去 ——
- *   见 `filter.css` 的 `html:not([data-ccf-on])` 规则(ADR-062 下新增)。
- *
+ * 📌 ADR-069 之后还多了一层天然保护:即便某页被多匹配进来拿到了 CSS 文件,
+ *    JS 不加 `ccf-on` class,规则就不匹配 —— **误伤的窗口关闭了**。
+ *    (但这不改变「放宽必须有界」的要求:那条约束防的是无界注册本身。)
  *
  * 纯 TypeScript:零 `chrome.*`、零 React、零 wxt、零 `node:fs` ——
  * 本模块只产出字符串,**写文件是构建脚本的事**(`scripts/generate-filter-css.mjs`)。
@@ -120,6 +120,7 @@ import {
   type FilterMode,
   type Intensity,
   FILTER_MODES,
+  FILTER_MODE_SLUGS,
   INTENSITY_MAX,
   INTENSITY_MIN,
   filterCssValue,
@@ -135,27 +136,21 @@ import {
  * 🔴 **不进 `web_accessible_resources`**(ADR-063 明文):
  * 这些文件由浏览器自己读取并注入,不经页面 `fetch`。
  * 放进去反而给站点一个探测扩展存在与用户滤镜偏好的接口 —— 增加指纹暴露面。
+ *
+ * 📌 ADR-069 选择同文档 SVG 而非 `chrome-extension://` + `web_accessible_resources`
+ *    的理由与此同源:后者同样会带来指纹暴露。
  */
 export const FILTER_CSS_DIR = 'filters';
 
 /**
  * 滤镜文件名中代表模式的短名。
  *
- * 为什么不直接用 `FilterMode` 的字面量(`Grayscale`/`RedGreen`/…):
- * 文件名进了注册记录、也进了扩展包清单,**全小写、无大小写歧义**的短名
- * 在跨平台(macOS 默认大小写不敏感、Linux 敏感)时更安全 ——
- * 一个大小写不一致的路径在 macOS 上能跑、在 Linux 上注册即失败,
- * 而注册失败的表现是「滤镜静默不生效」,排障成本极高。
- *
- * 📌 短名取 DESIGN.md §6 T4a 示例中的 `gray-100.css` 为准,其余三个
- * 按同一构词法(模式名小写、去驼峰分隔)。
+ * 🔴 **ADR-069 之后本常量的真相源在领域层**(`src/domain/filter-css.ts`):
+ *    它同时决定 SVG 的 `<filter id>` 与 CSS 的 `url("#id")`,两边必须逐字
+ *    相同,故不能有第二份。这里**重新导出**,使既有 import 路径继续可用
+ *    (向后兼容),但**不是**独立定义。
  */
-export const FILTER_MODE_SLUGS: Readonly<Record<FilterMode, string>> = {
-  Grayscale: 'gray',
-  RedGreen: 'redgreen',
-  GreenRed: 'greenred',
-  BlueYellow: 'blueyellow',
-};
+export { FILTER_MODE_SLUGS };
 
 /** 短名 → 模式的反查(诊断与测试用,避免手写第二份映射)。 */
 export const FILTER_SLUG_TO_MODE: Readonly<Record<string, FilterMode>> =
@@ -181,10 +176,12 @@ export function filterCssFilePath(
  *
  * 结构与 `src/injection/filter.css` 的两条规则一一对应,原因相同:
  *
- * - **主规则**作用在根元素 `<html>`。🔴 **不得改成 `body`** ——
- *   根元素的 filter 有 CSS Filter Effects 的特例,**不为 `position:fixed`
- *   后代建立 containing block**(T0 实测 dx=0/dy=0);换成 `body` 则
- *   fixed header 跑到 y=-1000(T0 §4.3)。这是 INV-1 最脆弱的点。
+ * - **主规则**作用在根元素 `<html>`,门控为 `.ccf-on`(ADR-069)。
+ *   🔴 **不得改成 `body`** —— 根元素的 filter 有 CSS Filter Effects 的特例,
+ *   **不为 `position:fixed` 后代建立 containing block**(T0 实测 dx=0/dy=0);
+ *   换成 `body` 则 fixed header 跑到 y=-1000(T0 §4.3)。这是 INV-1 最脆弱的点。
+ *   🔴 **也不得去掉 `.ccf-on`** —— 裸 `html` 会让 CSS 在 SVG 节点就位之前
+ *   就去解析 `url("#ccf-…")`,把 ADR-069 精心消除的前向引用不确定性放回来。
  * - **top layer 补偿**不是可选项(T0 §4.5):`<dialog showModal()>`、
  *   `[popover]`、`:fullscreen`、`::backdrop` 在绘制树中**不是根元素的后代**,
  *   根 filter 到不了它们。T0 实测缺此规则时 modal 全彩(maxChannelSpread=238)。
@@ -199,16 +196,16 @@ export function filterCssFileContent(
   intensity: Intensity,
 ): string {
   const value = filterCssValue(mode, intensity);
-  // 🔴 裸 `html`,**无任何属性门控** —— 见文件头「选择器是裸 html」一节。
-  //    加门控会把 JS 重新放回页面加载的关键路径,ADR-062 的收益当场归零
-  //    (真实 Chrome 逐帧实测确认:attr 要到 readyState=complete 才设上)。
+  // 🔴 `html.ccf-on` —— class 门控是 ADR-069 的规格,不是样式糖。
+  //    去掉它会让浏览器在 SVG 就位前解析 url("#..."),
+  //    恢复那个本已被消除的不确定性。
   return (
-    `/* 预生成滤镜 ${mode} @ ${intensity}%(ADR-062/063)。由 scripts/generate-filter-css.mjs 生成,勿手改。 */\n` +
-    `html { filter: ${value} !important; }\n` +
-    `html :modal,\n` +
-    `html [popover]:popover-open,\n` +
-    `html :fullscreen,\n` +
-    `html ::backdrop { filter: ${value} !important; }\n`
+    `/* 预生成滤镜 ${mode} @ ${intensity}%(ADR-062/063/069/070)。由 scripts/generate-filter-css.mjs 生成,勿手改。 */\n` +
+    `html.ccf-on { filter: ${value} !important; }\n` +
+    `html.ccf-on :modal,\n` +
+    `html.ccf-on [popover]:popover-open,\n` +
+    `html.ccf-on :fullscreen,\n` +
+    `html.ccf-on ::backdrop { filter: ${value} !important; }\n`
   );
 }
 

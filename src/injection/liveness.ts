@@ -2,29 +2,38 @@
  * 存活性(**INV-5 / ADR-017**)—— 站点脚本移除注入物后自动恢复。
  *
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * ## 新架构(ADR-062)下「注入物」到底是什么 —— 这决定了要守什么
+ * ## 新架构(ADR-062 / **ADR-069**)下「注入物」到底是什么 —— 这决定了要守什么
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
  * T4a 之后首帧样式来自**声明式注册的预生成 CSS 文件**(ADR-062/063),
- * 不再是 JS 插的 `<style>` 节点。于是注入物只剩下 `documentElement` 上的
- * 三样东西(见 `apply-filter.ts`):
+ * 不再是 JS 插的 `<style>` 节点。ADR-069 之后注入物是 `documentElement` 上的
+ * 三样东西(见 `apply-filter.ts` 与 `svg-filter-def.ts`):
  *
- * - `data-ccf-on`   属性 —— 门控「上色」
- * - `data-ccf-off`  属性 —— 门控「明确不上色」(压制预生成 CSS)
- * - `--ccf-filter`  CSS 自定义属性 —— 承载 filter 值
+ * - `ccf-on`       **class** —— 开闸(ADR-069 的唯一开关)
+ * - `--ccf-filter` CSS 自定义属性 —— 承载 filter 值
+ * - `<svg id="ccf-svg-defs">` 子节点 —— 被 `url("#ccf-…")` 引用的滤镜定义
  *
- * 站点脚本能做的破坏因此也只有这三种(外加「给 html 塞自己的 filter」,
+ * 站点脚本能做的破坏因此有这三种(外加「给 html 塞自己的 filter」,
  * 那一项由 `filter.css` 的 `!important` 对抗,见该文件头注释)。
+ *
+ * 📌 **ADR-069 去掉了一个状态**:旧实现还有个 `data-ccf-off` 压制属性,
+ *    站点只要塞上它就能关掉滤镜(因为预生成 CSS 用裸 `html` 无条件生效,
+ *    必须靠压制规则撤除)。现在「没有 class」就是「不上色」,
+ *    **没有第二个可被塞上的状态** —— 这一类破坏手段随之消失。
  *
  * 🔴 **注意恢复路径仍然是 JS**,哪怕首帧由 CSS 文件负责:
  * 浏览器注入的样式表本身站点脚本碰不到(它不在页面的 `document.styleSheets`
- * 可写范围内),但**属性**是页面 DOM 的一部分,`removeAttribute` 一行就能摘掉。
- * 摘掉 `data-ccf-on` 后:
- * - 已注册 CSS 文件的站点 → 裸 `html` 规则仍在,滤镜**不会**消失;
- * - 但 `--ccf-filter` 被摘掉 → `filter: var(--ccf-filter)` 失效;
- * - 且 `data-ccf-off` 被**塞上** → 压制规则命中,滤镜被撤。
+ * 可写范围内),但 class、内联样式与子节点都是页面 DOM 的一部分,
+ * `classList.remove('ccf-on')` 一行就能关掉滤镜。三种破坏:
  *
- * 三种破坏都必须能恢复,而恢复只能靠 JS 重新写回属性 —— 这就是本模块。
+ * - 摘掉 `ccf-on` class → 两张表一并失效,滤镜消失;
+ * - 摘掉 `--ccf-filter` → `filter: var(--ccf-filter)` 失效
+ *   (预生成文件写死了值,故**已注册**的站点仍有滤镜 —— 但 JS 路径的那张表失效);
+ * - 摘掉 `<svg>` 容器 → `url("#ccf-…")` 引用不到,**静默**变回无滤镜
+ *   (这正是本轮 CSP 缺陷的同形失败,故必须守)。
+ *
+ * 三种都必须能恢复,而恢复只能靠 JS 重新写回 —— 这就是本模块。
+ * 恢复走 `syncFilter`,它内部按 ADR-069 的顺序重建:**SVG 先就位、再加 class**。
  *
  * ───────────────────────────────────────────────────────────────────────────
  * ## observer 开销可控(DESIGN.md §6 T4b 逐字要求)
@@ -38,10 +47,23 @@
  * 2. **不观察 childList / characterData。** 只 `attributes: true`。
  *    `characterData` 等同于观察页面**文本内容**,那是 INV-9/ADR-026
  *    的红线;本模块连看的能力都不要。
- * 3. **属性过滤。** `attributeFilter` 只列我们自己的三个名字
- *    (`data-ccf-on`/`data-ccf-off`/`style`)。站点改 `class`、`lang`、
- *    `dir` 一概不触发回调 —— 真实站点上 `<html class>` 的改动极频繁
- *    (暗色模式、滚动锁、各类框架标记)。
+ * 3. **属性过滤。** `attributeFilter` 只列 `class` 与 `style` 这两个
+ *    承载注入物的名字。站点改 `lang`、`dir`、`data-*` 一概不触发回调。
+ *
+ *    ⚠️ **ADR-069 在这里付了一笔真实的代价,必须说清楚:** 旧实现过滤的是
+ *    `data-ccf-on`/`data-ccf-off`/`style`,**故意把 `class` 排除在外**,
+ *    理由正是「真实站点上 `<html class>` 的改动极频繁(暗色模式、滚动锁、
+ *    各类框架标记)」。现在开关本身就是一个 class,**不观察 `class` 就等于
+ *    不守护**,所以只能把它加进来 —— 回调频率因此上升。
+ *
+ *    这笔代价是**有界**的,靠下面第 4 条与速率上限兜住:站点改 `<html class>`
+ *    时回调会触发,但 `isInDesiredState` 判定「状态已对」后**立即返回,
+ *    零 DOM 写入**(站点加自己的 class 不影响我们的 `ccf-on` 是否在位)。
+ *    即单次回调是 O(1) 的几次读取,不产生写入、不产生连锁。
+ *    真正的热路径风险(站点与我们互相覆写)由速率上限封顶。
+ *
+ *    📌 `attributeOldValue` 等选项一概不开:我们不需要知道站点**改成了什么**,
+ *       只需要知道「该不该重新写回」,后者由 `desired()` + 当前状态决定。
  * 4. **幂等 + 零写入短路。** 恢复走 `syncFilter`,它在已处于期望状态时
  *    **不做任何 DOM 写入**。这关掉了「我们写 → observer 回调 → 又写」的
  *    自激循环:回调里调 `syncFilter`,若状态已对则不写,循环自然终止。
@@ -64,21 +86,33 @@
  * (INV-1 的精神:扩展不得让页面变卡)。放弃是可观测的,见 `LivenessHandle.stats`。
  */
 
-import { type FilterTarget, syncFilter } from './apply-filter.js';
-import { FILTER_ATTR, SUPPRESS_ATTR } from './apply-filter.js';
+import {
+  type FilterTarget,
+  FILTER_VAR,
+  isFilterApplied,
+  syncFilter,
+} from './apply-filter.js';
+import { hasSvgFilterDefs } from './svg-filter-def.js';
 
 /**
  * 被观察的属性白名单。
  *
- * `style` 在列是因为 `--ccf-filter` 是**内联自定义属性**,站点若
- * `el.style.removeProperty('--ccf-filter')` 或整体 `removeAttribute('style')`,
- * 反映到 MutationObserver 上就是 `attributeName === 'style'`。
+ * - `class` 承载 ADR-069 的开闸 `ccf-on`。站点 `classList.remove('ccf-on')`
+ *   或整体改写 `className` 都反映为 `attributeName === 'class'`。
+ *   (加入它的代价与为何有界,见头注释第 3 条。)
+ * - `style` 在列是因为 `--ccf-filter` 是**内联自定义属性**,站点若
+ *   `el.style.removeProperty('--ccf-filter')` 或整体 `removeAttribute('style')`,
+ *   反映到 MutationObserver 上就是 `attributeName === 'style'`。
+ *
+ * 📌 **`<svg>` 容器被摘掉这一种破坏不在属性白名单里** —— 它是 childList
+ *    变化,而本模块**绝不**观察 childList(头注释第 2 条:那是 INV-9/ADR-026
+ *    的红线,且 SPA 下是热路径)。恢复仍然成立,只是**时机**不同:
+ *    任何一次因 class/style 变化而触发的回调都会经 `isInDesiredState`
+ *    连带检查容器是否还在,缺了就重建。这是有意的取舍 ——
+ *    为「站点单独摘掉一个隐藏 SVG 却不碰 class/style」这种未观测到的
+ *    行为去开 childList,代价(全站点的子树回调)远大于收益。
  */
-export const OBSERVED_ATTRIBUTES: readonly string[] = [
-  FILTER_ATTR,
-  SUPPRESS_ATTR,
-  'style',
-];
+export const OBSERVED_ATTRIBUTES: readonly string[] = ['class', 'style'];
 
 /**
  * MutationObserver 的最小可注入抽象 —— 只要本模块真正用到的那几项。
@@ -235,17 +269,24 @@ export function startLiveness(options: LivenessOptions): LivenessHandle {
  */
 function isInDesiredState(target: FilterTarget, want: string | null): boolean {
   if (want === null) {
-    // 「不该上色」的达标条件:没有 `data-ccf-on`,且**有** `data-ccf-off`
-    // (压制属性必须在位,否则预生成的裸 `html` CSS 仍在生效 ——
-    //  见 apply-filter.ts 对 SUPPRESS_ATTR 的长注释)。
+    // 🔴 ADR-069:「不该上色」的达标条件就是**没有 `ccf-on` class** ——
+    //    两张表(预生成文件与 filter.css)的选择器都是 `html.ccf-on`,
+    //    class 不在就一并失效。旧实现还要求压制属性在位,那条复杂性
+    //    随裸 `html` 选择器一起消失了。
+    //    顺带要求变量与容器也已清掉,与 `syncFilter(null)` 的条件严格对偶。
     return (
-      !target.hasAttribute(FILTER_ATTR) && target.hasAttribute(SUPPRESS_ATTR)
+      !isFilterApplied(target) &&
+      target.style.getPropertyValue(FILTER_VAR) === '' &&
+      !hasSvgFilterDefs(target)
     );
   }
+  // 上色态的达标条件:class 在位、值正确、**且被引用的 SVG 定义还在**。
+  // 第三项不可省:容器被摘掉时 `url("#ccf-…")` 引用不到,页面静默变回
+  // 无滤镜 —— 与本轮 CSP 缺陷同形的失败,必须能恢复。
   return (
-    target.hasAttribute(FILTER_ATTR) &&
-    !target.hasAttribute(SUPPRESS_ATTR) &&
-    target.style.getPropertyValue('--ccf-filter') === want
+    isFilterApplied(target) &&
+    target.style.getPropertyValue(FILTER_VAR) === want &&
+    hasSvgFilterDefs(target)
   );
 }
 

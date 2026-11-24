@@ -1,6 +1,6 @@
-/* 预生成滤镜 Grayscale @ 85%(ADR-062/063)。由 scripts/generate-filter-css.mjs 生成,勿手改。 */
-html { filter: grayscale(0.85) !important; }
-html :modal,
-html [popover]:popover-open,
-html :fullscreen,
-html ::backdrop { filter: grayscale(0.85) !important; }
+/* 预生成滤镜 Grayscale @ 85%(ADR-062/063/069/070)。由 scripts/generate-filter-css.mjs 生成,勿手改。 */
+html.ccf-on { filter: url("#ccf-gray-85") !important; }
+html.ccf-on :modal,
+html.ccf-on [popover]:popover-open,
+html.ccf-on :fullscreen,
+html.ccf-on ::backdrop { filter: url("#ccf-gray-85") !important; }

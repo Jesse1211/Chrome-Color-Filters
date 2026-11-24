@@ -12,6 +12,10 @@
  *
  * 删掉这行 import,INV-3 立即失效(样式表不再进 manifest)。
  * 同理**绝不可**设 `cssInjectionMode: "ui"`(线索明文警告)。
+ *
+ * 📌 **ADR-069 不改变这条机制**(零闪烁架构不动):CSS 文件照旧由 Chrome
+ *    在首帧前注入,只是选择器多了个 `.ccf-on` class 门控,滤镜值从
+ *    `data:` URI 换成同文档 `url("#ccf-…")` 引用。
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
 import '../src/injection/filter.css';
@@ -43,6 +47,12 @@ export default defineContentScript({
     const repo = new SettingsRepository();
 
     const { settled } = runInjector({
+      // 🔴 ADR-069:`documentElement` 同时是**滤镜宿主**与**SVG 挂载点**。
+      //    `document_start` 时它已存在(`<head>`/`<body>` 尚无),所以
+      //    「插 SVG → 加 ccf-on class」两步可以直接挂 html 完成,
+      //    全程同步、不等 DOM(见 src/injection/svg-filter-def.ts)。
+      //    两者必须是同一个元素 —— `FilterTarget` 因此把 `SvgDefsHost`
+      //    并了进来,而不是另开一个参数让它们有机会不一致。
       target: document.documentElement,
       // 🔴 ADR-060:宿主 origin 的 localStorage。这是 INV-3(零闪烁)
       // **唯一可行**的同步通道 —— MV3 没有任何同步的扩展存储 API,而

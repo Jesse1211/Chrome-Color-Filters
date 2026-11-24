@@ -21,7 +21,7 @@ import {
   attachPreviewPort,
   createRenderArbiter,
 } from '../../injection/preview-receiver.js';
-import { type FilterTarget } from '../../injection/apply-filter.js';
+import { makeFilterTarget } from '../../injection/__tests__/filter-target-double.js';
 import {
   type PreviewSenderPort,
   chromePreviewConnect,
@@ -190,20 +190,11 @@ describe('🔴 ADR-049 · 不碰 chrome.tabs.query(发送端的依赖面)', () =
 describe('🔴 发送端 ⇄ 接收端(T4b)的端到端契约', () => {
   /** 把发送端的消息直接喂给 T4b 的接收端,验证契约真的对得上。 */
   function wired() {
-    // 与 `src/injection/__tests__/preview.test.ts` 的 `makeTarget` 同形 ——
-    // 复用接收端自己的那套替身形状,避免两边对 `FilterTarget` 理解漂移。
-    const attrs = new Map<string, string>();
-    const props = new Map<string, string>();
-    const target: FilterTarget = {
-      setAttribute: (n, v) => void attrs.set(n, v),
-      removeAttribute: (n) => void attrs.delete(n),
-      hasAttribute: (n) => attrs.has(n),
-      style: {
-        setProperty: (n, v) => void props.set(n, v),
-        removeProperty: (n) => void props.delete(n),
-        getPropertyValue: (n) => props.get(n) ?? '',
-      },
-    };
+    // 🔴 **直接复用**接收端那套替身(`filter-target-double.ts`),
+    //    而不是在这里再手搓一份 —— 两边对 `FilterTarget` 的理解一旦漂移,
+    //    这条「端到端契约」就会在一个与生产不同的形状上通过。
+    //    ADR-069 之后 `FilterTarget` 还兼任 SVG 挂载点,手搓更容易搓错。
+    const target = makeFilterTarget();
 
     const arbiter = createRenderArbiter(target, null);
 

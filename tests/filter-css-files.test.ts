@@ -32,9 +32,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   FILTER_MODES,
-  type FilterMode,
   filterCssValue,
-  toColorMatrix,
+  svgFilterId,
 } from '../src/domain/index.js';
 import {
   ALL_INTENSITIES,
@@ -125,51 +124,59 @@ describe('🔴 ADR-063 · 404 个文件全部与 toColorMatrix 逐位一致(防�
     );
   });
 
-  it('🔴 非 Grayscale 模式的矩阵系数来自 toColorMatrix(不是另写的公式)', () => {
-    // Grayscale 走 CSS 原生 grayscale(),无矩阵;其余三种内联 feColorMatrix。
-    for (const mode of ['RedGreen', 'GreenRed', 'BlueYellow'] as FilterMode[]) {
+  it('🔴 ADR-069/070 · 文件里是**同文档 fragment 引用**,矩阵系数不在 CSS 里', () => {
+    // 🔴 本条取代了旧的「文件里含 toColorMatrix 的系数」断言。
+    //    ADR-069 之后系数**不再出现在 CSS 里** —— 它们在 content script
+    //    同步注入的 <filter> 节点上(见 src/injection/svg-filter-def.ts)。
+    //    CSS 只留一个引用。防漂移因此改由两件事共同保证:
+    //    (a) 文件内容逐位等于 filterCssFileContent(上面那条全查断言);
+    //    (b) id 与 SVG 侧同源于 svgFilterId(见下面一条 + svg-filter-def 的单测)。
+    for (const mode of FILTER_MODES) {
       for (const intensity of [0, 1, 37, 50, 99, 100]) {
         const name = `${FILTER_MODE_SLUGS[mode]}-${intensity}.css`;
         const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
-        const matrix = toColorMatrix(mode, intensity);
-        // 取矩阵的第一个非平凡系数,确认它确实出现在文件里。
-        // 这是「公式同源」的独立证据 —— 不经 filterCssValue 这一层。
-        const coefficients = Object.values(matrix).filter(
-          (v): v is number => typeof v === 'number',
-        );
-        expect(coefficients.length).toBeGreaterThan(0);
-        // 文件里的系数是 URL 转义过的,空格 → %20;取一个确定存在的数字串。
-        const sample = coefficients
-          .map((c) => formatLikeDomain(c))
-          .find((s) => s !== '0' && s !== '1');
-        if (sample !== undefined) {
-          expect(
-            text,
-            `${name} 不含 toColorMatrix 的系数 ${sample}`,
-          ).toContain(sample);
-        }
+        expect(text).toContain(`url("#${svgFilterId(mode, intensity)}")`);
+        // 系数不该泄进 CSS —— 那会变成第二份真相。
+        expect(text).not.toContain('feColorMatrix');
       }
     }
   });
 
-  it('Grayscale 用 CSS 原生 grayscale()(W3C 定义即 BT.709 插值,与矩阵等价)', () => {
+  it('🔴 ADR-069 · 404 个文件里**没有一个** data: URI(本轮缺陷本体)', () => {
+    // `data:` URI 的 SVG 被归类为图片资源,受站点 CSP 的 img-src 管辖;
+    // 不放行 data: 的站点上三个色觉矫正滤镜**静默失效**(T7 实测,
+    // 真实 Chrome 捕获 {directive:'img-src', blockedURI:'data'})。
+    // 这条断言是那次红灯的闭合条件之一,防止 data: 方案被「还原」。
+    const offenders: string[] = [];
+    for (const name of readdirSync(FILTERS_DIR)) {
+      const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
+      if (text.includes('data:')) offenders.push(name);
+    }
+    expect(
+      offenders,
+      'data: URI 会被站点 CSP 的 img-src 拦掉 → 滤镜静默失效',
+    ).toEqual([]);
+  });
+
+  it('🔴 ADR-070 · 灰阶也走 SVG,404 个文件里不出现内置 grayscale( 调用', () => {
+    // 灰阶本身就是一个颜色矩阵,用内置函数只是巧合可行。两条路径各自演化
+    // 会一直有「只在某条路上出现的 bug」—— 本次 CSP 缺陷恰好只打中 SVG 路径
+    // 而灰阶无恙,正是这种分裂的代价。
+    const offenders: string[] = [];
+    for (const name of readdirSync(FILTERS_DIR)) {
+      const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
+      if (text.includes('grayscale(')) offenders.push(name);
+    }
+    expect(offenders, 'ADR-070 要求四个滤镜路径统一').toEqual([]);
+    // 正面断言:灰阶文件引用的是 SVG filter id。
     expect(readFileSync(resolve(FILTERS_DIR, 'gray-100.css'), 'utf8')).toContain(
-      'grayscale(1)',
-    );
-    expect(readFileSync(resolve(FILTERS_DIR, 'gray-0.css'), 'utf8')).toContain(
-      'grayscale(0)',
+      'url("#ccf-gray-100")',
     );
   });
 });
 
-/** 复刻 `colorMatrixToValues` 的格式化,仅用于上面那条独立证据。 */
-function formatLikeDomain(value: number): string {
-  if (Number.isInteger(value)) return String(value);
-  return value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
-}
-
-describe('🔴 ADR-062/063 / INV-1 · 文件内的选择器是裸 html,注入目标是根元素', () => {
-  it('🔴 主规则选择器**精确**为裸 `html`(不是 body,也**不带属性门控**)', () => {
+describe('🔴 ADR-063/069 / INV-1 · 文件内的选择器是 `html.ccf-on`,注入目标是根元素', () => {
+  it('🔴 主规则选择器**精确**为 `html.ccf-on`(不是 body,也不是裸 html)', () => {
     const text = readFileSync(resolve(FILTERS_DIR, 'gray-100.css'), 'utf8');
     const mainRule = text
       .split('\n')
@@ -177,9 +184,9 @@ describe('🔴 ADR-062/063 / INV-1 · 文件内的选择器是裸 html,注入目
     expect(mainRule).toBeDefined();
     // 精确匹配,不用子串 —— 上一轮正是子串断言放过了 body[...] 的变异。
     expect(
-      (mainRule as string).slice(0, 'html {'.length),
-      '主规则不是以裸 `html {` 开头',
-    ).toBe('html {');
+      (mainRule as string).slice(0, 'html.ccf-on {'.length),
+      '主规则不是以 `html.ccf-on {` 开头',
+    ).toBe('html.ccf-on {');
   });
 
   it('🔴 404 个文件中**没有一个**用 body 作注入目标', () => {
@@ -189,25 +196,43 @@ describe('🔴 ADR-062/063 / INV-1 · 文件内的选择器是裸 html,注入目
     const offenders: string[] = [];
     for (const name of readdirSync(FILTERS_DIR)) {
       const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
-      if (text.includes('body[data-ccf-on]')) offenders.push(name);
-      if (text.includes('body {')) offenders.push(`${name}(body 主规则)`);
+      if (/(^|[\s>+~,])body\b/m.test(text.replace(/\/\*[\s\S]*?\*\//g, ''))) {
+        offenders.push(name);
+      }
     }
     expect(offenders).toEqual([]);
   });
 
-  it('🔴 404 个文件中**没有一个**带 [data-ccf-on] 门控(ADR-062 的要害)', () => {
-    // 门控会把 JS 重新放回页面加载的关键路径 —— 真实 Chrome 实测:
-    // 属性要到 readyState=complete 才设上,首帧 computed filter 为 none,
-    // coldCache 3/3 站点出现未滤镜彩色帧。这是本轮亲手踩过并修掉的缺陷,
-    // 断言留在这里防止它被「优化」回来。
+  it('🔴 404 个文件**全部**带 `.ccf-on` class 门控(ADR-069 的要害)', () => {
+    // 🔴 这条与上一轮的要求**方向相反**,原因必须记清:
+    //
+    //    ADR-062 时代要求裸 `html`(无门控),因为当时的门控是 `data-ccf-on`
+    //    **属性**,而属性要等**异步** storage 读完才设上 —— 真实 Chrome 实测
+    //    属性要到 readyState=complete 才到位,coldCache 3/3 站点首帧彩色。
+    //
+    //    ADR-069 的门控是 class,它与 SVG 注入同处 document_start 的
+    //    **同一个同步段**,不等任何异步结果(实测同步 fragment 路径 0 次闪烁)。
+    //    而 class 门控是**必需**的:裸 `html` 会让浏览器在 SVG 节点就位之前
+    //    就去解析 `url("#ccf-…")`,把 ADR-069 精心消除的前向引用不确定性放回来。
     const offenders: string[] = [];
     for (const name of readdirSync(FILTERS_DIR)) {
       const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
-      if (text.includes('[data-ccf-on]')) offenders.push(name);
+      const stripped = text.replace(/\/\*[\s\S]*?\*\//g, '');
+      // 每一条含 filter 的规则都必须由 html.ccf-on 门控。
+      for (const line of stripped.split('\n')) {
+        if (!line.includes('filter:')) continue;
+        if (!stripped.includes('html.ccf-on')) offenders.push(name);
+      }
+      if (/(^|\})\s*html\s*\{/.test(stripped)) {
+        offenders.push(`${name}(裸 html 主规则)`);
+      }
+      if (stripped.includes('[data-ccf-')) {
+        offenders.push(`${name}(属性门控)`);
+      }
     }
     expect(
       offenders,
-      '预生成 CSS 带了属性门控 —— 首帧将依赖 JS,INV-3 必然破裂',
+      '预生成 CSS 的门控必须是 `.ccf-on` class(ADR-069)',
     ).toEqual([]);
   });
 
@@ -247,6 +272,9 @@ describe('🔴 ADR-062/063 / INV-1 · 文件内的选择器是裸 html,注入目
   it('🔴 文件里写死 filter 值,**不用** var(--ccf-filter)', () => {
     // 首帧时 CSS 变量尚未被 JS 赋值,filter 会解析为无效值 ——
     // 等于没有滤镜,ADR-062 的全部收益当场归零。
+    // 📌 ADR-069 不改变这一点:class 由 JS 同步加上,但**值**仍必须是
+    //    构建时写死的 —— 变量赋值与 class 虽同处一个同步段,
+    //    让预生成文件依赖变量仍会在「JS 未运行」的极端情形下失效。
     for (const name of readdirSync(FILTERS_DIR)) {
       const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
       expect(text, `${name} 用了 CSS 变量,首帧必然无效`).not.toContain(

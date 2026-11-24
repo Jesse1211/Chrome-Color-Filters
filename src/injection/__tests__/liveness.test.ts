@@ -5,8 +5,8 @@
  * > observer 开销可控。
  *
  * 本文件把「自动恢复」与「开销可控」两半都做成**机械断言**:
- * - 恢复:三种破坏方式(摘 `data-ccf-on`、摘 `--ccf-filter`、塞 `data-ccf-off`)
- *   各自都能恢复;
+ * - 恢复:三种破坏方式(摘 `ccf-on` class、摘 `--ccf-filter`、摘掉被引用的
+ *   `<svg>` 容器)各自都能恢复 —— 三者是 ADR-069 之后注入物的全部构成;
  * - 开销:observe 选项逐项断言(不观察子树/childList/characterData、属性白名单),
  *   加上「站点不动时零恢复」与速率上限的放弃行为。
  *
@@ -15,39 +15,20 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
-  type FilterTarget,
   type MutationObserverLike,
   type MutationObserverLikeInit,
-  FILTER_ATTR,
+  FILTER_CLASS,
   FILTER_VAR,
   OBSERVED_ATTRIBUTES,
-  SUPPRESS_ATTR,
   applyFilter,
   currentFilterValue,
+  hasSvgFilterDefs,
   isFilterApplied,
-  isFilterSuppressed,
   startLiveness,
 } from '../index.js';
+import { makeFilterTarget } from './filter-target-double.js';
 
-function makeTarget(): FilterTarget & {
-  attrs: Map<string, string>;
-  props: Map<string, string>;
-} {
-  const attrs = new Map<string, string>();
-  const props = new Map<string, string>();
-  return {
-    attrs,
-    props,
-    setAttribute: (n, v) => void attrs.set(n, v),
-    removeAttribute: (n) => void attrs.delete(n),
-    hasAttribute: (n) => attrs.has(n),
-    style: {
-      setProperty: (n, v) => void props.set(n, v),
-      removeProperty: (n) => void props.delete(n),
-      getPropertyValue: (n) => props.get(n) ?? '',
-    },
-  };
-}
+const makeTarget = makeFilterTarget;
 
 /**
  * 可手动触发的假 observer —— 模拟「站点脚本改了属性 → 浏览器回调我们」。
@@ -80,12 +61,14 @@ function makeObserver(): {
   };
 }
 
-const GRAY = 'grayscale(1)';
+import { filterCssValue } from '../../domain/index.js';
+
+const GRAY = filterCssValue('Grayscale', 100);
 
 // ──────────────────── 恢复:三种破坏方式 ────────────────────
 
 describe('🔴 INV-5 / ADR-017 · 站点脚本移除注入物后自动恢复', () => {
-  it('站点摘掉 data-ccf-on → 恢复', () => {
+  it('站点摘掉 ccf-on class → 恢复(ADR-069 的开闸就是它)', () => {
     const target = makeTarget();
     applyFilter(target, GRAY);
     const obs = makeObserver();
@@ -97,8 +80,8 @@ describe('🔴 INV-5 / ADR-017 · 站点脚本移除注入物后自动恢复', (
     });
     expect(handle.started).toBe(true);
 
-    // 站点脚本:`document.documentElement.removeAttribute('data-ccf-on')`
-    target.removeAttribute(FILTER_ATTR);
+    // 站点脚本:`document.documentElement.classList.remove('ccf-on')`
+    target.classList.remove(FILTER_CLASS);
     expect(isFilterApplied(target)).toBe(false); // 破坏确已发生(探针有效)
 
     obs.fire();
@@ -130,10 +113,11 @@ describe('🔴 INV-5 / ADR-017 · 站点脚本移除注入物后自动恢复', (
     expect(handle.stats().restores).toBe(1);
   });
 
-  it('🔴 站点塞上 data-ccf-off(压制属性)→ 被摘掉,滤镜恢复', () => {
-    // 这一格是新架构(ADR-062)特有的破坏方式:压制属性在位时
-    // `html[data-ccf-off]` 会把预生成 CSS 压回 none —— 站点只要塞上这个属性
-    // 就能关掉滤镜,而它根本不用动 `data-ccf-on`。
+  it('🔴 站点摘掉被引用的 <svg> 容器 → 重建(ADR-069 特有的破坏方式)', () => {
+    // 这一格是 ADR-069 特有的:`url("#ccf-…")` 指向同文档节点,
+    // 站点只要把那个隐藏的 <svg> 摘掉,引用就失效 —— 页面**静默**变回
+    // 无滤镜(与本轮要修的 CSP 缺陷完全同形:无报错、像素等于关闭态)。
+    // 故必须能恢复。
     const target = makeTarget();
     applyFilter(target, GRAY);
     const obs = makeObserver();
@@ -144,12 +128,12 @@ describe('🔴 INV-5 / ADR-017 · 站点脚本移除注入物后自动恢复', (
       observerFactory: obs.factory,
     });
 
-    target.setAttribute(SUPPRESS_ATTR, '');
-    expect(isFilterSuppressed(target)).toBe(true);
+    target.svgContainer()!.remove();
+    expect(hasSvgFilterDefs(target)).toBe(false); // 破坏确已发生(探针有效)
 
     obs.fire();
 
-    expect(isFilterSuppressed(target)).toBe(false);
+    expect(hasSvgFilterDefs(target), 'SVG 定义未被重建 → url(#…) 仍引用不到').toBe(true);
     expect(isFilterApplied(target)).toBe(true);
     expect(handle.stats().restores).toBe(1);
   });
@@ -167,19 +151,19 @@ describe('🔴 INV-5 / ADR-017 · 站点脚本移除注入物后自动恢复', (
     expect(currentFilterValue(target)).toBe(GRAY);
   });
 
-  it('🔴 期望为「不上色」时,站点摘掉 data-ccf-off → 压制属性被补回', () => {
-    // 对偶格:不该上色的页面上,压制属性是**必需**的(预生成 CSS 用裸 html)。
-    // 站点摘掉它 = 让滤镜出现在一个不该上色的页面上。
+  it('🔴 期望为「不上色」时,站点**塞上** ccf-on class → 被摘掉', () => {
+    // 对偶格:不该上色的页面上,class 必须保持不在位。站点(或别的扩展)
+    // 塞上它 = 让滤镜出现在一个不该上色的页面上。
+    // 📌 ADR-069 之后这是唯一需要守的方向 —— 旧实现还要守「压制属性被摘掉」,
+    //    因为那时预生成 CSS 用裸 `html` 无条件生效、必须靠压制属性撤除。
     const target = makeTarget();
-    target.setAttribute(SUPPRESS_ATTR, '');
     const obs = makeObserver();
 
     startLiveness({ target, desired: () => null, observerFactory: obs.factory });
 
-    target.removeAttribute(SUPPRESS_ATTR);
+    target.classList.add(FILTER_CLASS);
     obs.fire();
 
-    expect(isFilterSuppressed(target)).toBe(true);
     expect(isFilterApplied(target)).toBe(false);
   });
 
@@ -192,11 +176,11 @@ describe('🔴 INV-5 / ADR-017 · 站点脚本移除注入物后自动恢复', (
     let want: string | null = GRAY;
     startLiveness({ target, desired: () => want, observerFactory: obs.factory });
 
-    want = 'grayscale(0.3)'; // 例如:用户正在拖动滑块(预览覆盖)
-    target.removeAttribute(FILTER_ATTR);
+    want = filterCssValue('Grayscale', 30); // 例如:用户正在拖动滑块(预览覆盖)
+    target.classList.remove(FILTER_CLASS);
     obs.fire();
 
-    expect(currentFilterValue(target)).toBe('grayscale(0.3)');
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 30));
   });
 });
 
@@ -220,27 +204,28 @@ describe('🔴 observer 开销可控(DESIGN.md §6 T4b 逐字要求)', () => {
     expect(options.characterData).toBe(false);
   });
 
-  it('🔴 属性白名单只含自家三项 —— 站点改 class/lang/dir 不触发回调', () => {
+  it('🔴 属性白名单只含 class 与 style —— 站点改 lang/dir/data-* 不触发回调', () => {
     const target = makeTarget();
     const obs = makeObserver();
     startLiveness({ target, desired: () => GRAY, observerFactory: obs.factory });
 
     const filter = obs.observed[0]!.options.attributeFilter;
     expect(filter).toBeDefined();
-    expect([...filter!].sort()).toEqual(
-      [FILTER_ATTR, SUPPRESS_ATTR, 'style'].sort(),
-    );
-    // 真实站点上 `<html class>` 改动极频繁(暗色模式、滚动锁、框架标记)。
-    expect(filter).not.toContain('class');
+    expect([...filter!].sort()).toEqual(['class', 'style'].sort());
+    // 🔴 `class` **必须**在列:ADR-069 的开闸就是一个 class,
+    //    不观察它等于不守护(旧实现故意排除 class,因为那时开关是 data-* 属性)。
+    expect(filter).toContain('class');
+    // 白名单之外的一概不观察 —— 它们不承载任何注入物。
     expect(filter).not.toContain('lang');
     expect(filter).not.toContain('dir');
   });
 
-  it('OBSERVED_ATTRIBUTES 与 apply-filter 的属性名保持同一真相', () => {
-    // 两边若漂移,存活性会守一个不存在的属性(静默失效)。
-    expect(OBSERVED_ATTRIBUTES).toContain(FILTER_ATTR);
-    expect(OBSERVED_ATTRIBUTES).toContain(SUPPRESS_ATTR);
-    expect(OBSERVED_ATTRIBUTES).toHaveLength(3);
+  it('OBSERVED_ATTRIBUTES 与 apply-filter 的注入物保持同一真相', () => {
+    // 两边若漂移,存活性会守一个不承载注入物的属性(静默失效)。
+    // `class` 承载 ccf-on,`style` 承载 --ccf-filter。
+    expect(OBSERVED_ATTRIBUTES).toContain('class');
+    expect(OBSERVED_ATTRIBUTES).toContain('style');
+    expect(OBSERVED_ATTRIBUTES).toHaveLength(2);
   });
 
   it('🔴 已处于期望状态时零恢复、零 DOM 写入(不自激)', () => {
@@ -253,17 +238,21 @@ describe('🔴 observer 开销可控(DESIGN.md §6 T4b 逐字要求)', () => {
       observerFactory: obs.factory,
     });
 
-    const setAttr = vi.spyOn(target, 'setAttribute');
+    const addClass = vi.spyOn(target.classList, 'add');
     const setProp = vi.spyOn(target.style, 'setProperty');
+    // 共享替身把 class/style/节点三类写入**一并**记进 writes ——
+    // 比单个 spy 更难漏(ADR-069 之后注入物有三样)。
+    target.writes.length = 0;
 
-    // 我们自己写属性也会触发回调 —— 若这里仍写入,就形成
+    // 我们自己切 class 也会触发回调 —— 若这里仍写入,就形成
     //「我们写 → 回调 → 又写」的自激循环。
     for (let i = 0; i < 20; i += 1) obs.fire();
 
     expect(handle.stats().callbacks).toBe(20);
     expect(handle.stats().restores).toBe(0);
-    expect(setAttr).not.toHaveBeenCalled();
+    expect(addClass).not.toHaveBeenCalled();
     expect(setProp).not.toHaveBeenCalled();
+    expect(target.writes, '任何一类 DOM 写入都意味着自激').toEqual([]);
   });
 
   it('🔴 速率超预算 → 停止恢复并断开 observer(页面可用性优先)', () => {
@@ -285,7 +274,7 @@ describe('🔴 observer 开销可控(DESIGN.md §6 T4b 逐字要求)', () => {
 
     // 模拟「站点脚本在自己的 observer 里反复摘掉我们的属性」。
     for (let i = 0; i < 10; i += 1) {
-      target.removeAttribute(FILTER_ATTR);
+      target.classList.remove(FILTER_CLASS);
       obs.fire();
     }
 
@@ -311,7 +300,7 @@ describe('🔴 observer 开销可控(DESIGN.md §6 T4b 逐字要求)', () => {
 
     for (let i = 0; i < 10; i += 1) {
       now = i * 1_000; // 每次都落在新窗口
-      target.removeAttribute(FILTER_ATTR);
+      target.classList.remove(FILTER_CLASS);
       obs.fire();
     }
 
@@ -334,7 +323,7 @@ describe('🔴 observer 开销可控(DESIGN.md §6 T4b 逐字要求)', () => {
     expect(obs.disconnects).toBe(1);
 
     // 停止后回调不再恢复。
-    target.removeAttribute(FILTER_ATTR);
+    target.classList.remove(FILTER_CLASS);
     obs.fire();
     expect(isFilterApplied(target)).toBe(false);
   });

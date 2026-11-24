@@ -9,33 +9,20 @@ import {
   resolveRule,
 } from '../../domain/index.js';
 import {
-  type FilterTarget,
   type SyncKeyValueStore,
-  SUPPRESS_ATTR,
   currentFilterValue,
   decide,
   isFilterApplied,
-  isFilterSuppressed,
   runInjector,
   writeFastPath,
 } from '../index.js';
+import { makeFilterTarget } from './filter-target-double.js';
 
-function makeTarget(): FilterTarget & { attrs: Map<string, string>; props: Map<string, string> } {
-  const attrs = new Map<string, string>();
-  const props = new Map<string, string>();
-  return {
-    attrs,
-    props,
-    setAttribute: (n, v) => void attrs.set(n, v),
-    removeAttribute: (n) => void attrs.delete(n),
-    hasAttribute: (n) => attrs.has(n),
-    style: {
-      setProperty: (n, v) => void props.set(n, v),
-      removeProperty: (n) => void props.delete(n),
-      getPropertyValue: (n) => props.get(n) ?? '',
-    },
-  };
-}
+/**
+ * ADR-069 之后 `FilterTarget` 同时是 SVG 挂载点,替身统一取自
+ * `filter-target-double.ts`(见该文件头注释:避免各文件各自模拟得不一样)。
+ */
+const makeTarget = makeFilterTarget;
 
 function makeStore(): SyncKeyValueStore & { data: Map<string, string>; reads: string[] } {
   const data = new Map<string, string>();
@@ -100,14 +87,14 @@ describe('🔴 INV-8 / ADR-027 · masterEnabled === false 时完全不工作', (
     // 不残留任何滤镜值(CSS 变量一个都没有)。
     expect(target.props.size).toBe(0);
 
-    // 🔴 ADR-062 下断言**加强**而非放宽:
-    //    预生成的 CSS 文件(裸 `html` 选择器)可能正生效着,它**不看**
-    //    `data-ccf-on`。仅仅「不设上色属性」已不足以保证页面不被上色 ——
-    //    必须**显式**设上压制属性,由 `filter.css` 的 `html[data-ccf-off]`
-    //    把预生成 CSS 压回 none。少了它,主开关 OFF 的页面仍是滤镜态。
-    expect(isFilterSuppressed(target)).toBe(true);
-    // 且除压制属性外别无他物。
-    expect([...target.attrs.keys()]).toEqual([SUPPRESS_ATTR]);
+    // 🔴 ADR-069 下这条断言回到了最直接的形式:两张表(预生成文件与
+    //    `filter.css`)的选择器**都是** `html.ccf-on`,所以「没有 class」
+    //    就是「不上色」,无需任何压制属性。
+    //    (ADR-062 时代预生成文件用裸 `html` 无条件生效,必须显式设
+    //     `data-ccf-off` 去压;那层复杂性随 ADR-069 一起消失。)
+    expect(target.classes.size, '残留了 class').toBe(0);
+    // 也不残留 SVG 节点 —— 主开关 OFF 时页面上没有本扩展的任何痕迹。
+    expect(target.children, '残留了 SVG 节点').toEqual([]);
   });
 
   it('🔴 主开关关闭时清掉快路径缓存 —— 使「关主开关可彻底止血」对后续加载成立', async () => {
@@ -145,7 +132,8 @@ describe('🔴 INV-8 / ADR-027 · masterEnabled === false 时完全不工作', (
     // 🔴 同步阶段**什么都没画** —— INV-8 要的是不注入，不是注入后纠正。
     expect(fastPathHit).toBe(false);
     expect(isFilterApplied(target)).toBe(false);
-    expect(target.attrs.size).toBe(0);
+    expect(target.classes.size).toBe(0);
+    expect(target.children, 'SVG 定义不该在 INV-8 短路时被建出来').toEqual([]);
     expect(target.props.size).toBe(0);
     settled.catch(() => {});
   });
@@ -155,17 +143,11 @@ describe('🔴 INV-8 / ADR-027 · masterEnabled === false 时完全不工作', (
     // 就上色，于是主开关 OFF 时每次冷加载都有一段可见的「已上色」区间。
     // 判别器：直接数 DOM 写入次数，而不是等异步纠正完再看终态
     // （等到那时看到的是纠正后的结果，缺陷会被完全掩盖 —— 正是旧门禁的盲点）。
-    const writes: string[] = [];
-    const target: FilterTarget = {
-      setAttribute: (n) => void writes.push(`setAttribute:${n}`),
-      removeAttribute: (n) => void writes.push(`removeAttribute:${n}`),
-      hasAttribute: () => false,
-      style: {
-        setProperty: (n) => void writes.push(`setProperty:${n}`),
-        removeProperty: (n) => void writes.push(`removeProperty:${n}`),
-        getPropertyValue: () => '',
-      },
-    };
+    // ADR-069 之后「DOM 写入」包括 class 切换与 SVG 挂载,
+    // 共享替身把三者**一并**记进 `writes` —— 漏记任何一种都会让
+    // 这条判别器变钝。
+    const target = makeTarget();
+    const writes = target.writes;
     const store = makeStore();
     writeFastPath(store, 'a.example.com', false, { mode: 'Grayscale', intensity: 100 }, Date.now());
 
@@ -226,7 +208,8 @@ describe('🔴 INV-8 · 主开关一关立刻抹掉推测（ADR-027「彻底止�
       readSettings: async () => settingsWith({ masterEnabled: false, rules: [GRAY_RULE] }),
     });
     expect(fastPathHit).toBe(false);
-    expect(t2.attrs.size).toBe(0);
+    expect(t2.classes.size).toBe(0);
+    expect(t2.children).toEqual([]);
     expect(t2.props.size).toBe(0);
   });
 
@@ -308,7 +291,7 @@ describe('🔴 已打开标签页的实时更新(ADR-062:注册变更不影响�
     expect(currentFilterValue(target)).not.toBe(filterCssValue('Grayscale', 100));
   });
 
-  it('(c) 匹配规则被删除 → 已打开页面转为无滤镜,且显式设上压制属性', async () => {
+  it('(c) 匹配规则被删除 → 已打开页面转为无滤镜,注入物全部撤除', async () => {
     const { target, push } = await openedTab(settingsWith({ rules: [GRAY_RULE] }));
     expect(isFilterApplied(target)).toBe(true);
 
@@ -316,9 +299,12 @@ describe('🔴 已打开标签页的实时更新(ADR-062:注册变更不影响�
 
     expect(isFilterApplied(target)).toBe(false);
     expect(currentFilterValue(target)).toBe('');
-    // 🔴 仅摘 data-ccf-on 不够:预生成 CSS(ADR-063)用裸 `html` 无条件生效,
-    //    它**不看**我们的属性。必须显式压制,否则页面仍是滤镜态。
-    expect(isFilterSuppressed(target)).toBe(true);
+    // 🔴 ADR-069:摘掉 `ccf-on` class 就足够 —— 预生成 CSS 的选择器
+    //    也是 `html.ccf-on`,两张表一并失效。旧实现必须显式设
+    //    `data-ccf-off` 去压裸 `html` 规则,那层复杂性已消失。
+    //    断言仍然**可观察**:class 与 SVG 节点都不得残留。
+    expect(target.classes.size).toBe(0);
+    expect(target.children).toEqual([]);
   });
 
   it('(c2) 规则改成不再匹配本页 → 同样转为无滤镜(删除之外的另一条等价路径)', async () => {
@@ -329,7 +315,8 @@ describe('🔴 已打开标签页的实时更新(ADR-062:注册变更不影响�
     }));
 
     expect(isFilterApplied(target)).toBe(false);
-    expect(isFilterSuppressed(target)).toBe(true);
+    expect(target.classes.size).toBe(0);
+    expect(target.children).toEqual([]);
   });
 
   it('(d) 新增一条匹配本页的规则 → 原本未滤镜的已打开页面立即上色', async () => {
@@ -348,7 +335,9 @@ describe('🔴 已打开标签页的实时更新(ADR-062:注册变更不影响�
     push(settingsWith({ masterEnabled: false, rules: [GRAY_RULE] }));
 
     expect(isFilterApplied(target)).toBe(false);
-    expect(isFilterSuppressed(target)).toBe(true);
+    // INV-8 在本路径同样是「页面上没有本扩展的任何痕迹」。
+    expect(target.classes.size).toBe(0);
+    expect(target.children).toEqual([]);
   });
 
   it('实时更新把新判定回写进快路径,使下一次导航同步命中**新**值(ADR-060)', async () => {
@@ -374,19 +363,8 @@ describe('🔴 已打开标签页的实时更新(ADR-062:注册变更不影响�
   });
 
   it('幂等:推送一条毫无变化的设置 → 对 DOM 零写入(INV-1 不惊动站点的 observer)', async () => {
-    const writes: string[] = [];
-    const attrs = new Map<string, string>();
-    const props = new Map<string, string>();
-    const target: FilterTarget = {
-      setAttribute: (n, v) => { writes.push(`setAttribute:${n}`); attrs.set(n, v); },
-      removeAttribute: (n) => { writes.push(`removeAttribute:${n}`); attrs.delete(n); },
-      hasAttribute: (n) => attrs.has(n),
-      style: {
-        setProperty: (n, v) => { writes.push(`setProperty:${n}`); props.set(n, v); },
-        removeProperty: (n) => { writes.push(`removeProperty:${n}`); props.delete(n); },
-        getPropertyValue: (n) => props.get(n) ?? '',
-      },
-    };
+    const target = makeTarget();
+    const writes = target.writes;
     let fire: ((s: FilterSettings) => void) | null = null;
     const { settled } = runInjector({
       target,

@@ -1,6 +1,6 @@
-/* 预生成滤镜 GreenRed @ 39%(ADR-062/063)。由 scripts/generate-filter-css.mjs 生成,勿手改。 */
-html { filter: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1.170281%20-0.246245%200.075964%200%200%200%201%200%200%200%20-0.071853%200.072661%200.999193%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f") !important; }
-html :modal,
-html [popover]:popover-open,
-html :fullscreen,
-html ::backdrop { filter: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1.170281%20-0.246245%200.075964%200%200%200%201%200%200%200%20-0.071853%200.072661%200.999193%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f") !important; }
+/* 预生成滤镜 GreenRed @ 39%(ADR-062/063/069/070)。由 scripts/generate-filter-css.mjs 生成,勿手改。 */
+html.ccf-on { filter: url("#ccf-greenred-39") !important; }
+html.ccf-on :modal,
+html.ccf-on [popover]:popover-open,
+html.ccf-on :fullscreen,
+html.ccf-on ::backdrop { filter: url("#ccf-greenred-39") !important; }

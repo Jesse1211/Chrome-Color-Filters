@@ -6,7 +6,10 @@ import {
   FILTER_MODES,
   colorMatrixToValues,
   filterCssValue,
+  filterMatrixValues,
   intensityToCssAmount,
+  parseFilterCssValue,
+  svgFilterId,
   toColorMatrix,
 } from '../../domain/index.js';
 
@@ -19,39 +22,89 @@ describe('filterCssValue（ADR-025 派生值 / INV-3 前提）', () => {
     }
   });
 
-  it('Grayscale 走 CSS 原生函数（W3C Filter Effects L1 §8.5）', () => {
-    expect(filterCssValue('Grayscale', 100)).toBe('grayscale(1)');
-    expect(filterCssValue('Grayscale', 0)).toBe('grayscale(0)');
-    expect(filterCssValue('Grayscale', 50)).toBe('grayscale(0.5)');
+  it('🔴 ADR-070 · 四种模式**统一**走同文档 SVG fragment 引用,灰阶不例外', () => {
+    // 灰阶本身就是一个颜色矩阵,用内置 grayscale() 只是巧合可行。
+    // 两条路径各自演化会一直有「只在某条路上出现的 bug」——
+    // 本轮 CSP 缺陷恰好只打中 SVG 路径而灰阶无恙,正是这种分裂的代价。
+    for (const mode of FILTER_MODES) {
+      expect(filterCssValue(mode, 100)).toMatch(/^url\("#ccf-[a-z]+-\d+"\)$/);
+    }
+    expect(filterCssValue('Grayscale', 100)).toBe('url("#ccf-gray-100")');
+    expect(filterCssValue('Grayscale', 50)).toBe('url("#ccf-gray-50")');
+    expect(filterCssValue('Grayscale', 0)).toBe('url("#ccf-gray-0")');
   });
 
-  it('🔴 三种辅助模式走内联 data: URI，不需要任何 DOM 节点（INV-9/INV-3）', () => {
-    for (const mode of ['RedGreen', 'GreenRed', 'BlueYellow'] as const) {
-      const v = filterCssValue(mode, 100);
-      expect(v).toMatch(/^url\("data:image\/svg\+xml,/);
-      expect(v).toContain('feColorMatrix');
-      // 必须以 fragment 指向内联 filter 的 id，否则 url() 引用不到滤镜。
-      expect(v).toMatch(/#f"\)$/);
+  it('🔴 ADR-070 · 预生成值里**不出现**内置 grayscale( 调用', () => {
+    for (const mode of FILTER_MODES) {
+      for (const intensity of [0, 1, 50, 99, 100]) {
+        expect(filterCssValue(mode, intensity)).not.toContain('grayscale(');
+      }
     }
   });
 
-  it('data: URI 中的矩阵系数与 toColorMatrix 完全一致（ADR-025 单一真相源）', () => {
-    const expected = colorMatrixToValues(toColorMatrix('RedGreen', 70));
-    const v = filterCssValue('RedGreen', 70);
-    // 系数在 URI 中空格被转义为 %20。
-    expect(v).toContain(expected.replace(/ /g, '%20'));
+  it('🔴 ADR-069 · **不得**是 data: URI —— 那是本轮修复的缺陷本体', () => {
+    // `data:` URI 的 SVG 被浏览器归类为图片资源,受站点 CSP 的 img-src 管辖。
+    // 不放行 data: 的站点上三个色觉矫正滤镜**静默失效**(像素等于关闭态、
+    // 无任何报错)。真实 Chrome 捕获到 {directive:'img-src', blockedURI:'data'}。
+    for (const mode of FILTER_MODES) {
+      const v = filterCssValue(mode, 100);
+      expect(v, 'data: URI 会被站点 CSP 的 img-src 拦掉 → 静默失效').not.toContain(
+        'data:',
+      );
+      // 同文档引用不产生资源加载,CSP 无从拦截。
+      expect(v).toContain('url("#');
+      // 矩阵系数**不在** CSS 里 —— 它们在 SVG 节点上(见 svg-filter-def.ts)。
+      expect(v).not.toContain('feColorMatrix');
+    }
   });
 
-  it('🔴 data: URI 中不含未转义的 < > " #（否则 URI 在 CSS 中被截断/解析失败）', () => {
-    for (const mode of ['RedGreen', 'GreenRed', 'BlueYellow'] as const) {
-      const v = filterCssValue(mode, 100);
-      // 剥掉外层 url("...") 后检查 URI 本体。
-      const uri = v.slice('url("'.length, -'")'.length);
-      const body = uri.slice(0, uri.lastIndexOf('#')); // 末尾那个 # 是合法的 fragment
-      expect(body).not.toContain('<');
-      expect(body).not.toContain('>');
-      expect(body).not.toContain('"');
-      expect(body).not.toContain('#');
+  it('🔴 id 与 svgFilterId 同源 —— CSS 的 url(#id) 必须引用得到 SVG 的 filter id', () => {
+    // 两边若各写一份构词法,url() 会引用到不存在的 id,
+    // 而那个失败是**静默**的(filter 解析为无效 → 不上色、不报错)。
+    for (const mode of FILTER_MODES) {
+      for (const intensity of [0, 37, 100]) {
+        expect(filterCssValue(mode, intensity)).toBe(
+          `url("#${svgFilterId(mode, intensity)}")`,
+        );
+      }
+    }
+  });
+
+  it('矩阵系数仍单一真相源:filterMatrixValues === colorMatrixToValues∘toColorMatrix', () => {
+    for (const mode of FILTER_MODES) {
+      for (const intensity of [0, 70, 100]) {
+        expect(filterMatrixValues(mode, intensity)).toBe(
+          colorMatrixToValues(toColorMatrix(mode, intensity)),
+        );
+      }
+    }
+  });
+
+  it('🔴 parseFilterCssValue 是 filterCssValue 的逆 —— 往返无损(404 组合全查)', () => {
+    // 注入层靠这个逆函数在**唯一的 DOM 写入点**把 (mode,intensity) 解回来,
+    // 从而知道要建哪个 <filter>。往返一旦有损,就会建错/不建节点 → 静默失效。
+    for (const mode of FILTER_MODES) {
+      for (let intensity = 0; intensity <= 100; intensity += 1) {
+        const round = parseFilterCssValue(filterCssValue(mode, intensity));
+        expect(round, `${mode}@${intensity} 无法还原`).toEqual({
+          mode,
+          intensity,
+        });
+      }
+    }
+  });
+
+  it('parseFilterCssValue 对非本扩展的值返回 null,不抛异常', () => {
+    for (const bogus of [
+      'grayscale(1)',
+      'url("#other-thing")',
+      'url("data:image/svg+xml,<svg/>#f")',
+      'none',
+      '',
+      'url("#ccf-gray-101")', // 越界强度
+      'url("#ccf-nosuchmode-50")',
+    ]) {
+      expect(parseFilterCssValue(bogus), bogus).toBeNull();
     }
   });
 

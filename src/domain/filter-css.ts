@@ -7,57 +7,126 @@
  * **绝不持久化**。
  *
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * ## 为什么四种模式都必须能用「纯字符串」表达(INV-3 的真正要害)
+ * ## 🔴 本模块返回的是**同文档 fragment 引用**(ADR-069)—— 不是 `data:` URI
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
- * `toColorMatrix` 产出的是 SVG `feColorMatrix` 的 20 个系数。把它作用到页面上的
- * **常规**做法是往文档里插一个 `<svg><filter id>` 节点,再用 `filter: url(#id)` 引用。
- * 这条路在 T4a 上是死的,有两个独立的致命问题:
+ * 四种模式统一返回 `url("#ccf-{slug}-{intensity}")`,指向**本文档内**由
+ * content script 同步注入的 `<svg><filter id="ccf-{slug}-{intensity}">`
+ * (见 `src/injection/svg-filter-def.ts`)。
  *
- * 1. **违反 INV-3。** `document_start` 时只有 `documentElement`;插节点这件事本身
- *    要么等 DOM,要么由 JS 同步做 —— 而 JS 想知道该用哪个矩阵,必须先 `await`
- *    异步的 `chrome.storage`。静态样式表能赶在首帧之前,「JS 先 await 再插节点」不能。
- *    T0 spike §4.4 实测的 a3 方案正是栽在这里:等 DOM 的那几毫秒就是彩色闪帧
- *    (wikipedia 实拍到一整屏未滤镜的彩色页面)。
+ * ### 为什么不再用 `data:image/svg+xml,...` URI(本轮修复的缺陷本体)
  *
- * 2. **违反 INV-9/ADR-026 的精神。** 往宿主页面插 SVG 节点就是修改页面 DOM:
- *    站点自身的 `document.body.children`、`:last-child` 选择器、MutationObserver
- *    都会观测到它。T0 spike §4.4 第 2 点实测确认覆盖层 div 确实出现在
- *    页面自身的 fixed 元素枚举结果里 —— 这是可观察行为的改变。
+ * 上一版把整个 SVG 内联进 `data:` URI,图的是「滤镜值只是一个字符串,
+ * 无需 DOM 节点」。**T7 实测证伪了它**:
  *
- * ## 解法:把 SVG 滤镜本身放进 `data:` URI,于是它也只是一个字符串
+ * `data:` URI 形式的 SVG 被浏览器归类为**图片资源**,因而受站点 CSP 的
+ * `img-src` 指令管辖。在不放行 `data:` 的站点上,三个色觉矫正滤镜
+ * **静默失效** —— 像素与关闭态完全相同、且无任何报错。确定性复现于:
  *
- * CSS 的 `filter: url(...)` **不要求** 被引用的 SVG 存在于当前文档。
- * 引用一个 `data:image/svg+xml,...#id` 形式的 URI 同样合法 ——
- * 滤镜定义随 URI 内联,浏览器自行解析,**页面 DOM 里不增加任何节点**。
+ * - `img-src 'self'`(不放行 `data:`)
+ * - 只有 `default-src` 且不放行 `data:`,无 `img-src`
+ * - `img-src 'none'`
  *
- * 于是四种模式统一成「一个可放进静态样式表的字符串」:
- * - `Grayscale`  → `grayscale(<amount>)`(CSS 原生函数)
- * - 其余三种     → `url("data:image/svg+xml,<svg>…<feColorMatrix values='…'/>…#f")`
+ * 真实 Chrome 在 news.ycombinator.com 上捕获到
+ * `{directive:'img-src', disposition:'enforce', blockedURI:'data'}`,
+ * 5 次导航后三个滤镜像素全无变化。而灰阶当时走 CSS 内置 `grayscale()`
+ * (无 `url()`),故不受影响 —— 那正是 ADR-070 所说「两条路径各自演化」
+ * 的代价:缺陷只打中了其中一条。
  *
- * 两条路都不需要 DOM 节点,都能写进 `content_scripts[].css`,
- * 因而**四种模式享有完全相同的零闪烁保证** —— 这很重要:
- * RedGreen/GreenRed/BlueYellow 才是本扩展的色觉辅助主业(ADR-002),
- * 若只有 Grayscale 零闪烁、辅助模式闪烁,INV-3 等于没有对真实用户成立。
+ * **同文档 `url("#id")` 引用不产生资源加载,CSP 无从拦截。** 这是 ADR-069
+ * 拍板的解法。相比打包 SVG 走 `chrome-extension://`:不需要
+ * `web_accessible_resources`、无指纹暴露、无需任何服务器。
+ *
+ * ### 前向引用不是问题(ADR-069 的 class 开关)
+ *
+ * 「CSS 比 SVG 节点先到场」看似是前向引用,但 `html.ccf-on` 这个 class
+ * 门控让该问题**根本不存在**:CSS 注入时 `html` 还没有 `ccf-on`,规则
+ * 不匹配任何元素,浏览器压根不去解析那个 `url("#...")`;等 class 加上去时
+ * `#ccf-…` 已在 DOM 里,filter 值是新算出来的。**即使某个引擎缓存了
+ * 「找不到」也不受影响** —— 这是消除不确定性,不是赌对。
+ *
+ * 注入序列(两步,顺序不可颠倒)见 `src/injection/svg-filter-def.ts`。
+ *
+ * ### 四种模式**统一**走 SVG(ADR-070)
+ *
+ * 灰阶也用 `feColorMatrix`,不再用内置 `grayscale()`。灰阶本身就是一个
+ * 颜色矩阵,用内置函数只是巧合可行;若灰阶走内置函数、另三个走 SVG,
+ * 两条注入路径会各自演化,又多一类「只在某条路径上出现的 bug」——
+ * 本次 CSP 缺陷恰好只打中 SVG 路径而灰阶无恙,正是这种分裂的代价。
+ * 统一路径也让 ADR-063 的预生成文件结构一致。
+ *
+ * ### 关于 INV-9 / ADR-026(往页面插节点)
+ *
+ * 插一个 `<svg>` 确实让页面 DOM 多出一个节点,这是 ADR-069 已权衡并接受的
+ * 代价:CSP 静默失效让三个**主业**滤镜(ADR-002)在大量站点上完全不工作,
+ * 而多一个 `width:0;height:0` 的隐藏节点不改变布局几何(INV-1 的几何部分
+ * 不受影响)。节点挂在 `documentElement` 下而非 `body`,且带
+ * `position:absolute;width:0;height:0;overflow:hidden`。
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
 
 import { type FilterMode } from './filter-mode.js';
-import { type Intensity, intensityFraction } from './intensity.js';
+import { type Intensity, intensityFraction, isIntensity } from './intensity.js';
 import { colorMatrixToValues, toColorMatrix } from './color-matrix.js';
 
 /**
- * 内联 SVG 滤镜里使用的 filter id。
+ * 滤镜 id / 文件名中代表模式的短名 —— **单一真相源**。
  *
- * 只出现在 `data:` URI 内部的那个独立文档里,**不进入宿主页面的 id 空间** ——
- * 故不可能与站点自身的 id 冲突(INV-1:不改变页面可观察行为)。
+ * 为什么不直接用 `FilterMode` 的字面量(`Grayscale`/`RedGreen`/…):
+ * 短名同时进入
+ *
+ * - SVG `<filter id>` 与 CSS `url("#...")`(ADR-069),
+ * - 预生成文件名 `filters/{slug}-{intensity}.css`(ADR-063),后者还进了
+ *   注册记录与扩展包清单。
+ *
+ * **全小写、无大小写歧义**的短名在跨平台(macOS 默认大小写不敏感、
+ * Linux 敏感)时更安全 —— 一个大小写不一致的路径在 macOS 上能跑、
+ * 在 Linux 上注册即失败,而注册失败的表现是「滤镜静默不生效」,
+ * 排障成本极高。
+ *
+ * 📌 短名取 DESIGN.md §6 T4a 示例中的 `gray-100.css` 为准,其余三个
+ *    按同一构词法(模式名小写、去驼峰分隔)。
+ *
+ * 🔴 **本常量住在领域层,是因为 ADR-069 之后它同时决定 CSS 的
+ *    `url("#id")` 与 SVG 的 `<filter id>`。** 两边必须逐字相同,否则
+ *    `url()` 引用不到滤镜 —— 表现又是一次「静默失效」。故只能有一份。
+ *    `src/injection/filter-file-css.ts` 重新导出它以保持既有 import 可用
+ *    (向后兼容)。
  */
-export const INLINE_FILTER_ID = 'f';
+export const FILTER_MODE_SLUGS: Readonly<Record<FilterMode, string>> = {
+  Grayscale: 'gray',
+  RedGreen: 'redgreen',
+  GreenRed: 'greenred',
+  BlueYellow: 'blueyellow',
+};
+
+/**
+ * 同文档 SVG filter 节点的 `id`(ADR-069),形如 `ccf-gray-100`。
+ *
+ * 🔴 **CSS 的 `url("#...")` 与 SVG 的 `<filter id>` 都必须取自本函数** ——
+ *    这是 ADR-069 下「引用得到」的唯一保证。写死两份字符串,任何一边的
+ *    改动都会让 `url()` 引用到不存在的 id,而那个失败是**静默**的
+ *    (filter 解析为无效 → 不上色、不报错),与本轮要修的 CSP 缺陷同形。
+ *
+ * ## id 命名空间的冲突风险(INV-1)
+ *
+ * `ccf-` 前缀(Chrome Color Filters)+ 模式短名 + 强度,落在页面自身的
+ * id 空间里。理论上站点可能已有同名 id;实践中 `ccf-gray-100` 这种
+ * 带扩展前缀的组合撞名概率可忽略。选**带前缀**的名字正是为此。
+ */
+export function svgFilterId(mode: FilterMode, intensity: Intensity): string {
+  return `ccf-${FILTER_MODE_SLUGS[mode]}-${intensity}`;
+}
 
 /**
  * 把 `intensity` 格式化为 CSS 可接受的数量值(0–1 的小数)。
  *
  * 固定小数位输出,避免浮点尾数污染样式表,且保证确定性
  * (同 `colorMatrixToValues` 的 `formatCoefficient` 理由)。
+ *
+ * 📌 ADR-070 之后灰阶也走 `feColorMatrix`,本函数不再参与 `filterCssValue`
+ *    的计算。保留它是因为它是一个被测试与潜在 UI 文案使用的纯工具函数,
+ *    删除会是一次与本修复无关的破坏性变更(本任务是修复,不扩大范围)。
  */
 export function intensityToCssAmount(intensity: Intensity): string {
   const f = intensityFraction(intensity);
@@ -66,48 +135,14 @@ export function intensityToCssAmount(intensity: Intensity): string {
 }
 
 /**
- * 构造内联 SVG 滤镜的 `data:` URI。
- *
- * ## 转义
- *
- * `data:image/svg+xml,` 之后的内容必须是 URL 安全的。这里**不用** `encodeURIComponent`
- * 整体编码(可读性差且体积翻倍),而是只转义在 CSS `url()` 与 URI 语境中真正有歧义的字符:
- * `<` `>` `"` `#` `%` 与空格。其中 `#` 必须转义,否则会被当成 fragment 分隔符,
- * 把 SVG 内容在 `#` 处截断 —— 而我们**自己**要在末尾用一个真正的 `#` 指向 filter id。
- *
- * 矩阵系数由 `colorMatrixToValues` 产出,只含数字、空格、小数点与负号,
- * 空格已在下面统一转义为 `%20`。
- */
-function svgFilterDataUri(matrixValues: string): string {
-  // 单引号在 `data:` URI 与 CSS `url("...")` 中都无需转义,故 SVG 属性一律用单引号。
-  const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg'>` +
-    `<filter id='${INLINE_FILTER_ID}' color-interpolation-filters='sRGB'>` +
-    `<feColorMatrix type='matrix' values='${matrixValues}'/>` +
-    `</filter></svg>`;
-
-  const escaped = svg
-    .replace(/%/g, '%25')
-    .replace(/#/g, '%23')
-    .replace(/</g, '%3C')
-    .replace(/>/g, '%3E')
-    .replace(/"/g, '%22')
-    .replace(/ /g, '%20');
-
-  return `data:image/svg+xml,${escaped}#${INLINE_FILTER_ID}`;
-}
-
-/**
  * `filterCssValue(mode, intensity)` —— 返回可直接赋给 CSS `filter` 的字符串。
  *
- * **四种模式都有返回值,永不返回 null** —— 这是 INV-3 对所有模式一致成立的前提。
+ * **四种模式都走同一条路**(ADR-070):`url("#ccf-{slug}-{intensity}")`,
+ * 指向同文档内的 `<filter>` 节点。永不返回 null —— 这是 INV-3 对所有模式
+ * 一致成立的前提。
  *
- * - `Grayscale` → `grayscale(<amount>)`。W3C Filter Effects Level 1 §8.5 规定
- *   `grayscale()` **就是**用 BT.709 亮度系数在恒等与满强度之间插值,与
- *   `toColorMatrix('Grayscale', n)` 数学上完全等价(见 `color-matrix.ts` 同一处引用),
- *   故直接用原生函数:更短、更快,且走浏览器的原生快路径。
- * - 其余三种 → 内联 `data:` URI 引用的 `feColorMatrix`,系数取自 `toColorMatrix`,
- *   **与 ADR-025 的唯一真相源保持一致**(不另行复制一套系数)。
+ * 矩阵系数不在这里出现:它们由 `svgFilterMarkup`(注入层)从**同一个**
+ * `toColorMatrix` 取得。本函数只产出引用,两边靠 `svgFilterId` 对齐。
  *
  * `intensity === 0` 时各模式均等价于恒等变换(视觉无变化),
  * 与 `toColorMatrix` 在 `intensity = 0` 时的语义一致。
@@ -116,9 +151,71 @@ export function filterCssValue(
   mode: FilterMode,
   intensity: Intensity,
 ): string {
-  if (mode === 'Grayscale') {
-    return `grayscale(${intensityToCssAmount(intensity)})`;
-  }
-  const values = colorMatrixToValues(toColorMatrix(mode, intensity));
-  return `url("${svgFilterDataUri(values)}")`;
+  return `url("#${svgFilterId(mode, intensity)}")`;
+}
+
+/**
+ * 该 `(mode,intensity)` 对应的 `feColorMatrix` `values` 字符串。
+ *
+ * 独立导出是为了让注入层(`svg-filter-def.ts`)拿到系数时**不必**自己
+ * 拼装 `toColorMatrix` + `colorMatrixToValues` —— 少一处可漂移的接缝
+ * (ADR-063 的防漂移意图)。
+ */
+export function filterMatrixValues(
+  mode: FilterMode,
+  intensity: Intensity,
+): string {
+  return colorMatrixToValues(toColorMatrix(mode, intensity));
+}
+
+/**
+ * `filterCssValue` 的**逆函数**:从 filter 值串还原出 `(mode, intensity)`。
+ * 无法还原时返回 `null`。
+ *
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * ## 🔴 为什么需要一个逆函数(ADR-069 带来的真实需求,不是便利 API)
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *
+ * ADR-069 之前,filter 值是**自包含**的:`grayscale(0.5)` 或内联了整个 SVG 的
+ * `data:` URI,拿到串就能上色。于是注入管线(快路径 → `RenderArbiter` →
+ * `syncFilter` → 存活性恢复)一路只传一个 `string | null`。
+ *
+ * ADR-069 之后,filter 值变成一个**引用**:`url("#ccf-gray-50")`。要让它
+ * 真的生效,必须先保证被引用的 `<filter>` 在文档里 —— 而建那个节点需要
+ * `(mode, intensity)` 才能算矩阵系数。
+ *
+ * 两条路可选:
+ *
+ * 1. 把 `(mode, intensity)` 沿整条管线再传一遍(改 `RenderArbiter` 的
+ *    `setBase`/`setOverride`、`syncFilter`、`LivenessOptions.desired`、
+ *    `FastPathRead` …… 全部签名);
+ * 2. 在**唯一的 DOM 写入点**(`syncFilter`)把 id 解回来。
+ *
+ * 选 2,理由是**少一份真相**:方案 1 会让「filter 值」与「(mode,intensity)」
+ * 在管线里并行流动,两者必须始终一致,而任何一处忘记同步就是又一次
+ * 「引用到不存在的 id」的静默失效。方案 2 下 filter 值**仍然是唯一真相**,
+ * 系数在要用的那一刻现算(与 ADR-025「派生值不持久化、读时现算」同一个
+ * 思路,见 `fast-path-cache.ts` 的 `readFastPath`)。
+ *
+ * 这不是在解析不可信输入:串由 `filterCssValue` 产出,格式由
+ * `svgFilterId` 定死,且本文件对两者做了往返(round-trip)断言。
+ * 解不出来时返回 `null` 而非抛异常 —— 调用方据此降级为「不注入定义」,
+ * 绝不让 content script 抛到页面上(INV-1)。
+ */
+export function parseFilterCssValue(
+  value: string,
+): { readonly mode: FilterMode; readonly intensity: Intensity } | null {
+  const match = /^url\("#ccf-([a-z]+)-(\d{1,3})"\)$/.exec(value);
+  if (match === null) return null;
+
+  const slug = match[1]!;
+  const mode = (
+    Object.keys(FILTER_MODE_SLUGS) as readonly FilterMode[]
+  ).find((m) => FILTER_MODE_SLUGS[m] === slug);
+  if (mode === undefined) return null;
+
+  const intensity = Number(match[2]!);
+  if (!isIntensity(intensity)) return null;
+
+  return { mode, intensity };
 }

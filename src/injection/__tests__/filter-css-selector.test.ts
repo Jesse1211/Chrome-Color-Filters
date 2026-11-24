@@ -28,13 +28,17 @@
  *
  * 不再用任何子串/正则 `toMatch`。先把样式表切成 `{selector, body}` 列表,
  * 再定位「那条把 `filter` 赋给一个元素本身的主规则」,断言它的选择器
- * **全等于** `html[data-ccf-on]`。这样:
+ * **全等于** `html.ccf-on`(ADR-069;此前是 `html[data-ccf-on]`)。这样:
  *
- * - 主规则改 `body[data-ccf-on]` → 立即红(选择器不等);
- * - top-layer 规则里含 `html[...]` 子串也救不了它(它们带后代部分,不是主规则);
+ * - 主规则改 `body.ccf-on` → 立即红(选择器不等);
+ * - top-layer 规则里含 `html...` 子串也救不了它(它们带后代部分,不是主规则);
  * - 整张表里任何位置出现 `body` 的 filter 规则 → 立即红。
  *
  * 单元层抓住它,就不必每次都掏 10 分钟跑真实栈。
+ *
+ * 📌 **ADR-069 之后本文件还多守两件事**:门控必须是 class(属性门控会把 JS
+ *    放回首帧关键路径,实测 coldCache 3/3 破裂),且压制规则必须**不存在**
+ *    (撤除靠摘 class,不靠 `filter: none`)。
  */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -92,38 +96,43 @@ describe('🔴 filter.css 注入目标锁定(INV-1 / T0 §1 §4.3 / 变异测试
     expect(RULES.every((r) => r.body.includes('filter'))).toBe(true);
   });
 
-  it('🔴 主规则(给元素自身赋 filter 的那条)的选择器**精确**为 `html[data-ccf-on]`', () => {
+  it('🔴 主规则(给元素自身赋 filter 的那条)的选择器**精确**为 `html.ccf-on`', () => {
     // 主规则 = 选择器里没有后代/伪元素部分的那条,即作用于注入目标本身。
-    // ADR-062 后本表有**两个**这样的家族:上色(data-ccf-on)与压制(data-ccf-off)。
+    // 🔴 ADR-069 之后本表只有**一个**这样的家族:上色。
+    //    压制规则整组已删除 —— 摘掉 class 两张表一并失效,无需压制
+    //    (旧实现需要它,只因预生成文件当时用裸 `html` 无条件生效)。
     const mainRules = RULES.filter((r) =>
       selectorList(r).some((sel) => !sel.includes(' ') && !sel.includes('::')),
     );
-    expect(mainRules, '找不到作用于元素自身的主规则').toHaveLength(2);
+    expect(mainRules, '找不到作用于元素自身的主规则').toHaveLength(1);
 
-    const applyRule = mainRules.find((r) =>
-      r.body.includes('var(--ccf-filter)'),
-    );
-    expect(applyRule, '找不到上色主规则').toBeDefined();
+    const applyRule = mainRules[0]!;
     // 🔴 精确相等,不是 toMatch/toContain —— 子串匹配正是上一轮的盲区。
-    expect(selectorList(applyRule!)).toEqual(['html[data-ccf-on]']);
-    expect(applyRule!.body).toContain('filter: var(--ccf-filter)');
-
-    // 🔴 压制主规则同样精确锁定(ADR-062)。它的选择器**必须是肯定式**的
-    //    `html[data-ccf-off]` —— 写成 `html:not([data-ccf-on])` 会在
-    //    JS 尚未设属性的**首帧**就命中,把预生成 CSS 压掉
-    //    (真实 Chrome 实测:首帧 filter=none,coldCache 6 次里 4 次破裂)。
-    const suppressRule = mainRules.find((r) => r !== applyRule);
-    expect(selectorList(suppressRule!)).toEqual(['html[data-ccf-off]']);
-    expect(suppressRule!.body).toContain('filter: none');
+    expect(selectorList(applyRule)).toEqual(['html.ccf-on']);
+    expect(applyRule.body).toContain('filter: var(--ccf-filter)');
   });
 
-  it('🔴 压制规则**不得**写成 `:not([data-ccf-on])` —— 会在首帧命中(ADR-062)', () => {
-    // 这是本轮亲手踩过并修掉的缺陷,断言留在这里防止它被「还原」。
+  it('🔴 压制规则已随 ADR-069 删除 —— 表里不得再出现 `filter: none`', () => {
+    // 压制规则在 ADR-069 下不仅多余,还是**有害**的:任何依赖
+    // 「JS 尚未设置的状态」的默认态都等于把 JS 放回首帧的关键路径
+    // (旧实现为此踩过两次:属性门控与 `:not([data-ccf-on])`)。
+    // 现在撤除 = 摘 class,没有任何规则需要把滤镜压回 none。
     const stripped = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(
-      stripped,
-      '压制规则用了否定式选择器 —— 首帧(属性尚未设上)就会命中,INV-3 必然破裂',
-    ).not.toContain(':not([data-ccf-on])');
+    expect(stripped).not.toContain('data-ccf-off');
+    expect(stripped).not.toContain(':not(');
+    for (const rule of RULES) {
+      expect(rule.body, '压制规则已废止(ADR-069)').not.toContain(
+        'filter: none',
+      );
+    }
+  });
+
+  it('🔴 门控是 class 而非属性 —— 属性门控会把 JS 放回首帧关键路径', () => {
+    const stripped = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    // 上一轮实测:`html[data-ccf-on]` 在预生成文件上让 coldCache 3/3 站点
+    // 首帧仍有彩色帧(属性要等异步 storage 读完才设上)。
+    expect(stripped).not.toContain('[data-ccf-on]');
+    expect(stripped).toContain('html.ccf-on');
   });
 
   it('🔴 整张表中**不存在**任何 body 作为滤镜宿主的规则（T0 实测 y=-1000）', () => {
@@ -140,18 +149,16 @@ describe('🔴 filter.css 注入目标锁定(INV-1 / T0 §1 §4.3 / 变异测试
     expect(stripped).not.toMatch(/body\s*\[?[^{]*\{[^}]*filter/);
   });
 
-  it('🔴 每条规则都由本扩展自有属性门控(INV-8:属性不在就全不生效)', () => {
-    // 本表的每条规则都必须以 `html[data-ccf-on]`(上色)或
-    // `html[data-ccf-off]`(压制)开头。任何一条漏掉门控,
+  it('🔴 每条规则都由本扩展自有 class 门控(INV-8:class 不在就全不生效)', () => {
+    // 本表的每条规则都必须以 `html.ccf-on` 开头。任何一条漏掉门控,
     // 就会无条件作用于全网 —— 直接违反 INV-8 与 INV-1。
     //
-    // 📌 注意这张表与**预生成 CSS 文件**的要求相反:那些文件用裸 `html`
-    //    (ADR-063),因为它们的「该不该生效」由**注册与否**表达;
-    //    而本表随 content script 注入到 <all_urls>,必须自己门控。
+    // 📌 ADR-069 之后**预生成 CSS 文件用的是同一个门控**(不再是裸 `html`),
+    //    两张表因此结构一致。见 tests/filter-css-files.test.ts 的对应断言。
     for (const rule of RULES) {
       for (const sel of selectorList(rule)) {
-        expect(sel, `选择器 "${sel}" 缺少本扩展的属性门控`).toMatch(
-          /^html\[data-ccf-(on|off)\]( |$)/,
+        expect(sel, `选择器 "${sel}" 缺少本扩展的 class 门控`).toMatch(
+          /^html\.ccf-on( |$)/,
         );
       }
     }
@@ -159,43 +166,32 @@ describe('🔴 filter.css 注入目标锁定(INV-1 / T0 §1 §4.3 / 变异测试
 
   it('top-layer 补偿规则齐全,且它们是**后代/伪元素**规则而非主规则(T0 §4.5)', () => {
     // modal/popover/fullscreen 在绘制树中不是根元素的后代,根 filter 到不了它们。
-    // ADR-062 后上色与压制各有一组 top-layer 规则。
+    // ADR-069 后只剩上色一组(压制组已删除)。
     const toplayer = RULES.filter((r) =>
       selectorList(r).every((sel) => sel.includes(' ') || sel.includes('::')),
     );
-    expect(toplayer).toHaveLength(2);
+    expect(toplayer).toHaveLength(1);
 
-    for (const gate of ['data-ccf-on', 'data-ccf-off']) {
-      const group = toplayer.find((r) =>
-        selectorList(r).every((sel) => sel.startsWith(`html[${gate}]`)),
-      );
-      expect(group, `缺少 ${gate} 的 top-layer 补偿组`).toBeDefined();
-      const sels = selectorList(group!);
-      for (const needed of [
-        `html[${gate}] :modal`,
-        `html[${gate}] [popover]:popover-open`,
-        `html[${gate}] :fullscreen`,
-        `html[${gate}] ::backdrop`,
-      ]) {
-        expect(sels, `top-layer 补偿缺少 ${needed}`).toContain(needed);
-      }
+    const sels = selectorList(toplayer[0]!);
+    for (const needed of [
+      'html.ccf-on :modal',
+      'html.ccf-on [popover]:popover-open',
+      'html.ccf-on :fullscreen',
+      'html.ccf-on ::backdrop',
+    ]) {
+      expect(sels, `top-layer 补偿缺少 ${needed}`).toContain(needed);
     }
   });
 
   it('滤镜值一律取自 `var(--ccf-filter)` —— 本表不得写死任何具体滤镜(ADR-025)', () => {
     for (const rule of RULES) {
-      const isSuppress = selectorList(rule).every((sel) =>
-        sel.startsWith('html[data-ccf-off]'),
+      expect(rule.body).toContain('var(--ccf-filter)');
+      // 派生值(grayscale(...) / feColorMatrix / data: URI / url(#…))
+      // 绝不能固化进这张**单一**静态表:它要服务全部 404 个组合,
+      // 写死任何一个就产生了独立于设置的第二份真相。
+      expect(rule.body).not.toMatch(
+        /grayscale\(|feColorMatrix|data:image|url\(["']?#/,
       );
-      // 压制规则的值恒为 `none` —— 它不是「某个滤镜」,不构成第二份真相。
-      if (isSuppress) {
-        expect(rule.body).toContain('filter: none');
-      } else {
-        expect(rule.body).toContain('var(--ccf-filter)');
-      }
-      // 派生值(grayscale(...) / feColorMatrix / data: URI)绝不能固化进静态表:
-      // 那会产生独立于设置的第二份真相。
-      expect(rule.body).not.toMatch(/grayscale\(|feColorMatrix|data:image/);
     }
   });
 });
