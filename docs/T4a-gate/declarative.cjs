@@ -27,11 +27,11 @@ async function regs(w) { return w.evaluate(() => chrome.scripting.getRegisteredC
   let w = await getWorker(b);
   log((await regs(w)).length === 0, '初始无注册');
 
-  await seed(b, settings([rule('weibo.com'), rule('zhihu.com'), rule('a.com', 'RedGreen', 60)]));
+  await seed(b, settings([rule('weibo.com'), rule('zhihu.com'), rule('a.com', 'Grayscale', 60)]));
   await new Promise((r) => setTimeout(r, 1500));
   let r1 = await regs(w);
   results.afterSeed = r1;
-  log(JSON.stringify(ids(r1)) === JSON.stringify(['ccf-gray-100', 'ccf-redgreen-60']),
+  log(JSON.stringify(ids(r1)) === JSON.stringify(['ccf-gray-100', 'ccf-gray-60']),
     `按 (mode,intensity) 分组:${JSON.stringify(ids(r1))}`);
 
   // ADR-064:共享同一设置的站点合并进同一条 matches
@@ -44,20 +44,20 @@ async function regs(w) { return w.evaluate(() => chrome.scripting.getRegisteredC
     `css 指向预生成文件 ${JSON.stringify(gray && gray.css)}`);
 
   // ── 2. 幂等:再写一次同样的设置 ─────────────────────────────────────
-  await seed(b, settings([rule('weibo.com'), rule('zhihu.com'), rule('a.com', 'RedGreen', 60)]));
+  await seed(b, settings([rule('weibo.com'), rule('zhihu.com'), rule('a.com', 'Grayscale', 60)]));
   await new Promise((r) => setTimeout(r, 1500));
   const r2 = await regs(w);
   log(JSON.stringify(r2) === JSON.stringify(r1), '幂等:注册集合完全不变');
 
   // ── 3. 改强度 → css 路径被更新 ──────────────────────────────────────
-  await seed(b, settings([rule('weibo.com'), rule('zhihu.com'), rule('a.com', 'RedGreen', 25)]));
+  await seed(b, settings([rule('weibo.com'), rule('zhihu.com'), rule('a.com', 'Grayscale', 25)]));
   await new Promise((r) => setTimeout(r, 1500));
   const r3 = await regs(w);
   results.afterIntensityChange = r3;
-  log(JSON.stringify(ids(r3)) === JSON.stringify(['ccf-gray-100', 'ccf-redgreen-25']),
+  log(JSON.stringify(ids(r3)) === JSON.stringify(['ccf-gray-100', 'ccf-gray-25']),
     `改强度 → 新注册 ${JSON.stringify(ids(r3))}`);
-  const rg = r3.find((r) => r.id === 'ccf-redgreen-25');
-  log(rg && rg.css[0] === 'filters/redgreen-25.css', `css 更新到 ${rg && rg.css[0]}`);
+  const rg = r3.find((r) => r.id === 'ccf-gray-25');
+  log(rg && rg.css[0] === 'filters/gray-25.css', `css 更新到 ${rg && rg.css[0]}`);
 
   // ── 4. 删除规则 → 对应注册被 unregister ─────────────────────────────
   await seed(b, settings([rule('weibo.com'), rule('zhihu.com')]));
@@ -115,7 +115,7 @@ async function regs(w) { return w.evaluate(() => chrome.scripting.getRegisteredC
   //    flicker/multitab/geometry/modes 用的是 rule('*')(原意即全网)。
   //    **没有任何一条门禁把一个放宽的 glob 送进过真实浏览器。**
   //    这一节专门驱动那个状态。
-  await seed(b, settings([rule('*.baidu.*'), rule('*weibo*', 'RedGreen', 60)]));
+  await seed(b, settings([rule('*.baidu.*'), rule('*weibo*', 'Grayscale', 60)]));
   await new Promise((r) => setTimeout(r, 1500));
   const r8 = await regs(w);
   results.inexpressibleGlobs = r8;
