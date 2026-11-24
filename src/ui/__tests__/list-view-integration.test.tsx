@@ -69,7 +69,6 @@ const seeded = (rules: { pattern: string; mode?: string; intensity?: number }[])
       intensity: r.intensity ?? 100,
     })),
     lockUntil: null,
-    maxSeenTime: 0,
   },
 });
 
@@ -369,7 +368,6 @@ describe('ADR-046 · 仓储层写入失败 → 红色报错条', () => {
         rules: [{ pattern: 'a.com', mode: 'Grayscale', intensity: 100 }],
         // 锁到很久以后 —— 仓储层会以 kind:'locked' 拒绝一切规则写入(INV-14)
         lockUntil: Date.now() + 60 * 60 * 1000,
-        maxSeenTime: 0,
       },
     });
     render(<PopupUnderTest repository={makeRepo(area)} />);
@@ -404,7 +402,6 @@ describe('INV-4 · 另一处写入 → 本视图立即跟进(onChanged 订阅)',
             { pattern: 'b.com', mode: 'RedGreen', intensity: 50 },
           ],
           lockUntil: null,
-          maxSeenTime: 0,
         },
       });
     });

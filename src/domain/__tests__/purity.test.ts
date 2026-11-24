@@ -109,6 +109,5 @@ describe('ADR-036 · src/domain 纯度静态检查', () => {
     expect(typeof mod.toColorMatrix).toBe('function');
     expect(typeof mod.isLocked).toBe('function');
     expect(typeof mod.canSetLockUntil).toBe('function');
-    expect(typeof mod.effectiveNow).toBe('function');
   });
 });

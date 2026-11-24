@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { canSetLockUntil, effectiveNow } from '../../domain/filter-settings.js';
+import { canSetLockUntil } from '../../domain/filter-settings.js';
 import { type LockDuration, durationToMs } from '../lock-duration.js';
 
 const SEC = 1000;
@@ -87,17 +87,14 @@ describe('🔴 延长永远只增不减 —— 穷举找后门', () => {
     }
   }
 
-  it('🔴 时钟倒退时延长同样不缩短(ADR-059 / INV-15)', () => {
+  it('🔴 时钟倒退时延长同样不缩短(ADR-071:不夹下界,仍以 lockUntil 为基准)', () => {
     const lockUntil = T0 + 8 * HOUR;
-    const maxSeenTime = T0 + 4 * HOUR;
-    // 用户把系统时钟往回拨了 3 小时。
-    const rawNow = T0 + HOUR;
-    const now = effectiveNow(rawNow, maxSeenTime);
-    // 单调下界把它夹回 T0+4h。
-    expect(now).toBe(maxSeenTime);
+    // 用户把系统时钟往回拨了 7 小时 —— ADR-071 对此不做任何防范,
+    // 判定直接吃这个裸时刻。延长的**基准**仍必须是现有到期时间,
+    // 而不是「现在 + 1 小时」,否则一次「延长」反而成了缩短。
+    const now = T0 + HOUR;
 
     const next = extendTarget(lockUntil, now, { amount: 1, unit: 'hour' });
-    // 基准仍是现有到期时间,不是被拨回的那个时刻。
     expect(next).toBe(lockUntil + HOUR);
     expect(canSetLockUntil(lockUntil, next, now).ok).toBe(true);
   });

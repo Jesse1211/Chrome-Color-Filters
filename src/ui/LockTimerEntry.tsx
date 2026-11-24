@@ -58,8 +58,8 @@ export interface LockTimerEntryProps {
    *
    * 实现方须走仓储层的 `setLockUntil`,由它**原子地**一并置
    * `masterEnabled: true`(ADR-057)。本组件传出的是带单位的时长,
-   * 时间戳的换算由调用方用 `lockUntilFrom(effectiveNow, duration)` 完成 ——
-   * 因为只有调用方知道 `maxSeenTime`(ADR-059/INV-15)。
+   * 时间戳的换算由调用方用 `lockUntilFrom(clock(), duration)` 完成 ——
+   * 因为只有调用方持有注入的时钟(ADR-071)。
    */
   readonly onStartLock: (duration: LockDuration) => Promise<ActionResult> | ActionResult;
   /** 骨架态或其他原因下禁用入口(ADR-044)。 */

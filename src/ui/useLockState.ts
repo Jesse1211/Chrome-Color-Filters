@@ -38,7 +38,6 @@ import { useCallback, useMemo } from 'react';
 
 import {
   type FilterSettings,
-  effectiveNow,
   isLocked,
 } from '../domain/filter-settings.js';
 import { type SettingsRepository } from '../storage/settings-repository.js';
@@ -87,7 +86,7 @@ export function useLockState({
   /**
    * 判定「要不要走时」用的是**不走时的**那个时刻 —— 否则就循环了。
    *
-   * 这里用 `settings.maxSeenTime` 之外再读一次时钟会引入不可测的副作用,
+   * 在这里再读一次时钟会引入不可测的副作用,
    * 故改为:只要存在一个**未来的** `lockUntil` 就让时钟跑起来。
    * 时钟跑起来之后,真正的 `locked` 由下面按 `now` 判定 ——
    * 到期的那一秒 `locked` 自然翻 false(gate:到期自动恢复,无需刷新 popup)。
@@ -101,14 +100,13 @@ export function useLockState({
 
   const now = useLockClock({
     active: hasLockUntil,
-    maxSeenTime: settings.maxSeenTime,
     clock,
     setIntervalFn,
     clearIntervalFn,
   });
 
   /**
-   * 🔴 与仓储层**同口径**的锁定判定(`isLocked` + `effectiveNow`)。
+   * 🔴 与仓储层**同口径**的锁定判定(`isLocked` + 注入时钟,ADR-071)。
    *
    * 两边口径不一致会出现「UI 说已解锁、写入仍被拒」或反过来的裂缝 ——
    * 所以这里刻意复用领域层的同一个纯函数,而不是自己写 `now < lockUntil`。
@@ -118,14 +116,13 @@ export function useLockState({
   /**
    * 写入的统一出口。
    *
-   * ⚠️ 读「当前时刻」时再夹一次 `effectiveNow(clock(), maxSeenTime)` ——
+   * ⚠️ 读「当前时刻」时重新调一次 `clock()` ——
    * 不用渲染时的 `now`:那个值最多可能是一秒前的,
    * 而「从现在起锁 N 分钟」应当以**按下按钮的那一刻**为起点。
    */
   const readNow = useCallback(() => {
-    const raw = clock ? clock() : Date.now();
-    return effectiveNow(raw, settings.maxSeenTime);
-  }, [clock, settings.maxSeenTime]);
+    return clock ? clock() : Date.now();
+  }, [clock]);
 
   const apply = useCallback(
     async (target: number | null): Promise<ActionResult> => {

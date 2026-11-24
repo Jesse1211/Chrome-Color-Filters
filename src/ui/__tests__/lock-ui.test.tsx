@@ -104,7 +104,6 @@ const seeded = (over: {
   masterEnabled?: boolean;
   lockUntil?: number | null;
   rules?: { pattern: string }[];
-  maxSeenTime?: number;
 }) => ({
   [SETTINGS_KEY]: {
     version: 1,
@@ -115,7 +114,6 @@ const seeded = (over: {
       intensity: 100,
     })),
     lockUntil: over.lockUntil ?? null,
-    maxSeenTime: over.maxSeenTime ?? 0,
   },
 });
 
@@ -297,7 +295,7 @@ describe('🔴 二次确认(ADR-056)', () => {
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
 
-    // 基线:读路径可能回写 maxSeenTime(ADR-059),故记下当前调用数再比对。
+    // 基线:ADR-071 后读路径零写入,仍记下当前调用数再比对以隔离本段。
     const before = setSpy.mock.calls.length;
 
     // 点「启动锁定」之前没有确认框。
@@ -676,7 +674,7 @@ describe('🔴 锁定态的控件禁用(ADR-051)', () => {
     >;
     expect(JSON.stringify(after)).toBe(snapshot);
 
-    // 即便有写(maxSeenTime 的推进是 INV-11 例外 b,允许),
+    // 即便有写(ADR-071 后锁定期间不该有任何写入),
     // 三个受锁字段也绝不允许变。
     for (const call of setSpy.mock.calls) {
       const payload = (call[0] as Record<string, unknown>)[SETTINGS_KEY] as {

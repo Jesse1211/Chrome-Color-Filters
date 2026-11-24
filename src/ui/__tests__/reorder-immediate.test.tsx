@@ -83,7 +83,6 @@ const seeded = (patterns: string[]) => ({
       intensity: 100,
     })),
     lockUntil: null,
-    maxSeenTime: 0,
   },
 });
 
@@ -179,7 +178,6 @@ describe('🔴 ADR-061 / INV-6 · 重排后立即销毁 popup,存储里必须已
         masterEnabled: true,
         rules: [{ pattern: 'b.com', mode: 'Grayscale', intensity: 100 }],
         lockUntil: null,
-        maxSeenTime: 0,
       },
     });
     await drain();
@@ -228,7 +226,7 @@ describe('🔴 ADR-061 · 松手后不经任何延迟即写入(无防抖、无�
     render(<PopupUnderTest repository={repository} />);
     await waitFor(() => screen.getByTestId('rule-grip-1'));
 
-    // 基线:加载阶段已有的写入(ADR-059 读路径回写 maxSeenTime)不计入。
+    // 基线:加载阶段已有的写入不计入(ADR-071 后读路径本就零写入)。
     const before = area.setInvocationCount;
 
     await act(async () => {
@@ -310,7 +308,6 @@ describe('ADR-061 · 消除防抖后的回归保护', () => {
           { pattern: 'b.com', mode: 'Grayscale', intensity: 100 },
         ],
         lockUntil: Date.now() + 60 * 60 * 1000,
-        maxSeenTime: 0,
       },
     });
     const repository = new SettingsRepository({ area });

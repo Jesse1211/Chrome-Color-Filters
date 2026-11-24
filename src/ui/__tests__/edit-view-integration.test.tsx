@@ -192,7 +192,6 @@ const seeded = (
       intensity: r.intensity ?? 100,
     })),
     lockUntil: null,
-    maxSeenTime: 0,
   },
 });
 
@@ -435,7 +434,7 @@ describe('🔴 ADR-049 · 预览不写 storage', () => {
     });
     fireEvent.click(screen.getByTestId('rule-open-0'));
 
-    // 读路径可能回写 maxSeenTime(ADR-059),故在进入编辑视图后才开始计数。
+    // ADR-071:读路径不写盘;仍在进入编辑视图后才开始计数,只测这一段的写入。
     const setSpy = vi.spyOn(area, 'set');
 
     const slider = screen.getByTestId('intensity-slider');

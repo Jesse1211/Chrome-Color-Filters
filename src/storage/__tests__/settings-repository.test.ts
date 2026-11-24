@@ -14,6 +14,7 @@ import {
   type FilterSettings,
   MAX_RULES,
   GLOB_PATTERN_MAX_LENGTH,
+  coerceSettings,
 } from '../../domain/index.js';
 import {
   PERSISTED_RULE_KEYS,
@@ -22,7 +23,6 @@ import {
   SettingsRepository,
   MIN_DEBOUNCE_MS,
   MAX_DEBOUNCE_WAIT_MS,
-  MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS,
 } from '../settings-repository.js';
 import { MemoryStorageArea } from '../memory-storage-area.js';
 
@@ -80,9 +80,10 @@ function persisted(area: MemoryStorageArea): Record<string, unknown> {
 /**
  * 取「用户设置」三元组用于「未变」断言。
  *
- * 🔴 **INV-11 例外 b**:`maxSeenTime` 是防御性元数据而非用户设置,
- * 它**必须在锁定期间继续推进**(ADR-059)。故此处刻意**排除**该字段 ——
- * 否则这条断言会与 INV-15 的门禁撞车(DESIGN.md 对此有逐字说明)。
+ * ADR-071 废止 `maxSeenTime` 后**不再有任何豁免字段** —— INV-11 回到
+ * 「锁定期间一切不可变更」的单一语义。本 helper 保留只是为了可读性;
+ * 真正最强的断言是对持久化 JSON 做**全字段**深度相等
+ * (见「读路径不得写盘」一节)。
  */
 function userSettings(s: FilterSettings) {
   return {
@@ -533,14 +534,14 @@ describe('T3 gate · onChanged 订阅(INV-4 多 tab 即时同步的基础机制)
 
 // ════════════════════════════════════════════════════════════════════════
 describe('T3 gate · 存储为空返回默认值,不抛异常', () => {
-  it('空存储 → {version, masterEnabled, rules: [], lockUntil: null, maxSeenTime}', async () => {
+  it('空存储 → {version, masterEnabled, rules: [], lockUntil: null}', async () => {
     const area = new MemoryStorageArea();
     const repo = new SettingsRepository({ area, clock: () => 0 });
 
     const s = await repo.read();
     expect(s.rules).toEqual([]);
     expect(s.lockUntil).toBeNull();
-    expect(s.maxSeenTime).toBe(0);
+    expect(s).not.toHaveProperty('maxSeenTime'); // ADR-071
     expect(typeof s.version).toBe('number');
     expect(typeof s.masterEnabled).toBe('boolean');
   });
@@ -559,7 +560,7 @@ describe('T3 gate · 存储为空返回默认值,不抛异常', () => {
 
 // ════════════════════════════════════════════════════════════════════════
 describe('T3 gate · 持久化 JSON 的键集(ADR-025:派生字段一个都不许有)', () => {
-  it('顶层只含 version/masterEnabled/rules/lockUntil/maxSeenTime', async () => {
+  it('顶层只含 version/masterEnabled/rules/lockUntil(ADR-071)', async () => {
     const { repo, clock, area } = makeRepo();
     await repo.addRule(rule('x.com'));
     await repo.setLockUntil(clock.now() + 60_000);
@@ -632,7 +633,6 @@ describe('T3 gate · 未知/损坏数据不崩溃(ADR-041)', () => {
         masterEnabled: true,
         rules: [{ pattern: 'x.com', mode: 'Nonsense', intensity: 500 }],
         lockUntil: null,
-        maxSeenTime: 0,
       },
     });
     const repo = new SettingsRepository({ area, clock: () => T0 });
@@ -654,7 +654,6 @@ describe('T3 gate · 未知/损坏数据不崩溃(ADR-041)', () => {
           intensity: 100,
         })),
         lockUntil: null,
-        maxSeenTime: 0,
       },
     });
     const repo = new SettingsRepository({ area, clock: () => T0 });
@@ -665,7 +664,7 @@ describe('T3 gate · 未知/损坏数据不崩溃(ADR-041)', () => {
 
 // ════════════════════════════════════════════════════════════════════════
 describe('T3 gate · 写入结构稳定(ADR-047)', () => {
-  it('写入后的 JSON 必含全部五个顶层字段,rules[] 必含三个字段', async () => {
+  it('写入后的 JSON 必含全部四个顶层字段,rules[] 必含三个字段', async () => {
     const { repo, area } = makeRepo();
     await repo.addRule(rule('x.com'));
 
@@ -732,7 +731,7 @@ describe('🔴 T3 gate · 锁定强制(INV-14 / ADR-055)—— 直接调用仓�
     }
 
     // 🔴 INV-11 的「未变」:masterEnabled / rules / lockUntil 三者均未变。
-    // maxSeenTime 刻意排除 —— 例外 b,它必须继续推进。
+    // ADR-071 后不再有豁免字段,故整对象深度相等也成立(见 ADR-071 一节)。
     expect(userSettings(await repo.read())).toEqual(before);
   });
 
@@ -788,20 +787,16 @@ describe('🔴 T3 gate · 锁定强制(INV-14 / ADR-055)—— 直接调用仓�
     expect((await u.repo.read()).lockUntil).toBeNull();
   });
 
-  it('锁定期间被拒绝的写入**仍推进 maxSeenTime**(INV-11 例外 b / ADR-059)', async () => {
+  it('🔴 被拒绝的写入之后全字段深度相等 —— 不再有豁免字段(INV-11 / ADR-071)', async () => {
     const { repo, clock } = await locked();
     const before = await repo.read();
 
     clock.advance(5_000);
-    const res = await repo.setMasterEnabled(false);
-    expect(res.ok).toBe(false);
+    expect((await repo.setMasterEnabled(false)).ok).toBe(false);
 
-    const after = await repo.read();
-    // 用户设置三元组未变……
-    expect(userSettings(after)).toEqual(userSettings(before));
-    // ……但防御性元数据继续前进。若它随锁定一起冻结,单调下界会停在
-    // 锁定开始那一刻,时钟倒退防护立即失效。
-    expect(after.maxSeenTime).toBeGreaterThan(before.maxSeenTime);
+    // ADR-071 删除了原「例外 b:maxSeenTime 单调推进」,
+    // 于是这里可以对**整个聚合**做深度相等,而不只是三元组。
+    expect(await repo.read()).toEqual(before);
   });
 });
 
@@ -867,204 +862,228 @@ describe('🔴 T3 gate · 启动锁定原子地置 masterEnabled: true(ADR-057)'
 });
 
 // ════════════════════════════════════════════════════════════════════════
-describe('🔴 T3 gate · 时钟倒退不缩短锁定(ADR-059 / INV-15)', () => {
-  it('注入倒退的假时钟 → 锁定仍然有效,剩余时长不增加', async () => {
-    const { repo, clock } = makeRepo();
-    const until = clock.now() + 3_600_000;
-    await repo.setLockUntil(until);
-
-    const beforeMax = (await repo.read()).maxSeenTime;
-
-    // 把系统时钟往回拨一整天
-    clock.set(T0 - 86_400_000);
-
-    expect(await repo.isCurrentlyLocked()).toBe(true);
-
-    const s = await repo.read();
-    // maxSeenTime 不被倒退值覆盖
-    expect(s.maxSeenTime).toBeGreaterThanOrEqual(beforeMax);
-    expect(s.maxSeenTime).not.toBe(T0 - 86_400_000);
-
-    // 剩余时长按 effectiveNow 计算,**不增加**
-    const remaining = (s.lockUntil ?? 0) - s.maxSeenTime;
-    expect(remaining).toBeLessThanOrEqual(3_600_000);
-  });
-
-  it('时钟倒退后写入仍被拒绝 —— 倒退不能变成解锁手段', async () => {
-    const { repo, clock } = makeRepo();
+/**
+ * 🔴 **ADR-071 门禁 —— 读路径零写入。**
+ *
+ * `maxSeenTime` / `effectiveNow` / INV-15(时钟倒退防范)已**整条废止**:
+ * 改系统时钟绕过锁定本就允许(§4.1 记录为无法防范的途径),既然不防作弊,
+ * 这条防范就失去了存在理由。
+ *
+ * 废止的**核心收益**是这组测试守着的东西:原实现为维持单调下界,必须在
+ * **读路径**也更新 `maxSeenTime`,采用 read-modify-write **整体回写** ——
+ * 读出整个 settings、改一个字段、写回整个对象。期间若用户改了规则,
+ * 那次改动就被旧快照覆盖(实测规则数应为 1 实际为 0,**用户规则被静默吃掉**)。
+ *
+ * 读路径零写入是 ADR-071 的核心保证,下面的断言是它的门禁:
+ * 只要读路径一行写盘都没有,这条竞态在**结构上**不可能复活。
+ */
+describe('🔴 T3 gate · 读路径不得写盘(ADR-071)', () => {
+  it('read() 不产生任何 storage.set', async () => {
+    const { repo, clock, area } = makeRepo();
+    await repo.addRule(rule('a.com'));
     await repo.setLockUntil(clock.now() + 3_600_000);
 
-    clock.set(T0 - 86_400_000);
+    const baseline = area.setCallCount;
 
-    const res = await repo.setMasterEnabled(false);
-    expect(res.ok).toBe(false);
-    if (res.ok) throw new Error('unreachable');
-    expect(res.error.kind).toBe('locked');
+    // 锁定期间的正常使用:只读(popup 打开、content script 读取)。
+    // 时间大幅前进也不该引出任何写入 —— 已经没有下界需要落盘了。
+    for (let i = 0; i < 20; i += 1) {
+      clock.advance(60_000);
+      await repo.read();
+    }
+
+    expect(area.setCallCount).toBe(baseline);
   });
 
-  it('时钟倒退后「缩短锁定」仍被拒绝', async () => {
-    const { repo, clock } = makeRepo();
-    const until = clock.now() + 3_600_000;
-    await repo.setLockUntil(until);
-
-    clock.set(T0 - 86_400_000);
-
-    const res = await repo.setLockUntil(until - 1_000);
-    expect(res.ok).toBe(false);
-    expect((await repo.read()).lockUntil).toBe(until);
-  });
-
-  it('maxSeenTime 在正常前进时跟随时钟', async () => {
-    const { repo, clock } = makeRepo();
-    const first = (await repo.read()).maxSeenTime;
-    clock.advance(60_000);
-    const second = (await repo.read()).maxSeenTime;
-    expect(second).toBe(first + 60_000);
-  });
-
-  // ──────────────────────────────────────────────────────────────────
-  // 🔴 回归:读路径必须把 maxSeenTime **落盘**,不能只在内存里推进。
-  //
-  // 此前的断言全部经 `repo.read()` 读回 —— 同一个实例会用**活的注入时钟**
-  // 把下界重新算一遍,恰好把「从未落盘」这个缺陷完整掩盖掉。
-  // 下面的用例一律断言 **`area.snapshot()` 里的原始持久化值**,
-  // 或构造一个「重启后」的新实例来观察,绕开这层重算。
-  // ──────────────────────────────────────────────────────────────────
-
-  it('🔴 只读操作也要把推进后的 maxSeenTime 落盘(DESIGN.md:710「每次读写」)', async () => {
+  it('isCurrentlyLocked() 这条读路径同样不产生任何 storage.set', async () => {
     const { repo, clock, area } = makeRepo();
     await repo.setLockUntil(clock.now() + 3_600_000);
 
-    const atLockStart = persisted(area).maxSeenTime as number;
-    expect(atLockStart).toBe(T0);
-
-    // 锁定期间的正常使用:只读,不写(popup 打开、content script 读取)。
-    clock.advance(50 * 60_000);
-    await repo.read();
-
-    // 内存里的值对了还不够 —— 磁盘上的下界也必须前进,否则重启即丢。
-    expect(persisted(area).maxSeenTime).toBe(T0 + 50 * 60_000);
-  });
-
-  it('🔴 isCurrentlyLocked() 这条读路径同样落盘', async () => {
-    const { repo, clock, area } = makeRepo();
-    await repo.setLockUntil(clock.now() + 3_600_000);
+    const baseline = area.setCallCount;
 
     clock.advance(30 * 60_000);
     expect(await repo.isCurrentlyLocked()).toBe(true);
+    clock.advance(10 * 86_400_000); // 锁定早已过期
+    expect(await repo.isCurrentlyLocked()).toBe(false);
 
-    expect(persisted(area).maxSeenTime).toBe(T0 + 30 * 60_000);
+    expect(area.setCallCount).toBe(baseline);
   });
 
-  it('🔴 INV-15:只读一段时间 → 倒拨时钟 → 重启,剩余锁定时长不增加', async () => {
+  it('空存储 / 垃圾数据上的读同样零写入 —— 读不得「顺手修复」磁盘', async () => {
+    const empty = makeRepo();
+    await empty.repo.read();
+    await empty.repo.read();
+    expect(empty.area.setCallCount).toBe(0);
+
     const area = new MemoryStorageArea();
-    const c1 = fakeClock(T0);
-    const repo1 = new SettingsRepository({ area, clock: c1.now });
-
-    // 锁 7 天。
-    const until = T0 + 7 * 86_400_000;
-    await repo1.setLockUntil(until);
-
-    // 6 天过去,期间用户**一次写入都没尝试过** —— 只是打开 popup 看了看。
-    // 锁定期间所有用户写入本就被设计拒绝,所以「只读」才是常态。
-    for (let day = 1; day <= 6; day += 1) {
-      c1.set(T0 + day * 86_400_000);
-      await repo1.read();
-      await repo1.isCurrentlyLocked();
-    }
-
-    // 持久化的单调下界必须已跟到第 6 天,而不是冻结在锁定开始那一刻。
-    expect(persisted(area).maxSeenTime).toBe(T0 + 6 * 86_400_000);
-
-    // 攻击:把系统时钟倒拨回锁定开始,然后「重启浏览器」(全新实例 + 全新时钟)。
-    const c2 = fakeClock(T0);
-    const repo2 = new SettingsRepository({ area, clock: c2.now });
-
-    expect(await repo2.isCurrentlyLocked()).toBe(true);
-
-    const s = await repo2.read();
-    // 真实剩余 ≤ 1 天;若下界丢了,这里会是整整 7 天 —— 锁被重置。
-    const remaining = (s.lockUntil ?? 0) - s.maxSeenTime;
-    expect(remaining).toBeLessThanOrEqual(86_400_000);
-    expect(remaining).toBeGreaterThan(0);
-
-    // 写入仍然被拒 —— 倒拨 + 重启不是解锁手段。
-    expect((await repo2.setMasterEnabled(false)).ok).toBe(false);
+    area.seed({ [SETTINGS_KEY]: 'garbage' });
+    const repo = new SettingsRepository({ area, clock: () => T0 });
+    await repo.read();
+    expect(area.setCallCount).toBe(0);
+    // 磁盘上的垃圾原样保留 —— 回退只发生在内存里(ADR-041)。
+    expect(area.snapshot()[SETTINGS_KEY]).toBe('garbage');
   });
 
-  it('🔴 倒拨的时钟不会把已落盘的 maxSeenTime 改小', async () => {
-    const { repo, clock, area } = makeRepo();
-    await repo.setLockUntil(clock.now() + 3_600_000);
+  it('🔴 跨实例:在途的读路径回写跨越用户写入时,磁盘终态仍是用户的写入', async () => {
+    // 这是 ADR-071 废止掉的那个真实缺陷的回归断言,**精确复现竞态时序**:
+    //   后台实例的 get 已返回(规则为空)→ 用户并发加了一条规则落盘
+    //   → 后台实例此刻才发出整体回写 → 用旧快照把用户的规则覆盖掉。
+    // 这里用一个「可闸住 get」的 area 把后台读卡在那个窗口里。
+    const area = new MemoryStorageArea();
+    let releaseGet = (): void => undefined;
+    const gateOpened = new Promise<void>((resolve) => {
+      releaseGet = () => {
+        resolve();
+      };
+    });
 
-    clock.advance(10 * 60_000);
-    await repo.read();
-    const high = persisted(area).maxSeenTime as number;
-    expect(high).toBe(T0 + 10 * 60_000);
+    const realGet = area.get.bind(area);
+    let gated = false;
+    area.get = async (keys) => {
+      const result = await realGet(keys);
+      if (!gated) {
+        gated = true;
+        // 第一次 get 已经拿到「规则为空」的快照,但在这里挂住 ——
+        // 调用方要到 gate 放开之后才会继续(可能去发出回写)。
+        await gateOpened;
+      }
+      return result;
+    };
 
-    // 往回拨一整天后反复读 —— 磁盘上的下界只能持平,绝不能回落。
-    clock.set(T0 - 86_400_000);
-    await repo.read();
-    await repo.isCurrentlyLocked();
-    await repo.read();
+    const background = new SettingsRepository({ area, clock: () => T0 });
+    const user = new SettingsRepository({ area, clock: () => T0 });
 
-    expect(persisted(area).maxSeenTime).toBe(high);
+    // 后台读启动并卡在 get 之后 —— 刻意**不 await**。
+    const inflight = background.read();
+    await Promise.resolve();
+
+    // 用户在这个窗口里加了一条规则,已经落盘。
+    expect((await user.addRule(rule('user-added.com'))).ok).toBe(true);
+
+    // 放开后台读 —— 原实现会在此刻用旧快照整体回写,吃掉用户的规则。
+    releaseGet();
+    await inflight;
+
+    // 🔴 磁盘终态必须是用户的写入。读路径零写入 ⇒ 结构上不可能被覆盖。
+    const disk = coerceSettings(area.snapshot()[SETTINGS_KEY]);
+    expect(disk.rules).toHaveLength(1);
+    expect(disk.rules[0]?.pattern).toBe('user-added.com');
   });
 
-  it('读路径的回写有节流 —— 热读不会被放大成热写', async () => {
-    const { repo, clock, area } = makeRepo();
-    await repo.read();
-    const baseline = area.setCallCount;
+  it('🔴 跨实例:被拒绝的写入之后的推进同样不回滚并发的用户写入', async () => {
+    // 原实现在**被拒绝的写入**之后仍要推进 maxSeenTime(旧 INV-11 例外 b),
+    // 同样是整体回写 —— 于是一次被拒的写入也能吃掉并发的用户规则。
+    // ADR-071 删除了例外 b:拒绝路径一行都不写盘。
+    const area = new MemoryStorageArea();
+    let releaseGet = (): void => undefined;
+    const gateOpened = new Promise<void>((resolve) => {
+      releaseGet = () => {
+        resolve();
+      };
+    });
 
-    // 节流窗口内连读 50 次:至多再落盘一次。
-    for (let i = 0; i < 50; i += 1) {
-      clock.advance(100); // 共 5s,远小于 MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS
-      await repo.read();
-    }
-    expect(area.setCallCount - baseline).toBeLessThanOrEqual(1);
+    const realGet = area.get.bind(area);
+    let gated = false;
+    area.get = async (keys) => {
+      const result = await realGet(keys);
+      if (!gated) {
+        gated = true;
+        await gateOpened;
+      }
+      return result;
+    };
 
-    // 跨过节流窗口后,下一次读必须真的落盘。
-    clock.advance(MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS + 1);
-    await repo.read();
-    expect(persisted(area).maxSeenTime).toBe(clock.now());
+    const attacker = new SettingsRepository({ area, clock: () => T0 });
+    const user = new SettingsRepository({ area, clock: () => T0 });
+
+    // 攻击者发起一次**注定被拒**的写入(过去的时间戳 → 等于一键解锁,必拒),
+    // 它的 get 卡在闸门后,拿到的是「规则为空」的旧快照。
+    const inflight = attacker.setLockUntil(T0 - 1_000);
+    await Promise.resolve();
+
+    // 用户在这个窗口里加了一条规则,已经落盘。
+    expect((await user.addRule(rule('user-added.com'))).ok).toBe(true);
+
+    releaseGet();
+    const rejected = await inflight;
+    expect(rejected.ok).toBe(false);
+
+    // 🔴 被拒绝的写入不得回滚用户刚添加的规则(实测曾是 1 变 0)。
+    const disk = coerceSettings(area.snapshot()[SETTINGS_KEY]);
+    expect(disk.rules).toHaveLength(1);
+    expect(disk.rules[0]?.pattern).toBe('user-added.com');
   });
 
-  it('回写只动 maxSeenTime —— 用户设置三元组一字未动(INV-11)', async () => {
+  it('🔴 被拒绝的写入之后磁盘**全字段**深度相等(INV-11 单一语义)', async () => {
+    // ADR-071 删除例外 b 后不再有任何豁免字段,故可以做整对象深度相等 ——
+    // 这比原来「排除 maxSeenTime 的三元组相等」强得多。
     const { repo, clock, area } = makeRepo();
     await repo.addRule(rule('a.com'));
     await repo.addRule(rule('b.com'));
     await repo.setLockUntil(clock.now() + 3_600_000);
 
     const before = persisted(area);
-    clock.advance(10 * 60_000);
-    await repo.read();
-    const after = persisted(area);
+    const setsBefore = area.setCallCount;
 
-    expect(after.masterEnabled).toEqual(before.masterEnabled);
-    expect(after.rules).toEqual(before.rules);
-    expect(after.lockUntil).toEqual(before.lockUntil);
-    expect(after.version).toEqual(before.version);
-    // 唯一变的就是这个防御性字段(INV-11 例外 b)。
-    expect(after.maxSeenTime).toBe(T0 + 10 * 60_000);
+    clock.advance(5_000);
+    expect((await repo.setMasterEnabled(false)).ok).toBe(false);
+    expect((await repo.addRule(rule('c.com'))).ok).toBe(false);
+    expect((await repo.removeRule(0)).ok).toBe(false);
+    expect((await repo.updateRule(0, { intensity: 1 })).ok).toBe(false);
+    expect((await repo.reorderRule(0, 1)).ok).toBe(false);
+    expect((await repo.setLockUntil(null)).ok).toBe(false);
+
+    // 全字段深度相等 —— 不再有「例外 b」可以豁免。
+    expect(persisted(area)).toEqual(before);
+    // 且这些拒绝一次 storage.set 都没有产生。
+    expect(area.setCallCount).toBe(setsBefore);
   });
 
-  it('回写落盘失败时 read() 仍正常返回,不抛异常(ADR-041)', async () => {
+  it('持久化 JSON 里不存在 maxSeenTime(ADR-071 已废止该字段)', async () => {
     const { repo, clock, area } = makeRepo();
     await repo.addRule(rule('a.com'));
+    await repo.setLockUntil(clock.now() + 60_000);
 
-    area.failSet = () => new Error('boom');
-    clock.advance(10 * 60_000);
-
-    const s = await repo.read();
-    expect(s.rules.map((r) => r.pattern)).toEqual(['a.com']);
-    expect(s.maxSeenTime).toBe(T0 + 10 * 60_000);
+    expect(persisted(area)).not.toHaveProperty('maxSeenTime');
+    expect(PERSISTED_SETTINGS_KEYS).not.toContain('maxSeenTime');
   });
 
-  it('存储为空时的读不产生无谓写入', async () => {
-    const { repo, area } = makeRepo();
+  it('历史数据里的 maxSeenTime 在下一次写入时被清掉,不被带回磁盘', async () => {
+    const area = new MemoryStorageArea();
+    area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [],
+        lockUntil: null,
+        maxSeenTime: T0 + 999,
+      },
+    });
+    const repo = new SettingsRepository({ area, clock: () => T0 });
+
+    // 读不碰磁盘,旧字段仍在。
     await repo.read();
-    await repo.read();
-    // 空存储 → 下界为 clock(),磁盘上没有记录,需要落一次;但不该每读一次写一次。
-    expect(area.setCallCount).toBeLessThanOrEqual(1);
+    expect(persisted(area)).toHaveProperty('maxSeenTime');
+
+    // 一次正常写入之后,`toPersisted` 的逐字段拷贝把它彻底清掉(ADR-025)。
+    expect((await repo.addRule(rule('a.com'))).ok).toBe(true);
+    expect(persisted(area)).not.toHaveProperty('maxSeenTime');
+  });
+
+  it('时钟倒退后锁定按**绝对时间**继续有效(ADR-071 不做任何防范,但也不误判)', async () => {
+    // ADR-071 已接受「时钟拨快可绕过锁定」。但拨**慢**时锁定不该失效 ——
+    // `isLocked` 的语义是 `now < lockUntil`,倒退只会让锁显得更长(已接受的代价)。
+    const { repo, clock } = makeRepo();
+    const until = clock.now() + 3_600_000;
+    await repo.setLockUntil(until);
+
+    clock.set(T0 - 86_400_000); // 往回拨一整天
+
+    expect(await repo.isCurrentlyLocked()).toBe(true);
+    expect((await repo.setMasterEnabled(false)).ok).toBe(false);
+    // 缩短仍被拒(INV-12 与时钟无关)。
+    expect((await repo.setLockUntil(until - 1_000)).ok).toBe(false);
+    expect((await repo.read()).lockUntil).toBe(until);
   });
 });
 

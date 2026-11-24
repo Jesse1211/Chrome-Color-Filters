@@ -18,16 +18,14 @@
  * 剩余时长由 `remainingMs(lockUntil, now)` 在每次渲染时**重新**算 ——
  * 于是丢帧、后台节流、popup 重开都不会累积漂移(见 `lock-format.ts` 文件头)。
  *
- * ## 时钟倒退(ADR-059 / INV-15)
+ * ## 时钟(ADR-071)
  *
- * 对外给出的是 `effectiveNow(clock(), maxSeenTime)` —— 单调下界夹过的时刻。
- * 把系统时间往回调**不会**让倒计时变长,与仓储层的锁定判定同口径
+ * 对外给出的就是注入时钟 `clock()` 的原始时刻 —— 与仓储层的锁定判定同口径
  * (两边口径不一致会出现「UI 说还锁着、写入却已放行」的裂缝)。
+ * 原 `effectiveNow` 单调下界已随 ADR-071 废止:系统时钟由用户自行负责。
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-
-import { effectiveNow } from '../domain/filter-settings.js';
+import { useEffect, useRef, useState } from 'react';
 
 /** 倒计时刷新间隔 —— §5.4 要求**每秒**刷新。 */
 export const LOCK_TICK_MS = 1000;
@@ -38,8 +36,6 @@ export interface UseLockClockOptions {
    * 未锁定的 popup 不该为了一个不显示的倒计时每秒唤醒一次。
    */
   readonly active: boolean;
-  /** ADR-059 / INV-15 的单调下界,来自 `settings.maxSeenTime`。 */
-  readonly maxSeenTime: number;
   /** 可注入时钟,默认 `Date.now`。测试据此控制时间,不依赖真实挂钟。 */
   readonly clock?: () => number;
   /** 可注入的定时器,默认 `setInterval` / `clearInterval`。 */
@@ -48,11 +44,10 @@ export interface UseLockClockOptions {
 }
 
 /**
- * @returns 当前时刻(已过 `effectiveNow` 夹取),`active` 时每秒推进一次。
+ * @returns 当前时刻(注入时钟的原始值,ADR-071),`active` 时每秒推进一次。
  */
 export function useLockClock({
   active,
-  maxSeenTime,
   clock,
   setIntervalFn,
   clearIntervalFn,
@@ -109,11 +104,6 @@ export function useLockClock({
     };
   }, [active, readClock]);
 
-  /**
-   * ADR-059 / INV-15:对外一律给夹过单调下界的时刻。
-   *
-   * ⚠️ 注意这里夹的是 `max(tick, maxSeenTime)` —— 与仓储层
-   * `#readContext()` 的算法逐字一致。
-   */
-  return useMemo(() => effectiveNow(tick, maxSeenTime), [tick, maxSeenTime]);
+  // ADR-071:直接给注入时钟的时刻 —— 与仓储层 `#readContext()` 逐字一致。
+  return tick;
 }

@@ -52,7 +52,7 @@ export function formatRemaining(remainingMs: number): string {
  * 剩余毫秒 —— `lockUntil - now`,下限夹到 0。
  *
  * `lockUntil === null` 视为 0(未锁定)。
- * `now` 应当是 `effectiveNow(Date.now(), maxSeenTime)` 的结果(ADR-059/INV-15),
+ * `now` 应当是注入时钟 `clock()` 的结果(ADR-071),
  * 否则把系统时钟往回调会让倒计时变长。
  */
 export function remainingMs(lockUntil: number | null, now: number): number {

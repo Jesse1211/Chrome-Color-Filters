@@ -12,7 +12,6 @@ import {
   canSetLockUntil,
   coerceSettings,
   defaultSettings,
-  effectiveNow,
   isAtRuleCapacity,
   isLocked,
   type FilterSettings,
@@ -79,6 +78,8 @@ describe('ADR-041 · 损坏数据回退默认值且不抛异常', () => {
     [42],
     [{}],
     [{ rules: 'not an array' }],
+    [{ masterEnabled: 'yes', lockUntil: 'soon' }],
+    // ADR-071 已废止的旧字段:读到历史数据里的它也必须被安全忽略。
     [{ masterEnabled: 'yes', lockUntil: 'soon', maxSeenTime: {} }],
   ])('coerceSettings(%s) 返回合法 settings', (raw) => {
     expect(() => coerceSettings(raw)).not.toThrow();
@@ -86,7 +87,6 @@ describe('ADR-041 · 损坏数据回退默认值且不抛异常', () => {
     expect(Array.isArray(s.rules)).toBe(true);
     expect(typeof s.masterEnabled).toBe('boolean');
     expect(s.lockUntil === null || typeof s.lockUntil === 'number').toBe(true);
-    expect(Number.isFinite(s.maxSeenTime)).toBe(true);
   });
 
   it('丢弃 pattern 非法的规则,保留合法的', () => {
@@ -130,37 +130,6 @@ describe('isLocked · 时间边界(ADR-051 / ADR-053)', () => {
 
     // 静态证据:可执行代码里根本不出现 Date.now(注释中的说明不算)。
     expect(executableSourceOf('filter-settings.ts')).not.toContain('Date.now');
-  });
-});
-
-describe('effectiveNow · 单调性(ADR-059 / INV-15)', () => {
-  it('rawNow > maxSeenTime → 返回 rawNow(正常前进)', () => {
-    expect(effectiveNow(2_000, 1_000)).toBe(2_000);
-  });
-
-  it('rawNow < maxSeenTime → 返回 maxSeenTime(时钟倒退,不缩短锁定)', () => {
-    expect(effectiveNow(500, 1_000)).toBe(1_000);
-  });
-
-  it('rawNow === maxSeenTime → 返回该值', () => {
-    expect(effectiveNow(1_000, 1_000)).toBe(1_000);
-  });
-
-  it('时钟倒退不会把锁定误判为已解除(INV-15)', () => {
-    const settings: FilterSettings = {
-      ...defaultSettings(),
-      lockUntil: 10_000,
-      maxSeenTime: 9_000,
-    };
-    // 时钟被调回 1970:裸 rawNow 仍是锁定,这里确认单调下界也锁定。
-    expect(isLocked(settings, effectiveNow(0, settings.maxSeenTime))).toBe(true);
-    // 倒退后「剩余时长」不得增加:下界 9000 → 剩 1000,而非 10000。
-    expect(10_000 - effectiveNow(0, settings.maxSeenTime)).toBe(1_000);
-  });
-
-  it('非有限输入被安全处理', () => {
-    expect(effectiveNow(NaN, 1_000)).toBe(1_000);
-    expect(effectiveNow(1_000, NaN)).toBe(1_000);
   });
 });
 
@@ -251,16 +220,38 @@ describe('canSetLockUntil · 单向性(ADR-052 / INV-12)', () => {
   });
 });
 
-describe('INV-11 例外 b · maxSeenTime 不是用户设置', () => {
-  it('锁定期间 maxSeenTime 仍可推进(ADR-059)', () => {
-    // 领域层只负责提供单调推进的语义;仓储层(T3)据此在锁定期间
-    // 继续更新该字段。此处断言领域函数不会因「锁定中」而拒绝推进。
-    const locked: FilterSettings = {
-      ...defaultSettings(),
-      lockUntil: 10_000,
-      maxSeenTime: 5_000,
-    };
-    expect(isLocked(locked, effectiveNow(6_000, locked.maxSeenTime))).toBe(true);
-    expect(effectiveNow(6_000, locked.maxSeenTime)).toBe(6_000);
+describe('🔴 ADR-071 · maxSeenTime 与 effectiveNow 已整条废止', () => {
+  it('FilterSettings 聚合不含 maxSeenTime —— 默认值里没有该键', () => {
+    // INV-11 回到单一语义:锁定期间一切不可变更,唯一例外是 lockUntil 的延长
+    // (INV-12)。原「例外 b:maxSeenTime 单调推进」随 ADR-071 删除,
+    // 于是**不再有任何豁免字段**。
+    expect(Object.keys(defaultSettings()).sort()).toEqual(
+      ['lockUntil', 'masterEnabled', 'rules', 'version'].sort(),
+    );
+  });
+
+  it('coerceSettings 丢弃历史数据里的 maxSeenTime,不把它带回聚合', () => {
+    const s = coerceSettings({
+      version: 1,
+      masterEnabled: true,
+      rules: [],
+      lockUntil: null,
+      maxSeenTime: 123_456,
+    });
+    expect(s).not.toHaveProperty('maxSeenTime');
+  });
+
+  it('领域层不再导出 effectiveNow(ADR-071 删除了该纯函数)', async () => {
+    const mod: Record<string, unknown> = await import('../filter-settings.js');
+    expect(mod.effectiveNow).toBeUndefined();
+  });
+
+  it('锁定判定直接吃注入的 clock() —— 不再夹任何单调下界', () => {
+    const locked: FilterSettings = { ...defaultSettings(), lockUntil: 10_000 };
+    // 时钟被拨回 1970:锁定按绝对时间仍然成立(now < lockUntil)。
+    expect(isLocked(locked, 0)).toBe(true);
+    // 时钟被拨到锁定之后:判定为未锁定 —— 这是 ADR-071 明文接受的代价
+    // (改系统时钟绕过锁定本就允许,§4.1)。
+    expect(isLocked(locked, 20_000)).toBe(false);
   });
 });
