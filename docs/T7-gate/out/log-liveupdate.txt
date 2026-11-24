@@ -1,0 +1,18 @@
+PASS 初始 Grayscale@100 → 已上色 filter="grayscale(1)"
+PASS 前置:注册随强度变化而变 ["ccf-gray-100"] → ["ccf-gray-30"]
+PASS (a) 强度 100→30:已打开页面换成新值 filter="grayscale(0.3)"（旧值="grayscale(1)"）
+PASS (a) 页面未重新导航（实时更新不得靠重载实现）
+PASS (a) 新值形态确为 CSS 内置 grayscale()（ADR-075:不再有 data: URI 形态）filter="grayscale(0.3)"
+PASS (a) 强度 30 对应的变量值精确为 grayscale(0.3),实际="grayscale(0.3)"
+PASS (a2) 强度 30→75:已打开页面再次换值,变量值="grayscale(0.75)"
+PASS (a2) 页面未重新导航
+PASS (c) 规则被删除:已打开页面转为无滤镜 filter="none"
+PASS (c) 显式压制属性在位 on=false off=true
+PASS (c) 对应注册已被 unregister
+PASS (c) 页面未重新导航
+PASS (d) 新增规则:已打开页面立即上色 filter="grayscale(0.7)" on=true off=false
+PASS (d) 页面未重新导航
+PASS (e) 主开关 OFF:已打开页面撤滤镜 filter="none" off=true
+PASS (e) 注册被清空（ADR-027 彻底止血）
+PASS (f) 主开关开回:已打开页面恢复上色 filter="grayscale(0.7)"
+LIVEUPDATE: PASS

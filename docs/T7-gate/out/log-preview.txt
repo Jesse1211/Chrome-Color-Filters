@@ -1,0 +1,18 @@
+PASS  规则态:grayscale(1)  {"filter":"grayscale(1)","attrOn":true,"attrOff":false}
+PASS  取到目标 tabId  {"tabId":260644260}
+PASS  🔴 PREVIEW_FILTER 经 chrome.tabs.connect 直连生效(ADR-049 路由成立)  {"filter":"grayscale(0.3)","attrOn":true,"attrOff":false}
+PASS  🔴 连续拖动每一步都渲染(不防抖,ADR-049)  [{"intensity":80,"filter":"grayscale(0.8)"},{"intensity":60,"filter":"grayscale(0.6)"},{"intensity":40,"filter":"grayscale(0.4)"},{"intensity":20,"filter":"grayscale(0.2)"},{"intensity":5,"filter":"grayscale(0.05)"}]
+PASS  🔴 预览值绝不落盘:storage 中规则仍为 intensity=100  {"rules":[{"intensity":100,"mode":"Grayscale","pattern":"*.wikipedia.org"}]}
+PASS  🔴 预览活动期间 onChanged 到达,页面不重绘(ADR-049 优先级)  {"beforeChanged":"grayscale(0.05)","afterChanged":"grayscale(0.05)"}
+PASS  🔴 PREVIEW_CLEAR 后按 onChanged 带来的新值 0.7 渲染  {"filter":"grayscale(0.7)","attrOn":true,"attrOff":false}
+PASS  断开前确处于预览态(探针有效)  {"filter":"grayscale(0.2)","attrOn":true,"attrOff":false}
+PASS  🔴 端口断开(popup 关闭)→ 自动恢复规则值,无预览残留  {"filter":"grayscale(0.7)","attrOn":true,"attrOff":false}
+PASS  导航前确处于预览态(探针有效)  {"filter":"grayscale(0.1)","attrOn":true,"attrOff":false}
+PASS  🔴 预览期间导航 → 新页面按**规则**值 0.7 渲染,不是预览值 0.1  {"filter":"grayscale(0.7)","attrOn":true,"attrOff":false}
+PASS  🔴 页面导航触发端口 onDisconnect(ADR-049 生命周期)  {"portDead":true}
+PASS  多端口:A 的预览生效(探针有效)  {"filter":"grayscale(0.1)","attrOn":true,"attrOff":false}
+PASS  多端口:B 接手后页面为 B 的值  {"filter":"grayscale(0.3)","attrOn":true,"attrOff":false}
+PASS  🔴 陈旧端口 A 的 onDisconnect 不得擦掉 B 正在编辑的预览(ADR-049)  {"expected":"grayscale(0.3)","got":"grayscale(0.3)","ruleValue":"grayscale(0.7)"}
+PASS  🔴 归属端口 B 断开 → 恢复规则值 0.7,不残留预览态  {"filter":"grayscale(0.7)","attrOn":true,"attrOff":false}
+
+PASS — preview

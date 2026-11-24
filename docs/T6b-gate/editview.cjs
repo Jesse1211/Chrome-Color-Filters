@@ -475,12 +475,28 @@ async function main() {
 
     /* ═══════════ 5. 遮蔽场景 → 解释框与一键修复的渲染效果 ═══════════ */
 
-    // 播种两条:0 号 Grayscale 先命中,1 号 BlueYellow 被遮蔽。
+    // 播种两条:0 号先命中,1 号被遮蔽。
+    //
+    // 🔴 **ADR-075 后的修正(T7 复验时发现):** 1 号原本是
+    //    `rule('*.org', 'BlueYellow', 100)`。ADR-075 删掉了 BlueYellow,
+    //    而 `coerceFilterMode` 对未知 mode 按设计**回退 Grayscale**
+    //    (读时收敛的迁移口),于是 1 号实际变成 `Grayscale@100`
+    //    —— 与 0 号**逐字相同**。
+    //    后果:下面 5c「一键修复 → 当前页面渲染立即变成该规则的滤镜」
+    //    在结构上**不可能观测到变化**(两条规则算出的 filter 都是
+    //    `grayscale(1)`),判据 `afterFix !== 'grayscale(1)'` 必然失败。
+    //    即红灯来自门禁的**固定值失效**,不是产品缺陷。
+    //
+    //    修法:用**强度**区分两条规则(ADR-075 之后这是唯一的区分维度,
+    //    与 DESIGN.md §6 T7 gate 对 INV-6 的措辞一致:
+    //    「ADR-075 后只有一个模式,用强度区分」)。
+    //    1 号取 40 档 → 一键修复后页面必须变成 `grayscale(0.4)`,
+    //    与 0 号的 `grayscale(1)` 可区分。**条款一条未减。**
     await seed(
       browser,
       settings([
         rule('*.wikipedia.org', 'Grayscale', 100),
-        rule('*.org', 'BlueYellow', 100),
+        rule('*.org', 'Grayscale', 40),
       ]),
     );
     await site.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -548,9 +564,9 @@ async function main() {
       { rules: storedAfterFix && storedAfterFix.rules.map((r) => r.pattern) },
     );
     assert(
-      '🔴🔴 5c/S13. 一键修复 → **当前页面渲染立即变成该规则的滤镜**',
-      afterFix !== 'grayscale(1)' && afterFix !== 'none',
-      { filter: afterFix },
+      '🔴🔴 5c/S13. 一键修复 → **当前页面渲染立即变成该规则的滤镜**(应为 1 号的 40 档)',
+      afterFix === 'grayscale(0.4)',
+      { filter: afterFix, expected: 'grayscale(0.4)' },
     );
     /*
      * 🔴 ADR-044:写入改变了 `rules`,旧的索引字段随之失效 —— popup 在写入后

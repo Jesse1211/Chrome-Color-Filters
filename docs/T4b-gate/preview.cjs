@@ -177,20 +177,34 @@ async function main() {
     results.cases.push({ case: 'PREVIEW_CLEAR', filter: cleared.filter });
 
     // ── 条款:端口断开(popup 关闭)自动恢复,不残留 ──
+    //
+    // 🔴 **ADR-075 后的修正(T7 复验时发现):** 这里原本发的是
+    //    `mode: 'BlueYellow'` —— ADR-075 已删除该模式。
+    //    产品的 `coercePreviewMessage` 刻意**原样校验** mode、不做默认回退
+    //    (其注释:把拼错的 mode 静默变成 Grayscale 会让契约不符表现为
+    //    「预览总是灰阶」,比「无反应」更难诊断),于是这条消息被**正确地**
+    //    拒绝,页面停在规则值 0.7,「断开前确处于预览态」这条前置断言失败。
+    //
+    //    即:红灯来自**门禁引用了一个已不存在的模式**,不是产品缺陷。
+    //    改用一个合法的灰阶强度,且刻意选与规则值(70)不同的 20 ——
+    //    本条款要验的是「断开 → 恢复规则值、无预览残留」,
+    //    它只需要「预览态可与规则态区分」,从不需要第二个模式。
+    //    **条款本身一条未减**(17 条断言不变)。
     await worker.evaluate(() => {
       globalThis.__ccfPort.postMessage({
         type: 'PREVIEW_FILTER',
-        mode: 'BlueYellow',
-        intensity: 100,
+        mode: 'Grayscale',
+        intensity: 20,
       });
     });
     const beforeDisconnect = await waitFilter(
       page,
-      (p) => p.filter !== 'grayscale(0.7)',
+      (p) => p.filter === 'grayscale(0.2)',
     );
     assert(
       '断开前确处于预览态(探针有效)',
-      beforeDisconnect.filter !== 'grayscale(0.7)' &&
+      beforeDisconnect.filter === 'grayscale(0.2)' &&
+        beforeDisconnect.filter !== 'grayscale(0.7)' &&
         beforeDisconnect.filter !== 'none',
       beforeDisconnect,
     );

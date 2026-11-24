@@ -1,0 +1,38 @@
+PASS  基线:目标页初始无滤镜(探针有效)  {"baseline":"none"}
+PASS  取到目标页 tab(id + windowId)  {"id":1117546727,"windowId":1117546725}
+PASS  popup 以列表视图启动(ADR-022)  {"view":"list"}
+PASS  popup 收到 GET_TAB_STATE 响应(ADR-044 真实联调)
+PASS  🔴 GET_TAB_STATE 解析到目标页(wikipedia)而非 popup 自己  {"tabId":1117546727,"injectable":true,"host":"en.wikipedia.org","activeRuleIndex":null,"shadowedRuleIndexes":[]}
+PASS  ADR-020:新建视图输入框为空、Grayscale @ 100%  {"pattern":"","intensity":"100%"}
+PASS  🔴 F20:空 pattern → 保存禁用  {"text":"✕请输入网址模式,例如 *.weibo.*","disabled":false,"value":null,"dataset":{"testid":"status-line","kind":"empty","tone":"bad"}}
+PASS  🔴 非法字符 → 保存禁用 + 状态行指出该字符  {"kind":"illegal-character","char":"#"}
+PASS  非法时输入框描红(data-invalid=true)
+PASS  🔴 §5.6:匹配且生效 → kind=live / tone=ok  {"testid":"status-line","kind":"live","tone":"ok"}
+PASS  §5.7:预览提示行可用
+PASS  🔴🔴 1. 拖滑块 → 真实页面逐帧实时预览(ADR-049 从 popup 上下文成立)  [{"intensity":80,"filter":"grayscale(0.8)"},{"intensity":55,"filter":"grayscale(0.55)"},{"intensity":30,"filter":"grayscale(0.3)"}]
+PASS  🔴 预览期间 storage 零写入:规则列表仍为空  {"rules":[]}
+PASS  🔴🔴 2. 不保存**关闭 popup** → 页面恢复原状(onDisconnect 路径)  {"filter":"none"}
+PASS  2b 前置:预览已生效(探针有效)  {"filter":"grayscale(0.45)"}
+PASS  🔴🔴 2b. 不保存点「返回」(popup 未关)→ 页面恢复(主动 PREVIEW_CLEAR)  {"filter":"none","popupStillOpen":true}
+PASS  ADR-022:返回后回到列表视图
+PASS  🔴 3a. pattern 不匹配当前页 → 提示行置灰,reason=pattern-mismatch  {"testid":"preview-hint","available":"false","reason":"pattern-mismatch"}
+PASS  🔴🔴 3. 在 A 站编辑针对 B 站的规则 → A 站**绝不**被 B 站滤镜影响  {"filter":"none"}
+PASS  §5.7:预览不可用时**滑块仍可改值**  {"value":"20"}
+PASS  保存成功 → 返回列表视图(ADR-022)
+PASS  🔴 F20:点保存后规则**持久化**(一次写入,ADR-061 立即落盘)  {"rules":[{"intensity":60,"mode":"Grayscale","pattern":"*.wikipedia.org"}]}
+PASS  ⚠️ 保存触发 reconcile(ADR-062):**重新导航**后新规则对首帧生效  {"filter":"grayscale(0.6)"}
+PASS  5 前置:0 号规则先命中(grayscale(1))  {"filter":"grayscale(1)"}
+PASS  🔴 ADR-044:真实 SW 上报 activeRuleIndex=0 / shadowedRuleIndexes=[1]  {"activeRuleIndex":0,"shadowedRuleIndexes":[1]}
+PASS  🔴 5a. 被遮蔽 → `◐` warn 状态行 + 琥珀解释框(§5.6)  {"status":{"testid":"status-line","kind":"shadowed","tone":"warn"},"box":"第 1 条规则 *.wikipedia.org 排在前面,已先命中。把这条移到最上面 ↑"}
+PASS  🔴🔴 5b/S13. 一键修复 → 顺序改变(落盘)  {"rules":["*.org","*.wikipedia.org"]}
+PASS  🔴🔴 5c/S13. 一键修复 → **当前页面渲染立即变成该规则的滤镜**(应为 1 号的 40 档)  {"filter":"grayscale(0.4)","expected":"grayscale(0.4)"}
+PASS  🔴 ADR-044:一键修复后 SW 的 activeRuleIndex 指向用户编辑的那条,状态行变「生效中」  {"activeRuleIndex":0,"shadowedRuleIndexes":[1],"activePattern":"*.org","editingPattern":"*.org","statusKind":"live"}
+PASS  🔴🔴 2c. 预览中点「删除」→ 规则消失 + 页面恢复 + 回到列表视图  {"view":"list","rules":["*.wikipedia.org"],"beforeDelete":"grayscale(0.25)","afterDelete":"grayscale(1)"}
+PASS  4 前置:预览已生效(探针有效)  {"filter":"grayscale(0.15)"}
+PASS  🔴🔴 4. 预览期间导航 → 端口断开,新页面按**规则**渲染(非预览值)  {"filter":"grayscale(1)"}
+PASS  主开关 OFF 前置:页面无滤镜(INV-8)  {"filter":"none"}
+PASS  🔴 主开关 OFF 期间页面始终无滤镜(预览不可能把它点亮)  {"filter":"none"}
+PASS  ADR-013:不可注入页 → popup 显示琥珀说明条  {"text":"⚠此页面不支持滤镜。Chrome 不允许扩展修改内部页面、应用商店和 PDF 查看器。"}
+PASS  🔴 ADR-050:不可注入页上主开关**仍可用**
+
+GATE PASS  36/36

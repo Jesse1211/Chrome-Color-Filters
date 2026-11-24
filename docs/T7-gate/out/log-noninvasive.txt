@@ -1,0 +1,12 @@
+PASS  fixture 页面已滤镜  {"filter":"grayscale(1)"}
+PASS  🔴 (c) Network 实测:零条「页面与其资源之外」的请求(ADR-026)  {"foreignCount":0,"sample":[]}
+PASS  🔴 无请求 URL 携带页面内容(图片/信标外传)  {"suspicious":[]}
+PASS  🔴 跨域 iframe 内容被滤镜覆盖(ADR-016):maxChannelSpread == 0  {"frameSpreadOn":0}
+PASS  主开关 OFF 后页面未滤镜(INV-8)  {"offFilter":"none"}
+PASS  🔴 探针有效:iframe 在未滤镜态下确实彩色(spread > 0)  {"frameSpreadOff":255}
+PASS  🔴 滤镜开启时点击命中区域正常(INV-1)  {"clicked":1}
+PASS  🔴 滤镜开启时文本可选中(INV-1)  {"selectedLength":43}
+PASS  🔴 滤镜开启时 video 正常播放(INV-1)  {"t0":0.01104,"t1":1.169272,"paused":false,"readyState":4}
+PASS  🔴 滤镜开启时 CSS 动画正常运行(INV-1)  {"a":"matrix(0.500684, 0.86563, -0.86563, 0.500684, 0, 0)","b":"matrix(-0.668506, 0.743707, -0.743707, -0.668506, 0, 0)","running":1}
+
+PASS — noninvasive

@@ -1,0 +1,14 @@
+PASS  前置 hn:滤镜确实生效(录制的是一个真的在工作的扩展)  {"filter":"grayscale(1)"}
+PASS  🔴 (c) hn:录制到的请求中**零条**由扩展发起指向外部网络(ADR-026)  {"total":7,"extensionInitiated":0,"outbound":[]}
+PASS  (c) hn:无请求 URL 携带页面内容(信标形态)  {"sample":[]}
+PASS  前置 wikipedia:滤镜确实生效(录制的是一个真的在工作的扩展)  {"filter":"grayscale(1)"}
+PASS  🔴 (c) wikipedia:录制到的请求中**零条**由扩展发起指向外部网络(ADR-026)  {"total":5,"extensionInitiated":0,"outbound":[]}
+PASS  (c) wikipedia:无请求 URL 携带页面内容(信标形态)  {"sample":[]}
+PASS  前置 github:滤镜确实生效(录制的是一个真的在工作的扩展)  {"filter":"grayscale(1)"}
+PASS  🔴 (c) github:录制到的请求中**零条**由扩展发起指向外部网络(ADR-026)  {"total":101,"extensionInitiated":0,"outbound":[]}
+PASS  (c) github:无请求 URL 携带页面内容(信标形态)  {"sample":[]}
+PASS  🔴 N1 负向对照:录制器**抓到了**人为注入的那条外传请求(证明录制通道真的在工作)  {"recorded":1,"serverHits":1}
+PASS  N2 前置:在扩展的 isolated world 里执行注入脚本成功(无 evalError)  {"chosenContextId":8}
+PASS  🔴 N2 负向对照:从**扩展的 isolated world** 发出的 fetch 被归因为 fromExtension —— 归因逻辑不是恒假  {"recorded":[{"url":"http://127.0.0.1:61336/beacon?world=isolated","fromExtension":true,"attribution":{"byContext":true,"byUrl":false},"scriptIds":["11"]}]}
+
+PASS — T7 INV-9 (c) Network 实测

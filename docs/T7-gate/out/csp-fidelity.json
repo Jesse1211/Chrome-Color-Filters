@@ -1,0 +1,251 @@
+{
+  "clause": "T7【新增】CSP 无关性(ADR-075)+ 灰阶视觉/强度档保真",
+  "assertions": [
+    {
+      "name": "N2 基线 hn:无规则时未滤镜(filter=none)且像素确实彩色(maxSpread=255 > 0)",
+      "ok": true,
+      "detail": {
+        "filter": "none",
+        "max": 255,
+        "counted": 1100800
+      }
+    },
+    {
+      "name": "N2 基线 wiki:无规则时未滤镜(filter=none)且像素确实彩色(maxSpread=178 > 0)",
+      "ok": true,
+      "detail": {
+        "filter": "none",
+        "max": 178,
+        "counted": 1100800
+      }
+    },
+    {
+      "name": "🔴 N3 负向对照:news.ycombinator.com 的响应头**确实**带 CSP(否则「零 violation」空转)",
+      "ok": true,
+      "detail": {
+        "cspHeader": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://cdnjs.cloudflare.com/; frame-src 'self' https://www.google.com/recapt"
+      }
+    },
+    {
+      "name": "🔴 ADR-075:hn 上灰阶确实生效(computed filter = grayscale(1))",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "🔴 ADR-075:hn 上**像素确实改变** —— 全图 maxChannelSpread == 0(真灰),基线 > 0",
+      "ok": true,
+      "detail": {
+        "onSpread": {
+          "max": 0,
+          "counted": 1100800
+        },
+        "offSpread": {
+          "max": 255,
+          "counted": 1100800
+        }
+      }
+    },
+    {
+      "name": "🔴 ADR-075:hn 上**零 CSP violation**(页面内事件 + console 两条通道)",
+      "ok": true,
+      "detail": {
+        "violations": [],
+        "consoleErrors": []
+      }
+    },
+    {
+      "name": "强度 0 档:computed filter 逐位等于 grayscale(0)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(0)",
+        "expected": "grayscale(0)"
+      }
+    },
+    {
+      "name": "强度 1 档:computed filter 逐位等于 grayscale(0.01)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(0.01)",
+        "expected": "grayscale(0.01)"
+      }
+    },
+    {
+      "name": "强度 7 档:computed filter 逐位等于 grayscale(0.07)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(0.07)",
+        "expected": "grayscale(0.07)"
+      }
+    },
+    {
+      "name": "强度 30 档:computed filter 逐位等于 grayscale(0.3)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(0.3)",
+        "expected": "grayscale(0.3)"
+      }
+    },
+    {
+      "name": "强度 50 档:computed filter 逐位等于 grayscale(0.5)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(0.5)",
+        "expected": "grayscale(0.5)"
+      }
+    },
+    {
+      "name": "强度 55 档:computed filter 逐位等于 grayscale(0.55)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(0.55)",
+        "expected": "grayscale(0.55)"
+      }
+    },
+    {
+      "name": "强度 99 档:computed filter 逐位等于 grayscale(0.99)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(0.99)",
+        "expected": "grayscale(0.99)"
+      }
+    },
+    {
+      "name": "强度 100 档:computed filter 逐位等于 grayscale(1)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(1)",
+        "expected": "grayscale(1)"
+      }
+    },
+    {
+      "name": "🔴 N1:0 档是恒等变换 —— 同一页面上「0 档」与「无滤镜」的截图**逐字节相同**",
+      "ok": true,
+      "detail": {
+        "filterWith": "grayscale(0)",
+        "filterWithout": "none",
+        "identical": true,
+        "spreadWithFilter": 178,
+        "spreadWithout": 178
+      }
+    },
+    {
+      "name": "100 档:全图 maxChannelSpread == 0(完全灰阶)",
+      "ok": true,
+      "detail": {
+        "max": 0,
+        "counted": 1100800
+      }
+    },
+    {
+      "name": "50 档:像素极差严格介于 0 档与 100 档之间(强度是连续量,不是开/关两态)",
+      "ok": true,
+      "detail": {
+        "zero": 178,
+        "mid": 89,
+        "hundred": 0
+      }
+    }
+  ],
+  "data": {
+    "baseline_hn": {
+      "filter": "none",
+      "spread": {
+        "max": 255,
+        "counted": 1100800
+      }
+    },
+    "baseline_wiki": {
+      "filter": "none",
+      "spread": {
+        "max": 178,
+        "counted": 1100800
+      }
+    },
+    "hn": {
+      "filter": "grayscale(1)",
+      "cspHeader": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://cdnjs.cloudflare.com/; frame-src 'self' https://www.google.com/recaptcha/; style-src 'self' 'unsafe-inline'; img-src 'self' https://account.ycombinator.com; frame-ancestors 'self'",
+      "violations": [],
+      "consoleErrors": [],
+      "spread": {
+        "max": 0,
+        "counted": 1100800
+      }
+    },
+    "zeroIdentity": {
+      "filterWith": "grayscale(0)",
+      "filterWithout": "none",
+      "identical": true,
+      "spreadWithFilter": 178,
+      "spreadWithout": 178
+    },
+    "samples": {
+      "0": {
+        "filter": "grayscale(0)",
+        "expected": "grayscale(0)",
+        "spread": {
+          "max": 178,
+          "counted": 1100800
+        }
+      },
+      "1": {
+        "filter": "grayscale(0.01)",
+        "expected": "grayscale(0.01)",
+        "spread": {
+          "max": 176,
+          "counted": 1100800
+        }
+      },
+      "7": {
+        "filter": "grayscale(0.07)",
+        "expected": "grayscale(0.07)",
+        "spread": {
+          "max": 166,
+          "counted": 1100800
+        }
+      },
+      "30": {
+        "filter": "grayscale(0.3)",
+        "expected": "grayscale(0.3)",
+        "spread": {
+          "max": 124,
+          "counted": 1100800
+        }
+      },
+      "50": {
+        "filter": "grayscale(0.5)",
+        "expected": "grayscale(0.5)",
+        "spread": {
+          "max": 89,
+          "counted": 1100800
+        }
+      },
+      "55": {
+        "filter": "grayscale(0.55)",
+        "expected": "grayscale(0.55)",
+        "spread": {
+          "max": 80,
+          "counted": 1100800
+        }
+      },
+      "99": {
+        "filter": "grayscale(0.99)",
+        "expected": "grayscale(0.99)",
+        "spread": {
+          "max": 2,
+          "counted": 1100800
+        }
+      },
+      "100": {
+        "filter": "grayscale(1)",
+        "expected": "grayscale(1)",
+        "spread": {
+          "max": 0,
+          "counted": 1100800
+        }
+      }
+    }
+  },
+  "pass": true
+}

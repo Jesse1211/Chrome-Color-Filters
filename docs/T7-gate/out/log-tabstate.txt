@@ -1,0 +1,33 @@
+  [PASS] BASELINE · 匹配站点上 html.filter 非 none(探针有效) — {"filter":"grayscale(1)"}
+  [PASS] BASELINE · 不匹配站点上 html.filter 为 none(对照组) — {"filter":"none"}
+  [PASS] GATE-2 · 匹配站点的图标为 active(ADR-019 亮 = 这页被改色了) — {"tabId":1567676324,"icon":"active"}
+  [PASS] GATE-2 · 不匹配站点的图标为 inactive — {"tabId":1567676325,"icon":"inactive"}
+  [PASS] GATE-2 · 产物中两态 16px 图标内容不相同(ADR-045) — {"activeBytes":128,"inactiveBytes":116}
+  [PASS] GATE-5 · chrome://settings/ → injectable=false — {"got":false}
+  [PASS] GATE-5 · chrome://settings/ → reason=internal-page — {"got":"internal-page"}
+  [PASS] GATE-5 · chrome://settings/ → host=null — {"got":null}
+  [PASS] GATE-5 · chrome://settings/ → TabState 字段集与 ADR-044 完全一致 — {"keys":"activeRuleIndex,host,injectable,reason,shadowedRuleIndexes,tabId"}
+  [PASS] GATE-5 · https://chromewebstore.google.com/ → injectable=false — {"got":false}
+  [PASS] GATE-5 · https://chromewebstore.google.com/ → reason=web-store — {"got":"web-store"}
+  [PASS] GATE-5 · https://chromewebstore.google.com/ → host=null — {"got":null}
+  [PASS] GATE-5 · https://chromewebstore.google.com/ → TabState 字段集与 ADR-044 完全一致 — {"keys":"activeRuleIndex,host,injectable,reason,shadowedRuleIndexes,tabId"}
+  [PASS] GATE-5 · chrome://newtab/ → injectable=false — {"got":false}
+  [PASS] GATE-5 · chrome://newtab/ → reason=new-tab — {"got":"new-tab"}
+  [PASS] GATE-5 · chrome://newtab/ → host=null — {"got":null}
+  [PASS] GATE-5 · chrome://newtab/ → TabState 字段集与 ADR-044 完全一致 — {"keys":"activeRuleIndex,host,injectable,reason,shadowedRuleIndexes,tabId"}
+  [PASS] GATE-5 · https://zh.wikipedia.org/wiki/Color → injectable=true — {"got":true}
+  [PASS] GATE-5 · https://zh.wikipedia.org/wiki/Color → reason=undefined — {}
+  [PASS] GATE-5 · https://zh.wikipedia.org/wiki/Color → host=zh.wikipedia.org — {"got":"zh.wikipedia.org"}
+  [PASS] GATE-5 · https://zh.wikipedia.org/wiki/Color → TabState 字段集与 ADR-044 完全一致 — {"keys":"activeRuleIndex,host,injectable,shadowedRuleIndexes,tabId"}
+  [PASS] GATE-3 · 3 个匹配同一规则的 tab 图标全部 active — {"ids3":[1567676324,1567676336,1567676337,1567676338],"icons3":["active","active","active","active"]}
+  [PASS] GATE-3 · 改规则后 3 个 tab 的 filter 全部即时变化(未刷新,INV-4) — {"after":["grayscale(0.6)","grayscale(0.6)","grayscale(0.6)"]}
+  [PASS] GATE-4 · 主开关 OFF → 3 个 tab 滤镜全部消失 — {"offFilters":["none","none","none"]}
+  [PASS] GATE-4 · 主开关 OFF → 图标全灰(ADR-019 明文) — {"offIcons":["inactive","inactive","inactive","inactive"]}
+  [PASS] GATE-4 · 主开关 OFF → 规则原样保留(INV-8) — {"keptRules":[{"intensity":60,"mode":"RedGreen","pattern":"*.wikipedia.org"}]}
+  [PASS] GATE-4 · 主开关 ON → 3 个 tab 滤镜全部恢复 — {"onFilters":["grayscale(0.6)","grayscale(0.6)","grayscale(0.6)"]}
+  [PASS] GATE-1 · service worker 已被终止(行为探针:不再应答消息) — {"killed":true,"swSilent":"silent"}
+  [PASS] GATE-1 · 🔴 worker 被终止后打开匹配站点,滤镜仍正确应用 — {"filter":"grayscale(1)"}
+  [PASS] GATE-1 · worker 重启后 GET_TAB_STATE 仍答出正确的 activeRuleIndex — {"revivedState":{"tabId":1567676346,"injectable":true,"host":"en.wikipedia.org","activeRuleIndex":0,"shadowedRuleIndexes":[]}}
+
+  ── 30/30 断言通过 ──
+  T5 REAL_STACK_GATE: PASS

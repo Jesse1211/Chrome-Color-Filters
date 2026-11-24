@@ -1,0 +1,67 @@
+──────── RUN 1/5 ────────
+run1 github {"off":{"frames":356,"colorFrames":354,"worst":0.0276},"coldCache":{"frames":192,"colorFrames":0,"worst":0},"newTab":{"frames":172,"colorFrames":0,"worst":0},"restart":{"frames":215,"colorFrames":0,"worst":0},"hot":{"frames":201,"colorFrames":0,"worst":0}}
+run1 wikipedia {"off":{"frames":121,"colorFrames":119,"worst":0.0379},"coldCache":{"frames":89,"colorFrames":0,"worst":0},"newTab":{"frames":83,"colorFrames":0,"worst":0},"restart":{"frames":35,"colorFrames":0,"worst":0},"hot":{"frames":27,"colorFrames":0,"worst":0}}
+run1 hn {"off":{"frames":5,"colorFrames":3,"worst":0.0228},"coldCache":{"frames":3,"colorFrames":0,"worst":0},"newTab":{"frames":3,"colorFrames":0,"worst":0},"restart":{"frames":4,"colorFrames":0,"worst":0},"hot":{"frames":2,"colorFrames":0,"worst":0}}
+INFO run1 github: coldCache 0/192；newTab 0/172；restart 0/215；hot 0/201；基线 354/356
+INFO run1 wikipedia: coldCache 0/89；newTab 0/83；restart 0/35；hot 0/27；基线 119/121
+INFO run1 hn: coldCache 0/3；newTab 0/3；restart 0/4；hot 0/2；基线 3/5
+run1 unmatched github {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":252,"filteredSamples":252,"firstFiltered":[20,"grayscale(1)"]}}
+run1 unmatched wikipedia {"unmatched":{"samples":248,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[14,"grayscale(1)"]}}
+run1 unmatched hn {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[18,"grayscale(1)"]}}
+INFO run1 unmatched github: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 252/252(应 >0)
+INFO run1 unmatched wikipedia: unmatched 带滤镜采样 0/248(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+INFO run1 unmatched hn: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+──────── RUN 2/5 ────────
+run2 github {"off":{"frames":455,"colorFrames":453,"worst":0.0208},"coldCache":{"frames":204,"colorFrames":0,"worst":0},"newTab":{"frames":169,"colorFrames":0,"worst":0},"restart":{"frames":245,"colorFrames":0,"worst":0},"hot":{"frames":190,"colorFrames":0,"worst":0}}
+run2 wikipedia {"off":{"frames":125,"colorFrames":124,"worst":0.038},"coldCache":{"frames":86,"colorFrames":0,"worst":0},"newTab":{"frames":84,"colorFrames":0,"worst":0},"restart":{"frames":35,"colorFrames":0,"worst":0},"hot":{"frames":103,"colorFrames":0,"worst":0}}
+run2 hn {"off":{"frames":5,"colorFrames":3,"worst":0.0228},"coldCache":{"frames":3,"colorFrames":0,"worst":0},"newTab":{"frames":3,"colorFrames":0,"worst":0},"restart":{"frames":2,"colorFrames":0,"worst":0},"hot":{"frames":2,"colorFrames":0,"worst":0}}
+INFO run2 github: coldCache 0/204；newTab 0/169；restart 0/245；hot 0/190；基线 453/455
+INFO run2 wikipedia: coldCache 0/86；newTab 0/84；restart 0/35；hot 0/103；基线 124/125
+INFO run2 hn: coldCache 0/3；newTab 0/3；restart 0/2；hot 0/2；基线 3/5
+run2 unmatched github {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":233,"filteredSamples":233,"firstFiltered":[17,"grayscale(1)"]}}
+run2 unmatched wikipedia {"unmatched":{"samples":246,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[14,"grayscale(1)"]}}
+run2 unmatched hn {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[7,"grayscale(1)"]}}
+INFO run2 unmatched github: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 233/233(应 >0)
+INFO run2 unmatched wikipedia: unmatched 带滤镜采样 0/246(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+INFO run2 unmatched hn: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+──────── RUN 3/5 ────────
+run3 github {"off":{"frames":413,"colorFrames":410,"worst":0.0277},"coldCache":{"frames":212,"colorFrames":0,"worst":0},"newTab":{"frames":197,"colorFrames":0,"worst":0},"restart":{"frames":210,"colorFrames":0,"worst":0},"hot":{"frames":180,"colorFrames":0,"worst":0}}
+run3 wikipedia {"off":{"frames":94,"colorFrames":93,"worst":0.3318},"coldCache":{"frames":132,"colorFrames":0,"worst":0},"newTab":{"frames":83,"colorFrames":0,"worst":0},"restart":{"frames":82,"colorFrames":0,"worst":0},"hot":{"frames":53,"colorFrames":0,"worst":0}}
+run3 hn {"off":{"frames":5,"colorFrames":3,"worst":0.0228},"coldCache":{"frames":3,"colorFrames":0,"worst":0},"newTab":{"frames":4,"colorFrames":0,"worst":0},"restart":{"frames":2,"colorFrames":0,"worst":0},"hot":{"frames":2,"colorFrames":0,"worst":0}}
+INFO run3 github: coldCache 0/212；newTab 0/197；restart 0/210；hot 0/180；基线 410/413
+INFO run3 wikipedia: coldCache 0/132；newTab 0/83；restart 0/82；hot 0/53；基线 93/94
+INFO run3 hn: coldCache 0/3；newTab 0/4；restart 0/2；hot 0/2；基线 3/5
+run3 unmatched github {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[15,"grayscale(1)"]}}
+run3 unmatched wikipedia {"unmatched":{"samples":247,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[13,"grayscale(1)"]}}
+run3 unmatched hn {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[8,"grayscale(1)"]}}
+INFO run3 unmatched github: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+INFO run3 unmatched wikipedia: unmatched 带滤镜采样 0/247(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+INFO run3 unmatched hn: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+──────── RUN 4/5 ────────
+run4 github {"off":{"frames":443,"colorFrames":440,"worst":0.0211},"coldCache":{"frames":208,"colorFrames":0,"worst":0},"newTab":{"frames":171,"colorFrames":0,"worst":0},"restart":{"frames":221,"colorFrames":0,"worst":0},"hot":{"frames":181,"colorFrames":0,"worst":0}}
+run4 wikipedia {"off":{"frames":118,"colorFrames":117,"worst":0.3321},"coldCache":{"frames":82,"colorFrames":0,"worst":0},"newTab":{"frames":83,"colorFrames":0,"worst":0},"restart":{"frames":144,"colorFrames":0,"worst":0},"hot":{"frames":105,"colorFrames":0,"worst":0}}
+run4 hn {"off":{"frames":4,"colorFrames":3,"worst":0.0228},"coldCache":{"frames":3,"colorFrames":0,"worst":0},"newTab":{"frames":4,"colorFrames":0,"worst":0},"restart":{"frames":4,"colorFrames":0,"worst":0},"hot":{"frames":2,"colorFrames":0,"worst":0}}
+INFO run4 github: coldCache 0/208；newTab 0/171；restart 0/221；hot 0/181；基线 440/443
+INFO run4 wikipedia: coldCache 0/82；newTab 0/83；restart 0/144；hot 0/105；基线 117/118
+INFO run4 hn: coldCache 0/3；newTab 0/4；restart 0/4；hot 0/2；基线 3/4
+run4 unmatched github {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":234,"filteredSamples":234,"firstFiltered":[16,"grayscale(1)"]}}
+run4 unmatched wikipedia {"unmatched":{"samples":247,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[14,"grayscale(1)"]}}
+run4 unmatched hn {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[6,"grayscale(1)"]}}
+INFO run4 unmatched github: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 234/234(应 >0)
+INFO run4 unmatched wikipedia: unmatched 带滤镜采样 0/247(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+INFO run4 unmatched hn: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+──────── RUN 5/5 ────────
+run5 github {"off":{"frames":355,"colorFrames":352,"worst":0.0277},"coldCache":{"frames":171,"colorFrames":0,"worst":0},"newTab":{"frames":172,"colorFrames":0,"worst":0},"restart":{"frames":231,"colorFrames":0,"worst":0},"hot":{"frames":184,"colorFrames":0,"worst":0}}
+run5 wikipedia {"off":{"frames":118,"colorFrames":117,"worst":0.0379},"coldCache":{"frames":138,"colorFrames":0,"worst":0},"newTab":{"frames":82,"colorFrames":0,"worst":0},"restart":{"frames":144,"colorFrames":0,"worst":0},"hot":{"frames":103,"colorFrames":0,"worst":0}}
+run5 hn {"off":{"frames":5,"colorFrames":3,"worst":0.0228},"coldCache":{"frames":3,"colorFrames":0,"worst":0},"newTab":{"frames":3,"colorFrames":0,"worst":0},"restart":{"frames":2,"colorFrames":0,"worst":0},"hot":{"frames":2,"colorFrames":0,"worst":0}}
+INFO run5 github: coldCache 0/171；newTab 0/172；restart 0/231；hot 0/184；基线 352/355
+INFO run5 wikipedia: coldCache 0/138；newTab 0/82；restart 0/144；hot 0/103；基线 117/118
+INFO run5 hn: coldCache 0/3；newTab 0/3；restart 0/2；hot 0/2；基线 3/5
+run5 unmatched github {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":238,"filteredSamples":238,"firstFiltered":[17,"grayscale(1)"]}}
+run5 unmatched wikipedia {"unmatched":{"samples":247,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[14,"grayscale(1)"]}}
+run5 unmatched hn {"unmatched":{"samples":253,"filteredSamples":0,"firstFiltered":null},"control":{"samples":253,"filteredSamples":253,"firstFiltered":[7,"grayscale(1)"]}}
+INFO run5 unmatched github: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 238/238(应 >0)
+INFO run5 unmatched wikipedia: unmatched 带滤镜采样 0/247(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+INFO run5 unmatched hn: unmatched 带滤镜采样 0/253(应 0)；对照 * 带滤镜采样 253/253(应 >0)
+FLICKER: PASS (连续 5 次全绿)
+FLICKER EXIT=0
