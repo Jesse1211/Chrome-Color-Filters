@@ -1,8 +1,10 @@
 {
   "github": {
     "off": {
-      "attr": false,
+      "cls": false,
       "varVal": "",
+      "svgDefs": false,
+      "registeredCss": "",
       "computedFilter": "none",
       "injectedStyle": 0,
       "injectedSvg": 0,
@@ -12,12 +14,14 @@
       "everOn": false
     },
     "on": {
-      "attr": true,
-      "varVal": "grayscale(1)",
-      "computedFilter": "grayscale(1)",
+      "cls": true,
+      "varVal": "url(\"#ccf-gray-100\")",
+      "svgDefs": true,
+      "registeredCss": "url(\"#ccf-gray-100\")",
+      "computedFilter": "url(\"#ccf-gray-100\")",
       "injectedStyle": 0,
-      "injectedSvg": 0,
-      "ccfNodes": 0,
+      "injectedSvg": 1,
+      "ccfNodes": 3,
       "sessionKeys": [],
       "localKeys": [
         "__ccf_fp_github.com"
@@ -27,8 +31,10 @@
   },
   "wikipedia": {
     "off": {
-      "attr": false,
+      "cls": false,
       "varVal": "",
+      "svgDefs": false,
+      "registeredCss": "",
       "computedFilter": "none",
       "injectedStyle": 0,
       "injectedSvg": 0,
@@ -38,12 +44,14 @@
       "everOn": false
     },
     "on": {
-      "attr": true,
-      "varVal": "grayscale(1)",
-      "computedFilter": "grayscale(1)",
+      "cls": true,
+      "varVal": "url(\"#ccf-gray-100\")",
+      "svgDefs": true,
+      "registeredCss": "url(\"#ccf-gray-100\")",
+      "computedFilter": "url(\"#ccf-gray-100\")",
       "injectedStyle": 0,
-      "injectedSvg": 0,
-      "ccfNodes": 0,
+      "injectedSvg": 1,
+      "ccfNodes": 3,
       "sessionKeys": [],
       "localKeys": [
         "__ccf_fp_en.wikipedia.org"
@@ -53,8 +61,10 @@
   },
   "hn": {
     "off": {
-      "attr": false,
+      "cls": false,
       "varVal": "",
+      "svgDefs": false,
+      "registeredCss": "",
       "computedFilter": "none",
       "injectedStyle": 0,
       "injectedSvg": 0,
@@ -64,12 +74,14 @@
       "everOn": false
     },
     "on": {
-      "attr": true,
-      "varVal": "grayscale(1)",
-      "computedFilter": "grayscale(1)",
+      "cls": true,
+      "varVal": "url(\"#ccf-gray-100\")",
+      "svgDefs": true,
+      "registeredCss": "url(\"#ccf-gray-100\")",
+      "computedFilter": "url(\"#ccf-gray-100\")",
       "injectedStyle": 0,
-      "injectedSvg": 0,
-      "ccfNodes": 0,
+      "injectedSvg": 1,
+      "ccfNodes": 3,
       "sessionKeys": [],
       "localKeys": [
         "__ccf_fp_news.ycombinator.com"

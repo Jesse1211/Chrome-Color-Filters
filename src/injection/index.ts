@@ -43,7 +43,6 @@ export * from './injector.js';
 export * from './liveness.js';
 export * from './preview-contract.js';
 export * from './preview-receiver.js';
-export * from './registered-marker.js';
 export * from './match-pattern.js';
 export * from './reconcile.js';
 export * from './reconciler.js';

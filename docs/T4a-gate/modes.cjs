@@ -1,5 +1,9 @@
-// 四种模式都必须在真实 Chrome 中真正生效 —— 尤其三种 daltonization 模式
-// 走的是内联 data: URI 引用的 feColorMatrix,这是本实现的新路径,必须实测。
+// 四种模式都必须在真实 Chrome 中真正生效 —— 四种模式统一走**同文档**
+// SVG feColorMatrix 的 url("#ccf-…") 引用(ADR-069/070),必须实测。
+//
+// 🔴 不要把这里的断言写回 `url("data:image/svg+xml…")`:那是 ADR-069
+//    **废止**的旧方案(data: URI 的 SVG 被站点 CSP 的 img-src 拦掉,
+//    三个色觉滤镜静默失效)。现在正确的形态恰恰是**没有** data: URI。
 const fs=require('fs'), path=require('path');
 const {PNG}=require('pngjs');
 const { launch, seed, rule, settings } = require('./lib.cjs');
@@ -75,7 +79,7 @@ function stats(buf){
   if(off.cls||off.svgDefs||off.maxSpread===0){console.log('FAIL: OFF 基线异常(应无滤镜且有彩色)');fail=true;}
   // Grayscale:必须完全灰阶。
   if(report.Grayscale.maxSpread!==0){console.log(`FAIL Grayscale: maxSpread=${report.Grayscale.maxSpread} ≠ 0`);fail=true;}
-  // 三种辅助模式:必须 (a) 真的应用了 url(data:...) (b) 像素确实变了。
+  // 三种辅助模式:必须 (a) 真的应用了同文档 url("#ccf-…") (b) 像素确实变了。
   for(const m of ['RedGreen','GreenRed','BlueYellow']){
     const r=report[m];
     if(!r.cls){console.log(`FAIL ${m}: 未打门控 class(ccf-on)`);fail=true;}
@@ -83,8 +87,11 @@ function stats(buf){
     //    灰阶若仍走内置 grayscale() 就不会有这个容器 —— 这条断言正是
     //    把「路径分裂」挡在门禁上。
     if(!r.svgDefs){console.log(`FAIL ${m}: 无同文档 SVG 滤镜定义容器 —— url("#ccf-…") 引用不到(ADR-069/070)`);fail=true;}
-    if(!/^url\("data:image\/svg\+xml/.test(r.v)){console.log(`FAIL ${m}: 未使用内联 data: URI,实际=${r.v.slice(0,40)}`);fail=true;}
-    if(r.computed==='none'){console.log(`FAIL ${m}: computed filter 为 none —— data: URI 未被 Chrome 接受!`);fail=true;}
+    // 🔴 ADR-069:必须是**同文档 fragment 引用**,且**绝不**是 data: URI。
+    //    后者正是被站点 CSP img-src 拦掉、导致静默失效的那个废止方案。
+    if(!/^url\("#ccf-/.test(r.v)){console.log(`FAIL ${m}: 未使用同文档 url("#ccf-…") 引用,实际=${r.v.slice(0,40)}`);fail=true;}
+    if(/data:/.test(r.v)){console.log(`FAIL ${m}: 出现了 ADR-069 废止的 data: URI,实际=${r.v.slice(0,40)}`);fail=true;}
+    if(r.computed==='none'){console.log(`FAIL ${m}: computed filter 为 none —— 同文档 url("#ccf-…") 未被 Chrome 解析到!`);fail=true;}
     // ⚠️ 单个色块可能是该矩阵的**不动点**,不足以判定「没生效」。
     // 实测:GreenRed 下纯红 (255,0,0) 的像确实就是 (255,0,0) ——
     // R'=1.436619*255 被钳到 255,G'=0,B'=-0.184239*255 被钳到 0。

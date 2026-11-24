@@ -31,7 +31,20 @@ const PROBE = `(() => {
     if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
-    out.push({ path: pathOf(el), pos: cs.position,
+    // 🔴 配对键:path(nth-child 路径)在真实站点上**不稳定** ——
+    //    github 两次加载之间 DOM 顺序会变(登录条/公告/A-B 分桶),
+    //    于是同一个 header 在 on/off 两轮里算出不同的 path,
+    //    compared 掉到 0,门禁报「无可比对元素」—— 那是仪器脆弱,
+    //    不是产品回归(实测 diffs=[]、filteredAttr=true 全部正常)。
+    //
+    //    故再给一个**不依赖兄弟下标**的稳定键:
+    //    标签 + id + 前两个 class + position + 尺寸(尺寸不受滤镜影响,
+    //    这正是 INV-1 要断言的量,拿它做身份是安全的)。
+    const cls = (typeof el.className === 'string' ? el.className : '')
+      .trim().split(/\s+/).filter(Boolean).slice(0, 2).join('.');
+    const stableKey = el.tagName.toLowerCase() + '#' + (el.id || '') + '.' + cls
+      + '|' + cs.position + '|' + Math.round(r.width) + 'x' + Math.round(r.height);
+    out.push({ path: pathOf(el), stableKey, pos: cs.position,
       x: Math.round(r.x*100)/100, y: Math.round(r.y*100)/100,
       w: Math.round(r.width*100)/100, h: Math.round(r.height*100)/100 });
   }
@@ -82,17 +95,28 @@ async function measure(browser, url, key, on) {
 
       // 逐元素求差,只比对两边都存在的元素(T0 §3.2 记录的已知噪声:
       // 募捐横幅/进度条等页面自身动态内容会让元素集合不完全相同)。
+      // 🔴 两级配对:先按 nth-child 路径(最精确),配不上再按 stableKey
+      //    (不依赖兄弟下标)。github 的 DOM 顺序在两次加载间会变,
+      //    只用 path 会让 compared 掉到 0 并报「无可比对元素」——
+      //    那是仪器脆弱而非产品回归,见 PROBE 里 stableKey 的注释。
       const offMap = new Map(off.els.map((e) => [e.path, e]));
+      const offStable = new Map();
+      for (const e of off.els) {
+        // 同一 stableKey 可能命中多个元素(如两条同尺寸的 sticky 分隔条);
+        // 只有**唯一**时才用它配对,避免把 A 的位置和 B 的位置比。
+        offStable.set(e.stableKey, offStable.has(e.stableKey) ? null : e);
+      }
+      const pairOf = (e) => offMap.get(e.path) ?? offStable.get(e.stableKey) ?? null;
       const diffs = [];
       for (const e of on.els) {
-        const b = offMap.get(e.path);
+        const b = pairOf(e);
         if (!b) continue;
         const dx = Math.round((e.x - b.x) * 100) / 100;
         const dy = Math.round((e.y - b.y) * 100) / 100;
         if (dx !== 0 || dy !== 0) diffs.push({ path: e.path, dx, dy });
       }
       results[key] = {
-        compared: on.els.filter((e) => offMap.has(e.path)).length,
+        compared: on.els.filter((e) => pairOf(e) !== null).length,
         onlyOn: on.els.length, onlyOff: off.els.length,
         diffs,
         filteredAttr: on.filtered,

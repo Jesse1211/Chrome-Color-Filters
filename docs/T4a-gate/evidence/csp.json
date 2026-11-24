@@ -1,0 +1,260 @@
+{
+  "policies": {
+    "imgSrcSelf": {
+      "policy": "default-src 'self' 'unsafe-inline'; img-src 'self'",
+      "cells": {
+        "Grayscale": {
+          "probe": {
+            "filter": "url(\"#ccf-gray-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 0,
+            "avg": [
+              119,
+              119,
+              119
+            ]
+          }
+        },
+        "RedGreen": {
+          "probe": {
+            "filter": "url(\"#ccf-redgreen-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 255,
+            "avg": [
+              120,
+              119,
+              116
+            ]
+          }
+        },
+        "GreenRed": {
+          "probe": {
+            "filter": "url(\"#ccf-greenred-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 255,
+            "avg": [
+              124,
+              120,
+              110
+            ]
+          }
+        },
+        "BlueYellow": {
+          "probe": {
+            "filter": "url(\"#ccf-blueyellow-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 193,
+            "avg": [
+              117,
+              116,
+              108
+            ]
+          }
+        }
+      },
+      "off": {
+        "probe": {
+          "filter": "none",
+          "classOn": false,
+          "svgDefs": false,
+          "violations": []
+        },
+        "stats": {
+          "maxSpread": 255,
+          "avg": [
+            120,
+            120,
+            108
+          ]
+        }
+      }
+    },
+    "defaultSrcOnly": {
+      "policy": "default-src 'self' 'unsafe-inline'",
+      "cells": {
+        "Grayscale": {
+          "probe": {
+            "filter": "url(\"#ccf-gray-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 0,
+            "avg": [
+              119,
+              119,
+              119
+            ]
+          }
+        },
+        "RedGreen": {
+          "probe": {
+            "filter": "url(\"#ccf-redgreen-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 255,
+            "avg": [
+              120,
+              119,
+              116
+            ]
+          }
+        },
+        "GreenRed": {
+          "probe": {
+            "filter": "url(\"#ccf-greenred-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 255,
+            "avg": [
+              124,
+              120,
+              110
+            ]
+          }
+        },
+        "BlueYellow": {
+          "probe": {
+            "filter": "url(\"#ccf-blueyellow-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 193,
+            "avg": [
+              117,
+              116,
+              108
+            ]
+          }
+        }
+      },
+      "off": {
+        "probe": {
+          "filter": "none",
+          "classOn": false,
+          "svgDefs": false,
+          "violations": []
+        },
+        "stats": {
+          "maxSpread": 255,
+          "avg": [
+            120,
+            120,
+            108
+          ]
+        }
+      }
+    },
+    "imgSrcNone": {
+      "policy": "default-src 'self' 'unsafe-inline'; img-src 'none'",
+      "cells": {
+        "Grayscale": {
+          "probe": {
+            "filter": "url(\"#ccf-gray-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 0,
+            "avg": [
+              119,
+              119,
+              119
+            ]
+          }
+        },
+        "RedGreen": {
+          "probe": {
+            "filter": "url(\"#ccf-redgreen-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 255,
+            "avg": [
+              120,
+              119,
+              116
+            ]
+          }
+        },
+        "GreenRed": {
+          "probe": {
+            "filter": "url(\"#ccf-greenred-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 255,
+            "avg": [
+              124,
+              120,
+              110
+            ]
+          }
+        },
+        "BlueYellow": {
+          "probe": {
+            "filter": "url(\"#ccf-blueyellow-100\")",
+            "classOn": true,
+            "svgDefs": true,
+            "violations": []
+          },
+          "stats": {
+            "maxSpread": 193,
+            "avg": [
+              117,
+              116,
+              108
+            ]
+          }
+        }
+      },
+      "off": {
+        "probe": {
+          "filter": "none",
+          "classOn": false,
+          "svgDefs": false,
+          "violations": []
+        },
+        "stats": {
+          "maxSpread": 255,
+          "avg": [
+            120,
+            120,
+            108
+          ]
+        }
+      }
+    }
+  },
+  "pass": true
+}

@@ -95,7 +95,31 @@ describe.skipIf(!built)(
       // 产物经压缩后标识符会改名,但 `.src` 这个**属性名**不会被改
       // (它是平台 API 的一部分),故这条断言在压缩产物上依然有效。
       expect(code).not.toMatch(/\.src\s*=/);
-      expect(code).not.toContain('createElement');
+
+      // 🔴 `document.createElement(` —— HTML 元素工厂,是 `new Image()` 之外
+      //    另一条造 `<img>`/`<script>`/`<iframe>` 信标的路。**仍然禁止**。
+      //
+      // ⚠️ 这条断言此前写成裸 `not.toContain('createElement')`,它会连
+      //    **`createElementNS`** 一起打中 —— 而 ADR-069 **要求**用
+      //    `createElementNS` 建同文档 `<svg><filter><feColorMatrix>`
+      //    (`data:` URI 方案被站点 CSP 的 `img-src` 拦掉,三个色觉滤镜
+      //    静默失效,见 ADR-069)。裸子串匹配因此是一条**假阳性**:
+      //    它拦的是 ADR 明文规定的实现手段,而不是外传通道。
+      //
+      //    收紧而非放宽:把「禁 HTML 元素工厂」与「允许 SVG 命名空间工厂」
+      //    分成两条可机械判定的断言 —— 后者还要逐一核对**建了什么标签**,
+      //    比原来的裸子串**更严**(原来只要不出现 createElement 就过,
+      //    现在还要证明 NS 工厂只建那三种 SVG 节点)。
+      expect(code).not.toMatch(/createElement\s*\(/);
+      expect(code).not.toContain('document.createElement');
+
+      // `createElementNS` 只允许出现在 ADR-069 的 SVG 注入上,且**只能**建
+      // `svg` / `filter` / `feColorMatrix` 这三种节点。任何人想用它造
+      // `<img>`(SVG 命名空间下没有 img,但 XHTML 命名空间下有)都会在这里变红。
+      const nsTags = [...code.matchAll(/createElementNS\([^,]+,\s*[`'"]([\w-]+)[`'"]/g)]
+        .map((m) => m[1])
+        .sort();
+      expect([...new Set(nsTags)]).toEqual(['feColorMatrix', 'filter', 'svg']);
     });
 
     it('🔴 不含动态 import()', () => {

@@ -1,15 +1,15 @@
 {
-  "runs": 5,
+  "runs": 3,
   "all": [
     {
       "github": {
         "off": {
-          "frames": 277,
-          "colorFrames": 276,
+          "frames": 327,
+          "colorFrames": 326,
           "worst": 0.0277
         },
         "coldCache": {
-          "frames": 179,
+          "frames": 167,
           "colorFrames": 0,
           "worst": 0
         },
@@ -19,39 +19,39 @@
           "worst": 0
         },
         "restart": {
-          "frames": 216,
+          "frames": 214,
           "colorFrames": 0,
           "worst": 0
         },
         "hot": {
-          "frames": 185,
+          "frames": 184,
           "colorFrames": 0,
           "worst": 0
         }
       },
       "wikipedia": {
         "off": {
-          "frames": 103,
-          "colorFrames": 101,
-          "worst": 0.0376
+          "frames": 116,
+          "colorFrames": 114,
+          "worst": 0.0379
         },
         "coldCache": {
-          "frames": 102,
-          "colorFrames": 0,
-          "worst": 0
+          "frames": 116,
+          "colorFrames": 1,
+          "worst": 0.0136
         },
         "newTab": {
-          "frames": 84,
+          "frames": 100,
           "colorFrames": 0,
           "worst": 0
         },
         "restart": {
-          "frames": 36,
+          "frames": 35,
           "colorFrames": 0,
           "worst": 0
         },
         "hot": {
-          "frames": 99,
+          "frames": 182,
           "colorFrames": 0,
           "worst": 0
         }
@@ -59,104 +59,21 @@
       "hn": {
         "off": {
           "frames": 4,
-          "colorFrames": 2,
+          "colorFrames": 3,
           "worst": 0.0228
         },
         "coldCache": {
-          "frames": 2,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
           "frames": 3,
           "colorFrames": 0,
           "worst": 0
         },
-        "restart": {
-          "frames": 2,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 3,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      }
-    },
-    {
-      "github": {
-        "off": {
-          "frames": 333,
-          "colorFrames": 332,
-          "worst": 0.0276
-        },
-        "coldCache": {
-          "frames": 179,
-          "colorFrames": 0,
-          "worst": 0
-        },
         "newTab": {
-          "frames": 169,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 219,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 185,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      },
-      "wikipedia": {
-        "off": {
-          "frames": 6,
-          "colorFrames": 1,
-          "worst": 0.0039
-        },
-        "coldCache": {
-          "frames": 101,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 81,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 34,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 98,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      },
-      "hn": {
-        "off": {
           "frames": 4,
-          "colorFrames": 2,
-          "worst": 0.0251
-        },
-        "coldCache": {
-          "frames": 3,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 2,
           "colorFrames": 0,
           "worst": 0
         },
         "restart": {
-          "frames": 3,
+          "frames": 2,
           "colorFrames": 0,
           "worst": 0
         },
@@ -170,22 +87,22 @@
     {
       "github": {
         "off": {
-          "frames": 311,
-          "colorFrames": 308,
+          "frames": 290,
+          "colorFrames": 287,
           "worst": 0.0276
         },
         "coldCache": {
-          "frames": 183,
+          "frames": 200,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 170,
+          "frames": 173,
           "colorFrames": 0,
           "worst": 0
         },
         "restart": {
-          "frames": 209,
+          "frames": 215,
           "colorFrames": 0,
           "worst": 0
         },
@@ -197,27 +114,27 @@
       },
       "wikipedia": {
         "off": {
-          "frames": 102,
-          "colorFrames": 101,
-          "worst": 0.0376
+          "frames": 115,
+          "colorFrames": 114,
+          "worst": 0.0378
         },
         "coldCache": {
-          "frames": 86,
+          "frames": 122,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 83,
+          "frames": 100,
           "colorFrames": 0,
           "worst": 0
         },
         "restart": {
-          "frames": 38,
+          "frames": 25,
           "colorFrames": 0,
           "worst": 0
         },
         "hot": {
-          "frames": 145,
+          "frames": 100,
           "colorFrames": 0,
           "worst": 0
         }
@@ -225,16 +142,16 @@
       "hn": {
         "off": {
           "frames": 4,
-          "colorFrames": 2,
-          "worst": 0.0251
+          "colorFrames": 3,
+          "worst": 0.0228
         },
         "coldCache": {
-          "frames": 2,
+          "frames": 3,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 3,
+          "frames": 2,
           "colorFrames": 0,
           "worst": 0
         },
@@ -253,44 +170,44 @@
     {
       "github": {
         "off": {
-          "frames": 214,
-          "colorFrames": 212,
+          "frames": 478,
+          "colorFrames": 476,
           "worst": 0.0277
         },
         "coldCache": {
-          "frames": 177,
+          "frames": 199,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 169,
+          "frames": 174,
           "colorFrames": 0,
           "worst": 0
         },
         "restart": {
-          "frames": 220,
+          "frames": 216,
           "colorFrames": 0,
           "worst": 0
         },
         "hot": {
-          "frames": 187,
+          "frames": 177,
           "colorFrames": 0,
           "worst": 0
         }
       },
       "wikipedia": {
         "off": {
-          "frames": 102,
-          "colorFrames": 100,
-          "worst": 0.0376
+          "frames": 120,
+          "colorFrames": 118,
+          "worst": 0.3321
         },
         "coldCache": {
-          "frames": 83,
+          "frames": 123,
           "colorFrames": 0,
           "worst": 0
         },
         "newTab": {
-          "frames": 84,
+          "frames": 86,
           "colorFrames": 0,
           "worst": 0
         },
@@ -300,102 +217,19 @@
           "worst": 0
         },
         "hot": {
-          "frames": 105,
+          "frames": 108,
           "colorFrames": 0,
           "worst": 0
         }
       },
       "hn": {
         "off": {
-          "frames": 5,
-          "colorFrames": 3,
-          "worst": 0.0228
-        },
-        "coldCache": {
-          "frames": 2,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 2,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 3,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 2,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      }
-    },
-    {
-      "github": {
-        "off": {
-          "frames": 213,
-          "colorFrames": 211,
-          "worst": 0.0276
-        },
-        "coldCache": {
-          "frames": 177,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 172,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 222,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 182,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      },
-      "wikipedia": {
-        "off": {
-          "frames": 98,
-          "colorFrames": 96,
-          "worst": 0.0376
-        },
-        "coldCache": {
-          "frames": 101,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "newTab": {
-          "frames": 84,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "restart": {
-          "frames": 36,
-          "colorFrames": 0,
-          "worst": 0
-        },
-        "hot": {
-          "frames": 104,
-          "colorFrames": 0,
-          "worst": 0
-        }
-      },
-      "hn": {
-        "off": {
-          "frames": 3,
+          "frames": 4,
           "colorFrames": 2,
           "worst": 0.0228
         },
         "coldCache": {
-          "frames": 2,
+          "frames": 3,
           "colorFrames": 0,
           "worst": 0
         },
@@ -426,26 +260,26 @@
           "firstFiltered": null
         },
         "control": {
-          "samples": 253,
-          "filteredSamples": 253,
+          "samples": 251,
+          "filteredSamples": 248,
           "firstFiltered": [
-            14,
-            "grayscale(1)"
+            30,
+            "url(\"#ccf-gray-100\")"
           ]
         }
       },
       "wikipedia": {
         "unmatched": {
-          "samples": 247,
+          "samples": 248,
           "filteredSamples": 0,
           "firstFiltered": null
         },
         "control": {
           "samples": 253,
-          "filteredSamples": 253,
+          "filteredSamples": 249,
           "firstFiltered": [
-            17,
-            "grayscale(1)"
+            107,
+            "url(\"#ccf-gray-100\")"
           ]
         }
       },
@@ -457,151 +291,10 @@
         },
         "control": {
           "samples": 253,
-          "filteredSamples": 253,
+          "filteredSamples": 250,
           "firstFiltered": [
-            7,
-            "grayscale(1)"
-          ]
-        }
-      }
-    },
-    {
-      "github": {
-        "unmatched": {
-          "samples": 253,
-          "filteredSamples": 0,
-          "firstFiltered": null
-        },
-        "control": {
-          "samples": 196,
-          "filteredSamples": 196,
-          "firstFiltered": [
-            18,
-            "grayscale(1)"
-          ]
-        }
-      },
-      "wikipedia": {
-        "unmatched": {
-          "samples": 247,
-          "filteredSamples": 0,
-          "firstFiltered": null
-        },
-        "control": {
-          "samples": 253,
-          "filteredSamples": 253,
-          "firstFiltered": [
-            13,
-            "grayscale(1)"
-          ]
-        }
-      },
-      "hn": {
-        "unmatched": {
-          "samples": 253,
-          "filteredSamples": 0,
-          "firstFiltered": null
-        },
-        "control": {
-          "samples": 253,
-          "filteredSamples": 253,
-          "firstFiltered": [
-            21,
-            "grayscale(1)"
-          ]
-        }
-      }
-    },
-    {
-      "github": {
-        "unmatched": {
-          "samples": 253,
-          "filteredSamples": 0,
-          "firstFiltered": null
-        },
-        "control": {
-          "samples": 229,
-          "filteredSamples": 229,
-          "firstFiltered": [
-            14,
-            "grayscale(1)"
-          ]
-        }
-      },
-      "wikipedia": {
-        "unmatched": {
-          "samples": 247,
-          "filteredSamples": 0,
-          "firstFiltered": null
-        },
-        "control": {
-          "samples": 253,
-          "filteredSamples": 253,
-          "firstFiltered": [
-            18,
-            "grayscale(1)"
-          ]
-        }
-      },
-      "hn": {
-        "unmatched": {
-          "samples": 253,
-          "filteredSamples": 0,
-          "firstFiltered": null
-        },
-        "control": {
-          "samples": 253,
-          "filteredSamples": 253,
-          "firstFiltered": [
-            7,
-            "grayscale(1)"
-          ]
-        }
-      }
-    },
-    {
-      "github": {
-        "unmatched": {
-          "samples": 253,
-          "filteredSamples": 0,
-          "firstFiltered": null
-        },
-        "control": {
-          "samples": 226,
-          "filteredSamples": 226,
-          "firstFiltered": [
-            17,
-            "grayscale(1)"
-          ]
-        }
-      },
-      "wikipedia": {
-        "unmatched": {
-          "samples": 247,
-          "filteredSamples": 0,
-          "firstFiltered": null
-        },
-        "control": {
-          "samples": 253,
-          "filteredSamples": 253,
-          "firstFiltered": [
-            13,
-            "grayscale(1)"
-          ]
-        }
-      },
-      "hn": {
-        "unmatched": {
-          "samples": 253,
-          "filteredSamples": 0,
-          "firstFiltered": null
-        },
-        "control": {
-          "samples": 253,
-          "filteredSamples": 253,
-          "firstFiltered": [
-            7,
-            "grayscale(1)"
+            25,
+            "url(\"#ccf-gray-100\")"
           ]
         }
       }
@@ -615,25 +308,25 @@
         },
         "control": {
           "samples": 253,
-          "filteredSamples": 253,
+          "filteredSamples": 250,
           "firstFiltered": [
-            13,
-            "grayscale(1)"
+            29,
+            "url(\"#ccf-gray-100\")"
           ]
         }
       },
       "wikipedia": {
         "unmatched": {
-          "samples": 247,
+          "samples": 246,
           "filteredSamples": 0,
           "firstFiltered": null
         },
         "control": {
           "samples": 253,
-          "filteredSamples": 253,
+          "filteredSamples": 249,
           "firstFiltered": [
-            14,
-            "grayscale(1)"
+            92,
+            "url(\"#ccf-gray-100\")"
           ]
         }
       },
@@ -645,10 +338,57 @@
         },
         "control": {
           "samples": 253,
-          "filteredSamples": 253,
+          "filteredSamples": 249,
           "firstFiltered": [
-            7,
-            "grayscale(1)"
+            25,
+            "url(\"#ccf-gray-100\")"
+          ]
+        }
+      }
+    },
+    {
+      "github": {
+        "unmatched": {
+          "samples": 248,
+          "filteredSamples": 0,
+          "firstFiltered": null
+        },
+        "control": {
+          "samples": 253,
+          "filteredSamples": 251,
+          "firstFiltered": [
+            28,
+            "url(\"#ccf-gray-100\")"
+          ]
+        }
+      },
+      "wikipedia": {
+        "unmatched": {
+          "samples": 246,
+          "filteredSamples": 0,
+          "firstFiltered": null
+        },
+        "control": {
+          "samples": 252,
+          "filteredSamples": 249,
+          "firstFiltered": [
+            38,
+            "url(\"#ccf-gray-100\")"
+          ]
+        }
+      },
+      "hn": {
+        "unmatched": {
+          "samples": 253,
+          "filteredSamples": 0,
+          "firstFiltered": null
+        },
+        "control": {
+          "samples": 253,
+          "filteredSamples": 249,
+          "firstFiltered": [
+            25,
+            "url(\"#ccf-gray-100\")"
           ]
         }
       }

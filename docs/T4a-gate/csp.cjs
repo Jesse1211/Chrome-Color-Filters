@@ -112,69 +112,29 @@ const PROBE = `(() => {
   const de = document.documentElement;
   return {
     filter: getComputedStyle(de).filter,
-    registered: getComputedStyle(de).getPropertyValue('--ccf-registered').trim(),
     classOn: de.classList.contains('ccf-on'),
     svgDefs: !!document.getElementById('ccf-svg-defs'),
     violations: (window.__ccfCspViolations || []).slice(),
   };
 })()`;
 
-// PNG → 最大彩色扩散度。用 sharp 不可得时退回纯 JS 的 PNG 解码过于沉重,
-// 故改用 Chrome 自己:把截图作为 blob 画进 OffscreenCanvas 在**扩展页**里算
-// 会牵扯权限;最省的办法是让 puppeteer 直接给出原始像素 —— 用
-// Page.captureScreenshot 的 PNG,再用 zlib 手工解 IDAT。
-// 这里只需要「有多彩」这一个标量,故实现一个最小 PNG 解码(仅 8bit RGBA/RGB)。
-const zlib = require('zlib');
+// PNG → 最大彩色扩散度。
+//
+// 🔴 这里**必须**用 pngjs,不要再手写解码器。本文件第一版自己写了一个
+//    最小 PNG 解码,当场就跑不起来:`TypeError: buf.readUInt32BE is not a
+//    function` —— puppeteer-core v23(README 钉死的版本)的
+//    `page.screenshot()` 返回的是 **Uint8Array 而非 Buffer**,没有
+//    `readUInt32BE`。仓里既有的 geometry/modes/flicker/multitab 四个
+//    harness 全都写了 `Buffer.from(shot)` 再喂给 `pngjs`,唯独这个新手写
+//    解码器漏了那一步。统一走 pngjs,既少一份要维护的解码逻辑,
+//    也让「忘了 Buffer.from」这类坑只可能犯一次。
+const { PNG } = require('pngjs');
 
-function decodePng(buf) {
-  if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error('not a png');
-  let off = 8;
-  let width = 0; let height = 0; let bitDepth = 0; let colorType = 0;
-  const idat = [];
-  while (off < buf.length) {
-    const len = buf.readUInt32BE(off);
-    const type = buf.toString('ascii', off + 4, off + 8);
-    const data = buf.subarray(off + 8, off + 8 + len);
-    if (type === 'IHDR') {
-      width = data.readUInt32BE(0);
-      height = data.readUInt32BE(4);
-      bitDepth = data[8];
-      colorType = data[9];
-    } else if (type === 'IDAT') {
-      idat.push(data);
-    } else if (type === 'IEND') break;
-    off += 12 + len;
-  }
-  if (bitDepth !== 8 || (colorType !== 6 && colorType !== 2)) {
-    throw new Error(`unsupported png: depth=${bitDepth} color=${colorType}`);
-  }
-  const channels = colorType === 6 ? 4 : 3;
-  const raw = zlib.inflateSync(Buffer.concat(idat));
-  const stride = width * channels;
-  const out = Buffer.alloc(height * stride);
-  let pos = 0;
-  for (let y = 0; y < height; y += 1) {
-    const ft = raw[pos]; pos += 1;
-    const line = raw.subarray(pos, pos + stride); pos += stride;
-    const cur = out.subarray(y * stride, (y + 1) * stride);
-    const prev = y > 0 ? out.subarray((y - 1) * stride, y * stride) : null;
-    for (let x = 0; x < stride; x += 1) {
-      const a = x >= channels ? cur[x - channels] : 0;
-      const b = prev ? prev[x] : 0;
-      const c = prev && x >= channels ? prev[x - channels] : 0;
-      let v = line[x];
-      if (ft === 1) v += a;
-      else if (ft === 2) v += b;
-      else if (ft === 3) v += (a + b) >> 1;
-      else if (ft === 4) {
-        const p = a + b - c;
-        const pa = Math.abs(p - a); const pb = Math.abs(p - b); const pc = Math.abs(p - c);
-        v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
-      }
-      cur[x] = v & 0xff;
-    }
-  }
-  return { width, height, channels, data: out };
+/** 截图(Uint8Array 或 Buffer)→ { width, height, channels, data }。 */
+function decodePng(shot) {
+  // 🔴 `Buffer.from` 不可省:puppeteer-core v23 给的是 Uint8Array。
+  const img = PNG.sync.read(Buffer.from(shot));
+  return { width: img.width, height: img.height, channels: 4, data: img.data };
 }
 
 /** 最大彩色扩散度 + 平均色 —— 两者一起才能区分「变灰」与「变色」。 */

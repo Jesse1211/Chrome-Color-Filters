@@ -72,12 +72,30 @@ const SITES={github:'https://github.com/',wikipedia:'https://en.wikipedia.org/wi
       })()`);
       const attributable=probe.diffs;
 
+      // ── 残留检查:必须走**产品自己的**移除路径 ─────────────────────────
+      //
+      // 🔴 此前这里直接复用上面那个同步探针留下的状态 —— 而那个探针是在
+      //    页内手工 `classList.remove('ccf-on')` + `removeProperty('--ccf-filter')`
+      //    来模拟移除的,**从不调用产品的 removeFilter()**。于是必然三连红:
+      //      (1) SVG 容器子树(ccf-svg-defs + filter + feColorMatrix = 3 节点)
+      //          当然不会被摘掉 —— 手工移除压根没碰它;
+      //      (2) 产品的 liveness MutationObserver 正确地观察 class/style,
+      //          把 --ccf-filter 复原(这是 INV-5 的**正确**行为)。
+      //    那是探针在测自己的模拟动作,不是在测产品。
+      //
+      // 改为触发真实的移除路径:关主开关 → content script 的 onChanged
+      // 监听器走 decide() → syncFilter(null) → removeFilter(),
+      // 它会摘 class、清变量、**并摘掉 SVG 容器**(apply-filter.ts 的顺序)。
+      await seed(b,settings([rule('*')],false));
+      await new Promise(r=>setTimeout(r,800));
       const residue=await page.evaluate(()=>{
         const de=document.documentElement;
         return {
           attrs:[...de.attributes].map(a=>a.name).filter(n=>n.includes('ccf')),
+          classHasCcf: de.classList.contains('ccf-on'),
           styleHasVar: !!(de.getAttribute('style')||'').includes('--ccf-filter'),
           injectedNodes: document.querySelectorAll('[id*="ccf"],[class*="ccf"],style[data-ccf],svg[id*="ccf"]').length,
+          computedFilter: getComputedStyle(de).filter,
         };
       });
 
@@ -95,8 +113,9 @@ const SITES={github:'https://github.com/',wikipedia:'https://en.wikipedia.org/wi
     if(r.count===0){console.log(`FAIL ${k}: 无元素可比对`);fail=true;}
     // 🔴 真正的判据:切换滤镜不得引入 control 之外的任何差异。
     if(r.attributable>0){console.log(`FAIL ${k}: ${r.attributable} 处差异可归因于滤镜(INV-1)`);fail=true;}
-    if(r.residue.attrs.length||r.residue.styleHasVar||r.residue.injectedNodes){
-      console.log(`FAIL ${k}: 移除后有残留 ${JSON.stringify(r.residue)}`);fail=true;}
+    if(r.residue.attrs.length||r.residue.classHasCcf||r.residue.styleHasVar
+       ||r.residue.injectedNodes||r.residue.computedFilter!=='none'){
+      console.log(`FAIL ${k}: 走产品 removeFilter() 之后仍有残留 ${JSON.stringify(r.residue)}`);fail=true;}
   }
   console.log(fail?'STYLES: FAIL':'STYLES: PASS');
   process.exit(fail?1:0);

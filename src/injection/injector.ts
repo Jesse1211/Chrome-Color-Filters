@@ -55,10 +55,6 @@ import {
   writeFastPath,
 } from './fast-path-cache.js';
 import {
-  type ComputedStyleReader,
-  readRegisteredMarker,
-} from './registered-marker.js';
-import {
   type OnConnectLike,
   type PreviewReceiverHandle,
   type RenderArbiter,
@@ -97,19 +93,6 @@ export interface InjectorDeps {
   ) => () => void;
   /** 时钟,默认 `Date.now`(便于测 TTL 边界)。 */
   readonly clock?: () => number;
-
-  /**
-   * 计算样式读取器(测试注入用);缺省用全局 `getComputedStyle`。
-   *
-   * 🔴 **这是 INV-3 在冷缓存下的输入通道**(见 `registered-marker.ts`):
-   *    声明式注册(ADR-062)注入的预生成 CSS 自带一行无门控的
-   *    `html { --ccf-registered: ccf-gray-100; }`,同步读出它即可知道
-   *    「浏览器已判定本 host 该上色」,无需等异步 `chrome.storage`。
-   *
-   * ⚠️ 它**不是**对任何 ADR 保证的开关:缺省就走生产路径(全局
-   *    `getComputedStyle`),传入只为让 Node 下的单测能机械断言编排。
-   */
-  readonly getComputedStyle?: ComputedStyleReader;
 
   // ───────────────────────── T4b 新增(全部可选,向后兼容) ─────────────────────────
 
@@ -197,13 +180,6 @@ export function decide(
 export interface InjectorRunResult {
   /** 同步阶段是否命中缓存并立即应用(INV-3 的可观测证据)。 */
   readonly fastPathHit: boolean;
-  /**
-   * 同步阶段是否靠**声明式注册的自述标记**(`--ccf-registered`)上了色。
-   *
-   * 这是 INV-3 在**冷缓存**下的可观测证据 —— 快路径返回 `unknown` 时,
-   * 零闪烁全靠这一条(见本文件同步阶段那段注释与 `registered-marker.ts`)。
-   */
-  readonly registeredHit: boolean;
   /** 同步阶段的推测值。 */
   readonly speculative: Decision;
   /** 异步阶段的权威值。 */
@@ -221,11 +197,6 @@ export interface InjectorRunResult {
  */
 export function runInjector(deps: InjectorDeps): {
   readonly fastPathHit: boolean;
-  /**
-   * 同步阶段是否靠注册自述标记上了色 —— **同步可读**,
-   * 与 `fastPathHit` 并列,便于调用方与 gate 立刻观测 INV-3 的承担者。
-   */
-  readonly registeredHit: boolean;
   readonly settled: Promise<InjectorRunResult>;
   /**
    * 渲染仲裁器 —— 本次运行中**唯一**的 DOM 写入点(T4b)。
@@ -259,7 +230,6 @@ export function runInjector(deps: InjectorDeps): {
   //    **什么都不做** —— INV-8 要的是不注入,不是注入后纠正。
   let speculative: Decision = null;
   let fastPathHit = false;
-  let registeredHit = false;
 
   if (host !== null) {
     const cached = readFastPath(deps.store, host, clock());
@@ -280,49 +250,29 @@ export function runInjector(deps: InjectorDeps): {
     // cached.kind === 'unknown' → 落到下面的注册自述探测。
   }
 
-  // ── 🔴 声明式注册的同步自述(INV-3 的冷缓存承担者)────────────────────
+  // ── 冷缓存下同步阶段无输入 —— 已实测,无可用的同步通道 ──────────────
   //
-  // **这一段修的是 ADR-069 的 class 门控带来的一个实测回归。**
+  // 上一轮曾在此处增设「声明式注册的自述标记」:每个预生成 CSS 文件多写
+  // 一行无门控的 `:root { --ccf-registered: ccf-gray-100; }`,再由本函数
+  // 用 `getComputedStyle` 同步读出,以补上冷缓存下缺失的那个同步输入。
   //
-  // 门控之前,预生成 CSS 是无条件的 `html { filter: … }` —— 首帧上色
-  // **零 JS 依赖**,这正是 ADR-062 零闪烁保证的基础。加了 `.ccf-on`
-  // 之后,上色需要 JS 加 class;而上面那段在**冷缓存**下
-  // (`cached.kind === 'unknown'`)什么都不做,class 于是要等异步
-  // `chrome.storage` 读完 —— JS 被重新放回了页面加载的关键路径。
+  // 🔴 **该方案已被真实 Chrome 实测否定,此处记录以免后人重走:**
   //
-  // 真实 Chrome 逐帧录屏抓到:`coldCache 1/4`、`1/3`、`1/5`、`2/127`
-  // 帧带色(完整渲染的未滤镜页面),而门控之前同一套 harness
-  // 「连续 5 次全绿」。与 `filter-file-css.ts` 记载的那次
-  // `html[data-ccf-on]` 失败是**同一个根因**:门控等异步结果。
+  //    本 content script 是 manifest 里的**静态** `content_scripts` 条目,
+  //    而预生成 CSS 由 `chrome.scripting.registerContentScripts()` **动态**
+  //    注册。实测(Chrome 158,news.ycombinator.com,3/3 确定性复现):
+  //    静态脚本在 `document_start` 读到的 `--ccf-registered` 是**空串**,
+  //    约 0.3–0.5ms 后动态注册的脚本才读得到值 ——
+  //    **动态注册的 CSS 在静态 content script 运行时尚未进入层叠**。
   //
-  // 🔴 修法不是撤门控(那会把前向引用的不确定性放回来),而是
-  //    **补上冷缓存下缺失的那个同步输入**:预生成文件自带一行无门控的
-  //    `html { --ccf-registered: ccf-gray-100; }`,而该文件是按
-  //    **用户规则算出的 `matches`** 注册的 —— 它出现在文档里,就等于
-  //    浏览器已经判定过「本 host 该上色,用这个 (mode,intensity)」。
-  //    `getComputedStyle` 读它**完全同步、零存储、零 await**。
+  //    把引导脚本改成与 CSS 同一条动态注册(`js` 与 `css` 并列)也不行:
+  //    那个脚本同样读到空串(实测),因为它与 CSS 在同一批注入里,
+  //    CSS 的层叠生效并不先于同批 JS 的执行。
   //
-  // 📌 只在快路径**没给出肯定答案**时才探测(`speculative === null`):
-  //    快路径命中时值已经写上去了,再探一次是无谓的样式计算。
-  //    两者是**或**的关系 —— 各自覆盖对方的盲区,见
-  //    `registered-marker.ts` 中那张分工表。
-  //
-  // ⚠️ 这里**不**短路 INV-8:主开关 OFF 时 `desiredRegistrations()` 返回
-  //    空集、`reconcile()` unregister 全部,CSS 文件压根不会被注入,
-  //    于是本探测读到空串、什么都不做。主开关的强制点仍是「注册与否」。
-  if (speculative === null) {
-    const registered = readRegisteredMarker(
-      deps.target,
-      deps.getComputedStyle,
-    );
-    if (registered !== null) {
-      registeredHit = true;
-      speculative = filterCssValue(registered.mode, registered.intensity);
-      // 🔴 经仲裁器写入 —— ADR-069 的两步序列(先 SVG 后 class)由
-      //    `syncFilter` 独家实现,这里只提供值,不重新实现顺序。
-      arbiter.setBase(speculative);
-    }
-  }
+  // 故冷缓存下同步阶段确实无事可做,`speculative` 保持 `null`,
+  // 由下面的异步权威阶段补上。这一格的 INV-3 缺口不是本函数能填的 ——
+  // 它源于 ADR-069 的 `url("#id")` 需要一个**由 JS 创建的** SVG 节点,
+  // 而任何 JS 都晚于首帧。详见 PR 说明中的 A/B 实测对照。
 
   // ── 变更订阅:已打开标签页的实时更新 ────────────────────────────────
   //
@@ -432,7 +382,6 @@ export function runInjector(deps: InjectorDeps): {
       arbiter.setBase(null);
       return {
         fastPathHit,
-        registeredHit,
         speculative,
         authoritative: null,
         corrected: speculative !== null,
@@ -468,7 +417,6 @@ export function runInjector(deps: InjectorDeps): {
 
     return {
       fastPathHit,
-      registeredHit,
       speculative,
       authoritative,
       corrected: speculative !== authoritative,
@@ -517,5 +465,5 @@ export function runInjector(deps: InjectorDeps): {
       })
     : null;
 
-  return { fastPathHit, registeredHit, settled, arbiter, preview, liveness };
+  return { fastPathHit, settled, arbiter, preview, liveness };
 }

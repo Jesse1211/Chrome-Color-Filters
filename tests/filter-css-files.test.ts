@@ -113,9 +113,24 @@ describe('🔴 ADR-063 · 404 个文件全部与 toColorMatrix 逐位一致(防�
         const name = `${FILTER_MODE_SLUGS[mode]}-${intensity}.css`;
         const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
         const expected = filterCssValue(mode, intensity);
-        // 主规则那一行必须逐位含有领域层算出的那个串。
-        if (!text.includes(`filter: ${expected} !important;`)) {
+        // 🔴 主规则那一行必须逐位是
+        //    `filter: var(--ccf-filter, <领域层算出的串>) !important;`。
+        //
+        //    `var()` 的**回退**才是本文件写死的首帧值;主值是 CSS 变量,
+        //    供已打开标签页的实时更新改写(见 filter-file-css.ts 中
+        //    filterCssFileContent 的注释:写死值会让 liveupdate 失效,
+        //    那是实测到的真实回归)。
+        //
+        //    这条断言比旧版**更严**:旧版只要求「含有 expected」,
+        //    现在连 `var(--ccf-filter, …)` 的包裹形态一起钉死 ——
+        //    谁把回退改成 `none`、或把变量名写错、或退回裸写死值,
+        //    都会在这里变红。
+        if (!text.includes(`filter: var(--ccf-filter, ${expected}) !important;`)) {
           mismatched.push(name);
+        }
+        // 回退值仍必须是本文件自己的 url("#id"):写 `none` 会让首帧无滤镜。
+        if (text.includes('var(--ccf-filter, none)')) {
+          mismatched.push(`${name}: 回退值是 none —— 首帧会无滤镜(INV-3)`);
         }
       }
     }
@@ -236,57 +251,26 @@ describe('🔴 ADR-063/069 / INV-1 · 文件内的选择器是 `html.ccf-on`,注
     ).toEqual([]);
   });
 
-  it('🔴 404 个文件全部带**无门控**的自述标记(INV-3 的冷缓存输入)', () => {
-    // 🔴 这一行是 ADR-069 的 class 门控与 ADR-062 零闪烁保证之间的接缝。
+  it('🔴 404 个文件里**不得**再出现 `--ccf-registered` 自述标记(已实测否定)', () => {
+    // 上一轮曾给每个文件加一行无门控的
+    // `:root { --ccf-registered: ccf-gray-100; }`,供 content script 在
+    // `document_start` 用 `getComputedStyle` 同步读出,以补上冷缓存下
+    // 缺失的同步输入。
     //
-    //    门控之前预生成 CSS 无条件生效,首帧上色**零 JS 依赖**;加了
-    //    `.ccf-on` 之后上色需要 JS,而冷缓存下同步阶段原本无事可做 ——
-    //    真实 Chrome 逐帧录屏抓到 coldCache 1/4、1/3、1/5、2/127 帧带色。
+    // 🔴 **真实 Chrome 实测否定了它(Chrome 158,3/3 确定性复现):**
+    //    本扩展的 content script 是 manifest 里的**静态** `content_scripts`,
+    //    而这些文件由 `registerContentScripts()` **动态**注册。静态脚本在
+    //    `document_start` 读到的 `--ccf-registered` 是**空串** ——
+    //    动态注册的 CSS 此刻还没进层叠;约 0.3–0.5ms 后才读得到。
+    //    把引导脚本改成与 CSS 同一条动态注册也一样读到空串。
     //
-    //    自述标记让「CSS 已被注册」本身成为**同步**真相源:
-    //    content script 读到它就立刻按 ADR-069 的两步上色,不等 storage。
-    //
-    // ⚠️ 必须**无门控**(`:root`,不带 `.ccf-on`)—— 它的全部意义就是
-    //    不等任何 JS 就能被读到。
-    // ⚠️ 且**不得带 filter** —— 无门控的 filter 规则会让浏览器在 SVG
-    //    就位前解析 url("#ccf-…"),正是 ADR-069 要消除的不确定性。
+    // 故它是**读不到的死代码**。这条断言把它钉死在删除状态:
+    // 谁再加回来,就必须先拿出「静态脚本能同步读到」的实测证据。
     const offenders: string[] = [];
     for (const name of readdirSync(FILTERS_DIR)) {
       const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
-      const stripped = text.replace(/\/\*[\s\S]*?\*\//g, '');
-      const markerLine = stripped
-        .split('\n')
-        .find((l) => l.includes('--ccf-registered'));
-      if (markerLine === undefined) {
-        offenders.push(`${name} 缺自述标记`);
-        continue;
-      }
-      if (!markerLine.includes(':root')) {
-        offenders.push(`${name} 自述标记不在 :root 上`);
-      }
-      if (markerLine.includes('.ccf-on')) {
-        offenders.push(`${name} 自述标记被门控了 —— 冷缓存下读不到`);
-      }
-      if (markerLine.includes('filter:')) {
-        offenders.push(`${name} 自述标记那条规则带了 filter —— 无门控上色`);
-      }
-    }
-    expect(offenders).toEqual([]);
-  });
-
-  it('🔴 自述标记的值与该文件的 `url("#id")` 逐字一致(防漂移)', () => {
-    // 两者都必须出自 `svgFilterId`。若标记说 `ccf-gray-50` 而 filter 引用
-    // `#ccf-gray-60`,content script 会按标记建错 id 的 <filter>,
-    // 结果是 url() 引用不到 —— 又一次「像素不变、零报错」的静默失效。
-    const offenders: string[] = [];
-    for (const name of readdirSync(FILTERS_DIR)) {
-      const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
-      const marker = /--ccf-registered:\s*([a-z0-9-]+)\s*;/.exec(text)?.[1];
-      const referenced = /url\("#([a-z0-9-]+)"\)/.exec(text)?.[1];
-      if (marker === undefined || referenced === undefined) {
-        offenders.push(`${name} 解析失败 marker=${String(marker)} ref=${String(referenced)}`);
-      } else if (marker !== referenced) {
-        offenders.push(`${name}: marker=${marker} 与 url(#${referenced}) 不一致`);
+      if (text.includes('--ccf-registered')) {
+        offenders.push(`${name} 又出现了读不到的自述标记`);
       }
     }
     expect(offenders).toEqual([]);

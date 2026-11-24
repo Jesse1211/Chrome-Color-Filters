@@ -333,5 +333,16 @@ async function unmatchedHostRun(runIdx) {
   // 🔴 连续 RUNS 次**全部**通过才算过 —— 该门禁此前是非确定性失败,
   //    单次通过不能作为证据。
   console.log(fail ? `FLICKER: FAIL (${RUNS} 次中存在失败)` : `FLICKER: PASS (连续 ${RUNS} 次全绿)`);
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+
+  // 🔴 退出码必须与上面那行字面一致 —— 任何按退出码判定的 CI/Owner
+  //    都只看它。这里**不要**用 `process.exit()`:它会在 stdout 尚未
+  //    flush 完时就终止进程,把最后几行(含上面那行判决)吞掉,
+  //    于是「打印了 FAIL 却看不到」或「看到 FAIL 但退出码读成 0」。
+  //    改为设 `exitCode` 并自然返回:Node 会在事件循环排空、
+  //    stdout flush 之后才用它退出。
+  //
+  // ⚠️ 另:用管道跑本脚本时(`node flicker.cjs | tail`),`$?` 拿到的是
+  //    **管道最后一个命令**的退出码,不是本脚本的。要判定本脚本请用
+  //    `node flicker.cjs > out.log 2>&1; echo $?`,或 `set -o pipefail`。
+  process.exitCode = fail ? 1 : 0;
+})().catch((e) => { console.error(e); process.exitCode = 1; });

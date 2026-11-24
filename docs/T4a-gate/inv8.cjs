@@ -16,9 +16,27 @@ const AUDIT=`(() => {
     varVal: de.style.getPropertyValue('--ccf-filter'),
     // ADR-069 的第二件注入物:同文档 SVG 滤镜定义容器。
     svgDefs: !!document.getElementById('ccf-svg-defs'),
-    // 声明式注册的自述标记(INV-3 的冷缓存输入)。主开关 OFF 时
-    // reconcile() unregister 全部 → 该属性必须**不存在**。
-    registered: getComputedStyle(de).getPropertyValue('--ccf-registered').trim(),
+    // 🔴 预生成 CSS 是否被注册进了本页(INV-8:主开关 OFF 时必须没有)。
+    //
+    //    此前这里读的是 --ccf-registered 自述标记,但那个标记已随
+    //    「静态 content script 读不到动态注册的 CSS」这一实测结论删除
+    //    (见 src/injection/filter-file-css.ts 的头注释)。标记没了,
+    //    原探针恒为空串 —— **断言会永远通过,变成一条假绿**。
+    //
+    //    改为直接探测那条规则**本身**:预生成文件的唯一内容就是
+    //    html.ccf-on { filter: url("#ccf-…") !important; }。临时给根元素
+    //    加上 ccf-on,若计算出的 filter 变成 url(...),就证明该 CSS
+    //    确实被注册并注入了本页;随后立刻恢复原状。
+    //    这比读标记更强:它测的是**上色能力本身**,而不是一个旁证。
+    registeredCss: (()=>{
+      const had = de.classList.contains('ccf-on');
+      try {
+        de.classList.add('ccf-on');
+        const f = getComputedStyle(de).filter;
+        return f.indexOf('url(') === 0 ? f : '';
+      } catch(e) { return 'ERR'; }
+      finally { if(!had) de.classList.remove('ccf-on'); }
+    })(),
     computedFilter: getComputedStyle(de).filter,
     // 扩展注入的 style / svg 节点(T4a gate 第一项)
     injectedStyle: document.querySelectorAll('style[id*="ccf"],style[data-ccf]').length,
@@ -129,8 +147,8 @@ function earlyProbe(){
     if(r.off.cls){console.log(`FAIL ${k}: 主开关关闭仍打了门控 class(ccf-on)`);fail=true;}
     if(r.off.svgDefs){console.log(`FAIL ${k}: 主开关关闭仍留着 SVG 滤镜定义容器(ccf-svg-defs)`);fail=true;}
     // 主开关 OFF → desiredRegistrations() 返回空集 → CSS 文件未注册 →
-    // 自述标记必须不存在(INV-8 的强制点仍是「注册与否」)。
-    if(r.off.registered){console.log(`FAIL ${k}: 主开关关闭但预生成 CSS 仍被注册(--ccf-registered=${r.off.registered})`);fail=true;}
+    // 即便强行加上 ccf-on 也不该有任何 url() 滤镜(INV-8 的强制点仍是「注册与否」)。
+    if(r.off.registeredCss){console.log(`FAIL ${k}: 主开关关闭但预生成 CSS 仍被注册(加上 ccf-on 后 filter=${r.off.registeredCss})`);fail=true;}
     if(r.off.varVal){console.log(`FAIL ${k}: 主开关关闭仍设了 CSS 变量`);fail=true;}
     if(r.off.computedFilter!=='none'){console.log(`FAIL ${k}: 主开关关闭仍有 filter=${r.off.computedFilter}`);fail=true;}
     if(r.off.injectedStyle||r.off.injectedSvg||r.off.ccfNodes){console.log(`FAIL ${k}: 主开关关闭仍有注入节点`);fail=true;}
