@@ -849,6 +849,22 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 > (实测对照:同步 fragment 路径 **0 次闪烁**;异步 storage 路径 **4 次中闪 1 次** ——
 > **异步等待才是闪烁根源,JS 本身不是**。)
 >
+> **🔴 三条已核实的实现坑(规范原文 + Blink 源码 + WPT 核实,不要踩):**
+> 1. **必须 `createElementNS('http://www.w3.org/2000/svg', 'filter')`** ——
+>    用 `document.createElement('filter')` 建的是 HTML 元素而非 SVG 元素,
+>    `getElementById` 找得到但 filter 不认。这是「动态加滤镜不生效」的头号原因。
+> 2. **宿主 `<svg>` 不得用 `display:none`** —— 那会让整个滤镜失效。
+>    用零尺寸 + `overflow:hidden`(即上面那段 style)。
+> 3. **空的 `<filter>` 会让元素整个消失** —— 与「缺失的 filter」行为**相反**
+>    (Filter Effects §9.3:有 filter 元素但无 primitive 树 ⇒ 元素不渲染;
+>    而缺失的引用 ⇒ 整条 filter 链被忽略、正常渲染)。
+>    若矩阵生成出错导致 `<filter>` 为空,**页面会整页不可见** —— 这是必须有断言守住的失败模式。
+>
+> 另注(支持本方案但非其前提):Chromium 的 `LocalSVGResource` 装了 id 观察者,
+> 前向引用本来也能工作、插入即失效重绘;但 **Safari 有两个自 2011/2014 起未修的
+> 前向引用 bug**。class 开关把「依赖引擎正确实现前向引用」变成「根本不产生前向引用」——
+> 这是本方案的真正价值。
+
 > **不要用 `data:` URI** —— 实测被站点 CSP 的 `img-src` 拦掉,三个色觉滤镜静默失效。
 > 也**不需要** `chrome-extension://` + `web_accessible_resources`(那会带来指纹暴露)。
 >
