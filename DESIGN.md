@@ -158,7 +158,9 @@ x.com         仅匹配 x.com
 | **ADR-068** | **不使用 Chromium Safe Storage / 操作系统密钥链存任何扩展数据** | 已评估,结论是不需要,后人无需重新纠结:(1) **我们没有秘密** —— 存的只有 `masterEnabled`/`rules`/`lockUntil`/`maxSeenTime`,无凭证、无令牌、无身份信息;(2) 最敏感的「用户在某站开了什么滤镜」**本来就暴露在渲染结果里**,且 ADR-060 已**主动**把 `mode`+`intensity` 写进宿主页面的 `localStorage` 供站点 JS 读取 —— 既然已决定公开,再加密本地存储就毫无意义;(3) 它**不是扩展 API**,`chrome.storage.*` 都不走 Safe Storage,开发者无法直接调用;(4) 它解决不了本项目的任何威胁 —— 扩展存储本就互相隔离,锁定绕过的真正路径是卸载扩展(§4.1),而能读到扩展存储文件的攻击者同样能改扩展代码。**若将来加入云同步账号、付费许可或跨设备身份,须重新评估本条** |
 | **ADR-066** | **`COMPILE_CMD`(`tsc --noEmit`)是独立的第三道门禁**,与 `TEST_CMD`/`LINT_CMD` 并列,每个任务都必须跑 | 实测教训:T4a 第三轮 `npm test` 737 个全绿、`npm run lint` 零错误,但 `tsc --noEmit` 报两个类型错误(且干净 main 上退出码 0,证明是新引入)。**vitest 不做类型检查,eslint 未配类型感知规则** —— 一个 TypeScript 项目的验收门禁里没有编译检查是漏洞。其中一个错误有实质后果:`mode: 'R-G'` 不是合法 `FilterMode`,该测试的规则根本没按预期构造,断言可能空转。类型错误能让测试**看起来绿而实际空转**,这正是本账本要防的自欺 |
 | **ADR-062** | **首帧滤镜改为声明式注册**:service worker 用 `chrome.scripting.registerContentScripts()` 为每组 `(mode, intensity)` 注册一条带预生成 CSS 文件的 content script(`persistAcrossSessions: true`),**取代「content script 运行时查询该用什么滤镜」** | **这是零闪烁的根本解法,取代 ADR-060 的缓存思路。** 原架构内含「必须查询」,而查询必然异步 —— 闪烁是架构的必然结果而非实现缺陷(五次独立测量,失败位置从未移动)。声明式方案把异步工作**挪到规则创建时**(此刻 SW 必然活着、延迟免费),页面加载路径上**不再有任何查询**。关键机制(已核实 Chromium 源码 `extension_user_script_loader.cc`):持久化注册在**扩展加载时从磁盘 StateStore 恢复**,**不依赖 SW 先启动**。API 文档原文:`css` 文件「在页面的任何 DOM 被构建**或显示**之前」注入,且 **CSS 不受 `runAt` 约束** —— 比 `document_start` 的 JS 更早。**冷缓存失败因此消失:不再有缓存需要填充** |
-| **ADR-063** | CSS **构建时预生成** `public/filters/{mode}-{intensity}.css`,共 4 模式 × 101 档 = **404 个文件**;必须复用 `toColorMatrix` 而非另写一份公式 | `registerContentScripts` 的 `css` **只接受文件路径,不接受内联字符串**(w3c/webextensions#615 已立项但未实现)。预生成是唯一可行路径。取 101 档而非 5 的倍数,是为了**保留强度无级可调**(每文件仅一行,总计几 KB)。复用 `toColorMatrix` 以免 CSS 与 JS 两条路径漂移 |
+| **ADR-069** | **滤镜矩阵改用同文档 SVG + class 开关**:content script 在 `document_start` 的**同步段**内先把 `<svg><filter id="ccf-{mode}-{intensity}">` 挂到 `documentElement` 下,**再**给 `documentElement` 加 `ccf-on` class;预生成的 CSS 写成 `html.ccf-on { filter: url("#ccf-{mode}-{intensity}") !important; }` | **取代原 `data:` URI 方案。** 实测缺陷:`data:` URI 形式的 SVG 被浏览器归类为图片资源,受站点 CSP 的 `img-src` 管辖 —— 在不放行 `data:` 的站点上三个色觉矫正滤镜**静默失效**(像素与关闭态完全相同、无任何报错),确定性复现于 `img-src 'self'` / 无 `img-src` 的 `default-src` / `img-src 'none'`。**同文档 `url("#id")` 引用不产生资源加载,CSP 无从拦截。** 相比打包 SVG 走 `chrome-extension://`:不需要 `web_accessible_resources`、无指纹暴露、无需任何服务器。<br><br>**class 开关是关键** —— 它让前向引用问题**根本不存在**:CSS 注入时(t=0)`html` 还没有 `ccf-on` class,规则不匹配任何元素,浏览器压根不去解析那个 `url("#...")`;等 class 加上去时 `#ccf-…` 已在 DOM 里,filter 值是新算出来的。**即使某个引擎缓存了「找不到」也不受影响** —— 这是消除不确定性,不是赌对。<br><br>**首帧安全性:** `document_start` 时 `documentElement` 已存在(`<head>`/`<body>` 尚无,但 SVG 直接挂 `html` 即可);content script 在主线程**同步执行**,期间解析器与渲染都停着,所以「插 SVG → 加 class」两步在首帧之前必然完成。实测对照:同步 fragment 路径 0 次闪烁,而异步 storage 路径 4 次中闪 1 次 —— **异步等待才是闪烁根源,JS 本身不是**。<br><br>**附带收益:** 开关滤镜只需切换 class,不增删样式表;INV-8(主开关 OFF)与 ADR-049(实时预览)的撤销/恢复同样简化为改 class 或改矩阵值 |
+| **ADR-070** | **四个滤镜统一走 SVG `feColorMatrix`**,灰阶也不例外(不再用 CSS 内置 `grayscale()`) | 灰阶本身就是一个颜色矩阵,用内置函数只是巧合可行。若灰阶走内置函数、另三个走 SVG,**两条注入路径会各自演化**,又多一类「只在某条路径上出现的 bug」—— 本次 CSP 缺陷恰好只打中 SVG 路径而灰阶无恙,正是这种分裂的代价。统一路径也让 ADR-063 的预生成文件结构一致 |
+| **ADR-063** | **构建时预生成** `public/filters/{mode}-{intensity}.css`,共 4 模式 × 101 档 = **404 个文件**,内容形如 `html.ccf-on { filter: url("#ccf-{mode}-{intensity}") !important; }`(ADR-069);SVG 矩阵由 content script 同步注入,矩阵系数与 CSS 的 id **必须同源于 `toColorMatrix`**,不得另写公式 | `registerContentScripts` 的 `css` **只接受文件路径,不接受内联字符串**(w3c/webextensions#615 已立项但未实现)。预生成是唯一可行路径。取 101 档而非 5 的倍数,是为了**保留强度无级可调**(每文件仅一行,总计几 KB)。复用 `toColorMatrix` 以免 CSS 与 JS 两条路径漂移 |
 | **ADR-064** | 注册**按 `(mode, intensity)` 分组**,而非按 host;`reconcile()` 必须**幂等且基于 diff** | 相同滤镜设置的站点合并进同一条注册的 `matches` 数组,最坏 20 条、通常远少于此。注册的 match pattern 会对每次导航求值,少量注册携带多个 pattern 优于大量单 pattern 注册。幂等是因为 `reconcile()` 有四个触发点(`onInstalled`/`onStartup`/规则变更/`storage.onChanged`),可能并发 |
 | **ADR-065** | **扩展更新会清除动态注册**,因此必须在 `chrome.runtime.onInstalled` 中重新注册(该事件 install 与 update 都触发) | 已核实:注册能存活浏览器重启、SW 终止、扩展禁用再启用,但**扩展更新时被清除**(Chrome 工程师确认,原因是注册引用的文件可能在更新中变化)。这是**强制项**,漏了会导致每次扩展更新后滤镜静默失效 |
 | **ADR-060** | **(已被 ADR-062 取代为主路径,保留为双重保险)** 允许在宿主页面 origin 的 `localStorage` 下存一条「快路径」记录(仅 `mode`+`intensity`),供首帧之前同步读取。这是对「永不拥有宿主页面」的**窄口例外** | MV3 **没有任何同步的扩展存储 API**。content script 虽在 `document_start` 执行,但它发起异步读取后本轮即结束,浏览器继续解析并**首次绘制** —— 回调到达时原色帧已经画出去了。唯一能在首帧前同步读到**且跨浏览器重启存活**的只有 `localStorage`(`sessionStorage` 活不过标签页,正是实测闪烁的根因)。**已知代价(产品负责人已接受):站点的 JS 能读到这条记录**,从而得知用户在本站开了什么滤镜。记录**只含滤镜参数,不含任何页面内容,绝不外传**。**⚠️ 本方案已实测无法解决冷缓存场景**(缓存必须先被填充才能被读到,而「冷缓存」的定义就是还没有记录)—— 15 个冷缓存场景 5 次失败,但 newTab/restart/hot 三态全部通过。首帧保证现由 ADR-062 承担;本条降级为**过渡期的双重保险**,可在一个版本周期后移除 |
@@ -644,11 +646,20 @@ export default defineContentScript({
 > 另注:dev 模式下 WXT 会**从 `matches` 推导并追加 host permissions**,导致 dev manifest 的权限集
 > 与生产不同。核对权限时须看 `.output/chrome-mv3/manifest.json`,不看 dev。
 
-**9. 预生成滤镜 CSS 文件(ADR-063)**
+**9. 预生成滤镜 CSS 文件(ADR-063/069/070)**
 构建时生成 `public/filters/{mode}-{intensity}.css`,4 模式 × 101 档强度 = **404 个文件**,每个形如:
 ```css
-html { filter: <toColorMatrix(mode, intensity) 的结果> !important; }
+html.ccf-on { filter: url("#ccf-{mode}-{intensity}") !important; }
 ```
+
+> **🔴 注意三件事(ADR-069/070):**
+> 1. **选择器带 `.ccf-on` class** —— 这是前向引用问题的消除手段,不是可选的样式糖。
+>    CSS 注入时该 class 尚不存在,规则不匹配,浏览器不解析 `url("#...")`。
+> 2. **`url()` 指向同文档 fragment**,不是 `data:` URI,也不是 `chrome-extension://` ——
+>    同文档引用不产生资源加载,站点 CSP 无从拦截。
+> 3. **四个滤镜统一走 SVG**,灰阶也用 `feColorMatrix`,不用内置 `grayscale()`(ADR-070)。
+>
+> 矩阵系数与 CSS 里的 id 必须**同源于 `toColorMatrix`**,否则两者会漂移。
 **必须复用领域层的 `toColorMatrix`**,不得另写一份公式 —— 否则 CSS 与 JS 两条路径会漂移。
 这些文件**不需要**放进 `web_accessible_resources`(由浏览器自己读取,不经页面 fetch),
 放进去反而增加指纹暴露面。
@@ -819,6 +830,35 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 必须满足 **INV-3(零闪烁)**:`document_start` 同步注入,用户不可见任何未滤镜帧。注意 `chrome.storage` 是异步的,此处需要设计。
 必须满足 **INV-8/ADR-027**:`masterEnabled == false` 时 content script **立即退出**,不读规则、不匹配、不注入。
 
+> **🔴 同步注入序列(ADR-069)—— 两步,顺序不可颠倒:**
+>
+> content script 在 `document_start` 的**同步段**内完成:
+> ```js
+> // ① SVG 先就位(documentElement 此刻已存在,<head>/<body> 尚无)
+> const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+> svg.innerHTML = `<filter id="ccf-${mode}-${intensity}"><feColorMatrix values="..."/></filter>`;
+> svg.setAttribute('style', 'position:absolute;width:0;height:0;overflow:hidden');
+> document.documentElement.appendChild(svg);
+>
+> // ② 再开闸 —— 此刻 CSS 规则 html.ccf-on 才开始匹配
+> document.documentElement.classList.add('ccf-on');
+> ```
+>
+> **顺序是关键。** 预生成的 CSS 由 Chrome 在更早时刻注入,但那时 `html` 没有 `ccf-on`
+> class,规则不匹配任何元素,**浏览器压根不会去解析 `url("#ccf-…")`** —— 前向引用问题
+> 根本不存在,而不是被绕过。等 ② 执行完,`#ccf-…` 已在 DOM 里,filter 值是新算出来的。
+> **即使某个引擎真的缓存了「找不到」,这里也不受影响。**
+>
+> **为什么不闪:** content script 在主线程**同步执行**,期间解析器与渲染都停着。
+> 两步都在同一段同步代码里,必然在首帧之前完成。
+> (实测对照:同步 fragment 路径 **0 次闪烁**;异步 storage 路径 **4 次中闪 1 次** ——
+> **异步等待才是闪烁根源,JS 本身不是**。)
+>
+> **不要用 `data:` URI** —— 实测被站点 CSP 的 `img-src` 拦掉,三个色觉滤镜静默失效。
+> 也**不需要** `chrome-extension://` + `web_accessible_resources`(那会带来指纹暴露)。
+>
+> **开关与预览都只需切 class 或改矩阵值**,不增删样式表(ADR-069 附带收益)。
+
 > **🔴 首帧滤镜走声明式注册(ADR-062)—— 这是 INV-3 的主路径,取代原缓存方案:**
 >
 > **service worker** 维护一个幂等、基于 diff 的 `reconcile()`:
@@ -860,11 +900,23 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 - 页面自身 JS 读到的计算样式不受影响(INV-1)。**明确范围**:比对 `position`、`top/left/right/bottom`、`width/height`、`display`、`transform`、`z-index`、`overflow`,**排除注入目标自身的 `filter`**(那个属性必须变)
 - 移除滤镜后 DOM 恢复原状,无残留节点/属性/class
 - **🔴 注入目标必须锁定在 `<html>`(INV-1 最脆弱点,上一轮变异测试暴露的盲区):**
-  断言主规则选择器**精确**为 `html[data-ccf-on]`,且 CSS 中**不存在** `body[data-ccf-on]`。
+  断言主规则选择器**精确**为 `html.ccf-on`,且 CSS 中**不存在** `body.ccf-on` 或 `body[data-ccf-on]`。
   > 上一轮实测:把 `html[...]` 改成 `body[...]` 后**单元测试全绿 296/296**,
   > 因为旧断言用 `toMatch(/html\[data-ccf-on\]/)`,而残留的 top-layer 规则里仍含该字符串。
   > 只有 10 分钟的真实 Chrome 门禁抓到了它。T0 实测 `body{filter}` 会让固定头部跳到 `y=-1000`。
   > 必须用精确匹配把这个回归挡在单元层,不依赖昂贵的真实栈跑。
+- **🔴 CSP 抗性(ADR-069)—— 这是上一轮 T7 实测红灯的那条,必须覆盖:**
+  在**注入了严格 CSP 的测试页**上验证四个滤镜全部生效,至少覆盖三种策略:
+  - `img-src 'self'`(不放行 `data:`)
+  - 只有 `default-src` 且不放行 `data:`,无 `img-src`
+  - `img-src 'none'`
+
+  断言:像素**确实改变**(与 OFF 基线不同),且 **DevTools 无 CSP violation 事件**。
+  > 上一轮 `data:` URI 方案在这三种策略下全部静默失效 —— 像素与 OFF 完全相同、无任何报错。
+- **🔴 注入序列正确(ADR-069)**:断言 SVG 节点在 `classList.add('ccf-on')` **之前**
+  已挂到 `documentElement`;断言两步在**同一个同步执行段**内完成(中间不得有 `await` / 定时器)
+- **🔴 四个滤镜路径统一(ADR-070)**:断言灰阶也走 `url("#ccf-grayscale-…")`,
+  预生成 CSS 中**不出现** `grayscale(` 内置函数调用
 - **🔴 声明式注册正确性(ADR-062/064)**:
   - `reconcile()` 是**幂等**的 —— 连续调用两次,注册集合不变(断言 `getRegisteredContentScripts()` 结果相同)
   - 基于 **diff**:只对变化部分调 register/unregister/update,未变的不动
@@ -880,6 +932,10 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
   - 除读取 `masterEnabled` 本身外,**无任何其他 storage 读取**(spy 断言)
   - 匹配函数**零次调用**(spy 断言)
 - **REAL_STACK_GATE(真实 Chrome + 真实网站,不接受 mock/jsdom):**
+  0. 🔴 **CSP 抗性实测(ADR-069)** — 在 **news.ycombinator.com**(上一轮已确认其 CSP 拦 `data:`)
+     上验证**四个滤镜**像素确实改变;并在自建的严格 CSP 测试页上跑完整策略矩阵
+     (`img-src 'self'` / 无 `img-src` 的 `default-src` / `img-src 'none'`)。
+     断言**零 CSP violation 事件**。这是上一轮 34/40 与 23/26 两条红灯的闭合条件。
   1. **position:fixed 验证** — 在 **github.com、wikipedia.org、news.ycombinator.com** 上,开关滤镜前后滚动页面,sticky/fixed 元素屏幕位置必须一致。**必须截图比对,不接受「应该没问题」** —— 这是 INV-1 最容易被破坏的点
   2. **零闪烁验证** — **必须在 `npm run build` 产物上进行(ADR-038)**,逐帧检查**第一个可见帧即已滤镜**(INV-3),dev 模式结果不作数。**必须覆盖三种缓存状态,缺一不可:**
      - **冷缓存**(清空该 origin 的 `localStorage` 后首次访问)—— 上一轮失败的正是这个场景
@@ -1208,6 +1264,9 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
   **主开关自动变 ON**(ADR-057)→ 尝试改规则、关主开关、**缩短计时器全部失败** → **延长成功**
   → **完全退出并重启浏览器** → 锁定仍有效、剩余时间正确 → 等待到期 → 自动解锁且设置可改
 - **【新增】** 持久化(ADR-010):配置规则 → **完全退出 Chrome 并重启** → 规则与顺序完好。改用 `storage.local` 后这是持久化的完整验收面,**无需第二个 Google 账号**
+- **【新增】** 🔴 CSP 抗性(ADR-069):在 **news.ycombinator.com** 与严格 CSP 测试页矩阵上,
+  **四个滤镜像素均确实改变**且**零 CSP violation** —— 这是上一轮 visual-modes 34/40、
+  csp-matrix 23/26 两条红灯的闭合条件
 - **【新增】** 四个滤镜在真实网页上视觉正确(截图留档,供人类复核色彩矩阵是否合理)
 - **blindSpots 必须显式申报** —— 列出未覆盖的站点类型与场景
 
