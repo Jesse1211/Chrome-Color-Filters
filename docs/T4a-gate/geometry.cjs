@@ -35,7 +35,8 @@ const PROBE = `(() => {
       x: Math.round(r.x*100)/100, y: Math.round(r.y*100)/100,
       w: Math.round(r.width*100)/100, h: Math.round(r.height*100)/100 });
   }
-  return { els: out, filtered: document.documentElement.hasAttribute('data-ccf-on') };
+  // 🔴 ADR-069:滤镜态的真相源是 ccf-on class(属性已废止)。
+  return { els: out, filtered: document.documentElement.classList.contains('ccf-on') };
 })()`;
 
 // 单像素 RGB 极差的最大值。灰阶输出必为 0 —— 证明滤镜真的生效了。

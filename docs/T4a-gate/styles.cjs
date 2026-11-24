@@ -22,7 +22,8 @@ const SITES={github:'https://github.com/',wikipedia:'https://en.wikipedia.org/wi
       await page.goto(url,{waitUntil:'networkidle2',timeout:90000});
       await new Promise(r=>setTimeout(r,800));
 
-      const onState=await page.evaluate(()=>document.documentElement.hasAttribute('data-ccf-on'));
+      // 🔴 ADR-069:class 门控(属性已废止)。
+      const onState=await page.evaluate(()=>document.documentElement.classList.contains('ccf-on'));
 
       // ── 方法论：**同步配对**（animation-immune paired comparison）──────────
       // 页面自身的动画会伪装成 INV-1 违规：github 首页有常驻横向滚动动画，
@@ -57,7 +58,7 @@ const SITES={github:'https://github.com/',wikipedia:'https://en.wikipedia.org/wi
         void de.offsetHeight;
         const withF=[]; for(let i=0;i<all.length;i++) withF.push(snap(all[i]));
         // 2) 同步移除滤镜。
-        de.removeAttribute('data-ccf-on');
+        de.classList.remove('ccf-on');
         de.style.removeProperty('--ccf-filter');
         void de.offsetHeight;
         // 3) 立即再拍 —— 与 (1) 同处一个任务，动画不可能前进。

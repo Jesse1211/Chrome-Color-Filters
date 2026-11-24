@@ -1,4 +1,5 @@
 /* 预生成滤镜 RedGreen @ 14%(ADR-062/063/069/070)。由 scripts/generate-filter-css.mjs 生成,勿手改。 */
+:root { --ccf-registered: ccf-redgreen-14; }
 html.ccf-on { filter: url("#ccf-redgreen-14") !important; }
 html.ccf-on :modal,
 html.ccf-on [popover]:popover-open,

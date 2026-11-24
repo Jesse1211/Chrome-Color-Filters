@@ -30,8 +30,10 @@ const PROBE = `(() => {
   const el = document.documentElement;
   return {
     filter: getComputedStyle(el).filter,
-    attrOn: el.hasAttribute('data-ccf-on'),
-    attrOff: el.hasAttribute('data-ccf-off'),
+    // 🔴 ADR-069:class 门控 + 同文档 SVG 定义。属性时代的 attrOn/attrOff
+    //    在 ADR-069 之后恒为 false —— 留着会让探针空转地通过。
+    classOn: el.classList.contains('ccf-on'),
+    svgDefs: !!document.getElementById('ccf-svg-defs'),
   };
 })()`;
 

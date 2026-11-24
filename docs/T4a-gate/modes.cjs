@@ -56,7 +56,9 @@ function stats(buf){
       });
       await new Promise(r=>setTimeout(r,500));
       const st=await page.evaluate(()=>({
-        attr:document.documentElement.hasAttribute('data-ccf-on'),
+        // 🔴 ADR-069:class 门控 + 同文档 SVG 定义(属性已废止)。
+        cls:document.documentElement.classList.contains('ccf-on'),
+        svgDefs:!!document.getElementById('ccf-svg-defs'),
         v:document.documentElement.style.getPropertyValue('--ccf-filter'),
         computed:getComputedStyle(document.documentElement).filter,
       }));
@@ -70,13 +72,17 @@ function stats(buf){
 
   let fail=false;
   const off=report.OFF;
-  if(off.attr||off.maxSpread===0){console.log('FAIL: OFF 基线异常(应无滤镜且有彩色)');fail=true;}
+  if(off.cls||off.svgDefs||off.maxSpread===0){console.log('FAIL: OFF 基线异常(应无滤镜且有彩色)');fail=true;}
   // Grayscale:必须完全灰阶。
   if(report.Grayscale.maxSpread!==0){console.log(`FAIL Grayscale: maxSpread=${report.Grayscale.maxSpread} ≠ 0`);fail=true;}
   // 三种辅助模式:必须 (a) 真的应用了 url(data:...) (b) 像素确实变了。
   for(const m of ['RedGreen','GreenRed','BlueYellow']){
     const r=report[m];
-    if(!r.attr){console.log(`FAIL ${m}: 未打门控属性`);fail=true;}
+    if(!r.cls){console.log(`FAIL ${m}: 未打门控 class(ccf-on)`);fail=true;}
+    // 🔴 ADR-070:四个模式**统一**走 SVG feColorMatrix,灰阶不例外。
+    //    灰阶若仍走内置 grayscale() 就不会有这个容器 —— 这条断言正是
+    //    把「路径分裂」挡在门禁上。
+    if(!r.svgDefs){console.log(`FAIL ${m}: 无同文档 SVG 滤镜定义容器 —— url("#ccf-…") 引用不到(ADR-069/070)`);fail=true;}
     if(!/^url\("data:image\/svg\+xml/.test(r.v)){console.log(`FAIL ${m}: 未使用内联 data: URI,实际=${r.v.slice(0,40)}`);fail=true;}
     if(r.computed==='none'){console.log(`FAIL ${m}: computed filter 为 none —— data: URI 未被 Chrome 接受!`);fail=true;}
     // ⚠️ 单个色块可能是该矩阵的**不动点**,不足以判定「没生效」。

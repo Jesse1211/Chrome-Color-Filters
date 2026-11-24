@@ -9,8 +9,16 @@ const SITES={github:'https://github.com/',wikipedia:'https://en.wikipedia.org/wi
 const AUDIT=`(() => {
   const de=document.documentElement;
   return {
-    attr: de.hasAttribute('data-ccf-on'),
+    // 🔴 ADR-069:真相源是 **class**,不再是 data-ccf-on 属性。
+    //    (属性时代的探针在 ADR-069 之后会**空转地通过** —— 属性永不存在,
+    //     hasAttribute 恒为 false,于是这一半审计什么都不再测。)
+    cls: de.classList.contains('ccf-on'),
     varVal: de.style.getPropertyValue('--ccf-filter'),
+    // ADR-069 的第二件注入物:同文档 SVG 滤镜定义容器。
+    svgDefs: !!document.getElementById('ccf-svg-defs'),
+    // 声明式注册的自述标记(INV-3 的冷缓存输入)。主开关 OFF 时
+    // reconcile() unregister 全部 → 该属性必须**不存在**。
+    registered: getComputedStyle(de).getPropertyValue('--ccf-registered').trim(),
     computedFilter: getComputedStyle(de).filter,
     // 扩展注入的 style / svg 节点(T4a gate 第一项)
     injectedStyle: document.querySelectorAll('style[id*="ccf"],style[data-ccf]').length,
@@ -53,7 +61,12 @@ function earlyProbe(){
     if(!started) return;
     const de=document.documentElement;
     if(!de) return;
-    if(de.hasAttribute('data-ccf-on')||de.style.getPropertyValue('--ccf-filter')){
+    // 🔴 ADR-069:class + SVG 容器 + 变量,三者任一出现即算「上过色」。
+    //    旧探针查的 data-ccf-on 属性在 ADR-069 之后压根不存在,
+    //    留着它会让这个早期探针**空转地通过**。
+    if(de.classList.contains('ccf-on')
+       ||de.style.getPropertyValue('--ccf-filter')
+       ||document.getElementById('ccf-svg-defs')){
       window.__ccfEverOn=true;
     }
   };
@@ -112,7 +125,12 @@ function earlyProbe(){
   fs.writeFileSync(path.join(OUT,'inv8.json'),JSON.stringify(report,null,2));
   let fail=false;
   for(const [k,r] of Object.entries(report)){
-    if(r.off.attr){console.log(`FAIL ${k}: 主开关关闭仍打了门控属性`);fail=true;}
+    // 🔴 ADR-069:门控是 class,不是属性。
+    if(r.off.cls){console.log(`FAIL ${k}: 主开关关闭仍打了门控 class(ccf-on)`);fail=true;}
+    if(r.off.svgDefs){console.log(`FAIL ${k}: 主开关关闭仍留着 SVG 滤镜定义容器(ccf-svg-defs)`);fail=true;}
+    // 主开关 OFF → desiredRegistrations() 返回空集 → CSS 文件未注册 →
+    // 自述标记必须不存在(INV-8 的强制点仍是「注册与否」)。
+    if(r.off.registered){console.log(`FAIL ${k}: 主开关关闭但预生成 CSS 仍被注册(--ccf-registered=${r.off.registered})`);fail=true;}
     if(r.off.varVal){console.log(`FAIL ${k}: 主开关关闭仍设了 CSS 变量`);fail=true;}
     if(r.off.computedFilter!=='none'){console.log(`FAIL ${k}: 主开关关闭仍有 filter=${r.off.computedFilter}`);fail=true;}
     if(r.off.injectedStyle||r.off.injectedSvg||r.off.ccfNodes){console.log(`FAIL ${k}: 主开关关闭仍有注入节点`);fail=true;}
@@ -130,7 +148,10 @@ function earlyProbe(){
     // 对照:主开关开启时探针必须抓到 everOn=true,否则上面那条是假阴性。
     if(!r.on.everOn){console.log(`FAIL ${k}: 对照组 everOn=false —— document_start 探针失效,INV-8 的 everOn 断言无意义`);fail=true;}
     // 对照必须生效,否则上面全是假阴性。
-    if(!r.on.attr||r.on.computedFilter==='none'){console.log(`FAIL ${k}: 对照组滤镜未生效,INV-8 断言无意义`);fail=true;}
+    if(!r.on.cls||r.on.computedFilter==='none'){console.log(`FAIL ${k}: 对照组滤镜未生效,INV-8 断言无意义`);fail=true;}
+    // 对照组必须真的有 SVG 定义,否则 url("#ccf-…") 引用不到 ——
+    // 那正是 ADR-069 要根治的「静默失效」,不能让它冒充 PASS。
+    if(!r.on.svgDefs){console.log(`FAIL ${k}: 对照组无 SVG 滤镜定义容器 —— url("#ccf-…") 引用不到,ADR-069 的注入第①步失效`);fail=true;}
   }
   console.log(fail?'INV8: FAIL':'INV8: PASS');
   process.exit(fail?1:0);

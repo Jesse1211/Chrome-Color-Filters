@@ -30,8 +30,10 @@ const PROBE = `(() => {
   const el = document.documentElement;
   return {
     filter: getComputedStyle(el).filter,
-    attrOn: el.hasAttribute('data-ccf-on'),
-    attrOff: el.hasAttribute('data-ccf-off'),
+    // 🔴 ADR-069:门控改为 class,另加同文档 SVG 定义容器。
+    //    属性时代的 attrOn/attrOff 恒为 false —— 留着会让探针空转。
+    classOn: el.classList.contains('ccf-on'),
+    svgDefs: !!document.getElementById('ccf-svg-defs'),
   };
 })()`;
 
@@ -50,8 +52,8 @@ async function main() {
     // 🔴 这里的宿主选择是被实测纠正过的，请连同理由一起读：
     //
     //    第一版把 `*.wikipedia.org` 当作对照组，当场 FAIL，数据是：
-    //      { beforeFilter: 'grayscale(1)', syncAfterFilter: 'grayscale(1)', syncAttrOn: false }
-    //    即属性**确实被摧掉了**（syncAttrOn:false），滞镜却没掉。
+    //      { beforeFilter: 'url("#ccf-gray-100")', syncAfterFilter: 'url("#ccf-gray-100")', syncClassOn: false }
+    //    即 class **确实被摘掉了**（syncClassOn:false），滤镜却没掉。
     //
     //    原因不是缺陷，而是 **ADR-062 按设计工作**：已配置的 host 上
     //    有声明式注册的预生成 CSS，它的选择器是**裸 `html`**：
@@ -104,17 +106,18 @@ async function main() {
       const el = document.documentElement;
       const out = {};
       out.beforeFilter = getComputedStyle(el).filter;
-      el.removeAttribute('data-ccf-on');
+      // 🔴 ADR-069:破坏手法改为摘 class(属性已废止,摘它什么都不会发生)。
+      el.classList.remove('ccf-on');
       el.style.removeProperty('--ccf-filter');
       // 🔴 同步读取 —— MutationObserver 回调还没跑(它是微任务)。
       out.syncAfterFilter = getComputedStyle(el).filter;
-      out.syncAttrOn = el.hasAttribute('data-ccf-on');
+      out.syncClassOn = el.classList.contains('ccf-on');
       return out;
     })()`);
 
     // 这就是「破坏手法确实有效」的直接证据:同步快照里滤镜已经掉了。
     assert(
-      '🔴 探针有效:摘掉属性后的**同步**快照显示滤镜确实消失',
+      '🔴 探针有效:摘掉 class 后的**同步**快照显示滤镜确实消失',
       sync.beforeFilter !== 'none' && sync.syncAfterFilter === 'none',
       sync,
     );

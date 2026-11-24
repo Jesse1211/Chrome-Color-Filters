@@ -236,6 +236,62 @@ describe('🔴 ADR-063/069 / INV-1 · 文件内的选择器是 `html.ccf-on`,注
     ).toEqual([]);
   });
 
+  it('🔴 404 个文件全部带**无门控**的自述标记(INV-3 的冷缓存输入)', () => {
+    // 🔴 这一行是 ADR-069 的 class 门控与 ADR-062 零闪烁保证之间的接缝。
+    //
+    //    门控之前预生成 CSS 无条件生效,首帧上色**零 JS 依赖**;加了
+    //    `.ccf-on` 之后上色需要 JS,而冷缓存下同步阶段原本无事可做 ——
+    //    真实 Chrome 逐帧录屏抓到 coldCache 1/4、1/3、1/5、2/127 帧带色。
+    //
+    //    自述标记让「CSS 已被注册」本身成为**同步**真相源:
+    //    content script 读到它就立刻按 ADR-069 的两步上色,不等 storage。
+    //
+    // ⚠️ 必须**无门控**(`:root`,不带 `.ccf-on`)—— 它的全部意义就是
+    //    不等任何 JS 就能被读到。
+    // ⚠️ 且**不得带 filter** —— 无门控的 filter 规则会让浏览器在 SVG
+    //    就位前解析 url("#ccf-…"),正是 ADR-069 要消除的不确定性。
+    const offenders: string[] = [];
+    for (const name of readdirSync(FILTERS_DIR)) {
+      const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
+      const stripped = text.replace(/\/\*[\s\S]*?\*\//g, '');
+      const markerLine = stripped
+        .split('\n')
+        .find((l) => l.includes('--ccf-registered'));
+      if (markerLine === undefined) {
+        offenders.push(`${name} 缺自述标记`);
+        continue;
+      }
+      if (!markerLine.includes(':root')) {
+        offenders.push(`${name} 自述标记不在 :root 上`);
+      }
+      if (markerLine.includes('.ccf-on')) {
+        offenders.push(`${name} 自述标记被门控了 —— 冷缓存下读不到`);
+      }
+      if (markerLine.includes('filter:')) {
+        offenders.push(`${name} 自述标记那条规则带了 filter —— 无门控上色`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('🔴 自述标记的值与该文件的 `url("#id")` 逐字一致(防漂移)', () => {
+    // 两者都必须出自 `svgFilterId`。若标记说 `ccf-gray-50` 而 filter 引用
+    // `#ccf-gray-60`,content script 会按标记建错 id 的 <filter>,
+    // 结果是 url() 引用不到 —— 又一次「像素不变、零报错」的静默失效。
+    const offenders: string[] = [];
+    for (const name of readdirSync(FILTERS_DIR)) {
+      const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
+      const marker = /--ccf-registered:\s*([a-z0-9-]+)\s*;/.exec(text)?.[1];
+      const referenced = /url\("#([a-z0-9-]+)"\)/.exec(text)?.[1];
+      if (marker === undefined || referenced === undefined) {
+        offenders.push(`${name} 解析失败 marker=${String(marker)} ref=${String(referenced)}`);
+      } else if (marker !== referenced) {
+        offenders.push(`${name}: marker=${marker} 与 url(#${referenced}) 不一致`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('🔴 每个文件都带 top layer 补偿(T0 §4.5:漏掉就是真实缺陷)', () => {
     // :modal / [popover] / :fullscreen / ::backdrop 在绘制树中不是根元素的
     // 后代,根 filter 到不了它们。T0 实测缺此规则时 modal 全彩

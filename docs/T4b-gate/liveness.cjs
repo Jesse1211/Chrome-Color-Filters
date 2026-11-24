@@ -22,8 +22,11 @@ const PROBE = `(() => {
   const el = document.documentElement;
   return {
     filter: getComputedStyle(el).filter,
-    attrOn: el.hasAttribute('data-ccf-on'),
-    attrOff: el.hasAttribute('data-ccf-off'),
+    // 🔴 ADR-069:门控是 class,且多了一件注入物(同文档 SVG 定义)。
+    //    属性时代的 attrOn/attrOff 在 ADR-069 之后恒为 false ——
+    //    留着它们会让这些探针**空转地通过**。
+    classOn: el.classList.contains('ccf-on'),
+    svgDefs: !!document.getElementById('ccf-svg-defs'),
     varValue: el.style.getPropertyValue('--ccf-filter'),
   };
 })()`;
@@ -75,17 +78,20 @@ async function main() {
 
       // 模拟站点脚本的三种破坏,逐一断言恢复。
       const sabotage = [
+        // 🔴 ADR-069 之后的破坏面:class、SVG 定义容器、变量、style 属性。
+        //    (旧版摘的是 data-ccf-on / 塞的是 data-ccf-off —— 那两个属性
+        //     压根不再被设置,于是那两个场景什么都不测。)
         {
-          name: '站点摘掉 data-ccf-on',
-          script: `document.documentElement.removeAttribute('data-ccf-on')`,
+          name: '站点摘掉 ccf-on class',
+          script: `document.documentElement.classList.remove('ccf-on')`,
         },
         {
           name: '站点摘掉 --ccf-filter 变量',
           script: `document.documentElement.style.removeProperty('--ccf-filter')`,
         },
         {
-          name: '站点塞上 data-ccf-off(压制属性)',
-          script: `document.documentElement.setAttribute('data-ccf-off','')`,
+          name: '站点整体摘掉 class 属性(连带 ccf-on)',
+          script: `document.documentElement.removeAttribute('class')`,
         },
         {
           name: '站点整体摘掉 style 属性',
@@ -110,7 +116,7 @@ async function main() {
       // 反复破坏 —— 速率上限之内应当每次都恢复。
       let restoredCount = 0;
       for (let i = 0; i < 20; i += 1) {
-        await page.evaluate(`document.documentElement.removeAttribute('data-ccf-on')`);
+        await page.evaluate(`document.documentElement.classList.remove('ccf-on')`);
         const r = await waitFiltered(page, 2000);
         if (r.filter !== 'none') restoredCount += 1;
       }

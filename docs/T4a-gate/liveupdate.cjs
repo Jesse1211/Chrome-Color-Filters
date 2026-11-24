@@ -46,8 +46,12 @@ async function state(page) {
     const cs = getComputedStyle(el);
     return {
       filter: cs.filter || '',
-      on: el.hasAttribute('data-ccf-on'),
-      off: el.hasAttribute('data-ccf-off'),
+      // 🔴 ADR-069:门控改为 class,且**压制状态已不存在** ——
+      //    摘掉 class 就等于撤除(预生成 CSS 也用 html.ccf-on)。
+      //    故这里不再有 `off` 这一维:它在 ADR-069 之后恒为 false,
+      //    留着会让下面那些 `off === true` 的断言永远失败或空转。
+      on: el.classList.contains('ccf-on'),
+      svgDefs: !!document.getElementById('ccf-svg-defs'),
       varValue: cs.getPropertyValue('--ccf-filter').trim(),
     };
   });
@@ -117,10 +121,12 @@ const filtered = (st) => st.filter !== '' && st.filter !== 'none';
   results.ruleDeleted = sC;
   log(!filtered(sC),
     `(c) 规则被删除:已打开页面转为无滤镜 filter=${JSON.stringify(sC.filter)}`);
-  // 🔴 预生成 CSS(ADR-063)用裸 `html` 无条件生效,只摘 data-ccf-on 压不掉它,
-  //    必须显式设上 data-ccf-off(见 apply-filter.ts / filter.css)。
-  log(sC.off === true && sC.on === false,
-    `(c) 显式压制属性在位 on=${sC.on} off=${sC.off}`);
+  // 🔴 ADR-069:撤除就是**摘 class**。预生成 CSS 的选择器也是 `html.ccf-on`,
+  //    摘掉 class 它一并失效 —— 不再需要任何压制规则/压制属性。
+  //    连带断言 SVG 定义容器也被摘掉(T4a gate:「移除滤镜后 DOM 恢复原状,
+  //    无残留节点/属性/class」)。
+  log(sC.on === false && sC.svgDefs === false,
+    `(c) class 与 SVG 定义均已撤除 on=${sC.on} svgDefs=${sC.svgDefs}`);
   log((await regIds(w)).length === 0, '(c) 对应注册已被 unregister');
   log(page.url() === urlBefore, '(c) 页面未重新导航');
 
@@ -128,23 +134,23 @@ const filtered = (st) => st.filter !== '' && st.filter !== 'none';
   await push(b, settings([rule('*', 'BlueYellow', 70)], true));
   const sD = await state(page);
   results.ruleAdded = sD;
-  log(filtered(sD) && sD.on === true && sD.off === false,
-    `(d) 新增规则:已打开页面立即上色 filter=${JSON.stringify(sD.filter.slice(0, 60))} on=${sD.on} off=${sD.off}`);
+  log(filtered(sD) && sD.on === true && sD.svgDefs === true,
+    `(d) 新增规则:已打开页面立即上色 filter=${JSON.stringify(sD.filter.slice(0, 60))} on=${sD.on} svgDefs=${sD.svgDefs}`);
   log(page.url() === urlBefore, '(d) 页面未重新导航');
 
   // ── (e) 主开关 OFF(INV-8 在本路径同样成立) ─────────────────────────
   await push(b, settings([rule('*', 'BlueYellow', 70)], false));
   const sE = await state(page);
   results.masterOff = sE;
-  log(!filtered(sE) && sE.off === true,
-    `(e) 主开关 OFF:已打开页面撤滤镜 filter=${JSON.stringify(sE.filter)} off=${sE.off}`);
+  log(!filtered(sE) && sE.on === false && sE.svgDefs === false,
+    `(e) 主开关 OFF:已打开页面撤滤镜 filter=${JSON.stringify(sE.filter)} on=${sE.on} svgDefs=${sE.svgDefs}`);
   log((await regIds(w)).length === 0, '(e) 注册被清空（ADR-027 彻底止血）');
 
   // ── (f) 主开关开回 → 恢复上色 ───────────────────────────────────────
   await push(b, settings([rule('*', 'BlueYellow', 70)], true));
   const sF = await state(page);
   results.masterBackOn = sF;
-  log(filtered(sF) && sF.on === true && sF.off === false,
+  log(filtered(sF) && sF.on === true && sF.svgDefs === true,
     `(f) 主开关开回:已打开页面恢复上色 filter=${JSON.stringify(sF.filter.slice(0, 60))}`);
 
   await page.close();

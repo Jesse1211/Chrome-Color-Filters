@@ -62,6 +62,56 @@
  * 现在**摘掉 class 就等于撤除**,`filter.css` 里那整组压制规则已删除。
  * ADR-069 原文:「开关滤镜只需切换 class,不增删样式表」。
  *
+ * ### 🔴 第三行:无门控的自述标记 `--ccf-registered`(INV-3 的回归修复)
+ *
+ * class 门控是必需的,但它**把 JS 重新放回了页面加载的关键路径** ——
+ * 而 ADR-062 当初之所以能保证零闪烁,恰恰因为那条 CSS 规则**零 JS 依赖**。
+ * 真实 Chrome 逐帧录屏抓到了这个回归:**冷缓存**下
+ * (宿主 origin 的 `localStorage` 无条目)`readFastPath` 返回 `unknown`,
+ * 同步阶段无事可做,`ccf-on` 要等异步 `chrome.storage` 读完 ——
+ * 实测 `coldCache 1/4`、`1/3`、`1/5`、`2/127` 帧带色,而门控之前
+ * 同一套 harness「连续 5 次全绿」。
+ *
+ * 修复不是撤掉门控,而是**补上冷缓存下缺失的那个同步输入**:
+ *
+ * ```css
+ * html { --ccf-registered: ccf-gray-100; }        <- 裸 html,无门控
+ * html.ccf-on { filter: url("#ccf-gray-100") !important; }
+ * ```
+ *
+ * 本文件由 `registerContentScripts` 按**用户规则算出的 `matches`** 注册
+ * (`reconcile.ts` 的 `desiredRegistrations`),**所以它一旦出现在文档里,
+ * 浏览器就已经替我们判定过「本 host 该上色,且用这个 (mode,intensity)」**。
+ * content script 于是能在 `document_start` 的同步段内用
+ * `getComputedStyle` 同步读出它(零存储、零 await),再走 ADR-069 的两步。
+ *
+ * ⚠️ **这一条不得加任何门控** —— 它的全部意义就是不等任何 JS 就能被读到。
+ *    给它加门控等于把问题原样搬回去。
+ * ⚠️ 自定义属性**不会**让页面上色:`--ccf-registered` 不是 `filter`,
+ *    它只是一个被继承的记号。上色仍然**只**由 `html.ccf-on` 那条规则负责,
+ *    故 ADR-069 的门控语义一字未变。
+ *
+ * ### 为什么选择器写 `:root` 而不是 `html`
+ *
+ * 两者在 HTML 文档里匹配的是**同一个元素**(根元素),但:
+ *
+ * 1. `:root` 是声明文档级自定义属性的**规范写法** —— CSS Variables 规范
+ *    通篇用它举例,读者一眼就知道「这是一处变量声明,不是样式」。
+ * 2. `tests/filter-css-files.test.ts` 有一条门禁禁止预生成文件里出现
+ *    **裸 `html {`** 规则块。那条门禁守的是一件真事:
+ *    「任何无门控的 `html { filter: … }` 都会让浏览器在 SVG 就位之前
+ *    去解析 `url("#ccf-…")`,把 ADR-069 消除的前向引用不确定性放回来」。
+ *    本规则**不含 `filter`**,所以不在它要防的那类东西里 ——
+ *    但与其去动那条门禁(它守的是红线,且它的措辞比意图更严是**安全**的
+ *    那个方向),不如用一个同样正确、且本就更贴切的选择器。
+ *    **门禁一字未改。**
+ *
+ * ⚠️ 由此得出一条实现约束:这一行**永远不要**改成带 `filter` 的规则。
+ *    自述标记与上色是两件事,混在一条无门控的规则里就是那个已知缺陷。
+ *
+ * 详见 `src/domain/filter-css.ts` 中 `FILTER_REGISTERED_VAR` 的长注释
+ * (含「为什么不用其它同步通道」的取舍矩阵)。
+ *
  * ───────────────────────────────────────────────────────────────────────────
  * ## 🔴 ADR-070:四个滤镜统一走 SVG,灰阶不例外
  * ───────────────────────────────────────────────────────────────────────────
@@ -121,9 +171,11 @@ import {
   type Intensity,
   FILTER_MODES,
   FILTER_MODE_SLUGS,
+  FILTER_REGISTERED_VAR,
   INTENSITY_MAX,
   INTENSITY_MIN,
   filterCssValue,
+  filterRegisteredMarker,
 } from '../domain/index.js';
 
 /**
@@ -151,6 +203,13 @@ export const FILTER_CSS_DIR = 'filters';
  *    (向后兼容),但**不是**独立定义。
  */
 export { FILTER_MODE_SLUGS };
+
+/**
+ * 自述标记的属性名与值构造器 —— 同样**重新导出**领域层的定义
+ * (理由同 `FILTER_MODE_SLUGS`:CSS 文件写入的值与 content script
+ * 读出后解析的值必须逐字同源,不能有第二份)。
+ */
+export { FILTER_REGISTERED_VAR, filterRegisteredMarker };
 
 /** 短名 → 模式的反查(诊断与测试用,避免手写第二份映射)。 */
 export const FILTER_SLUG_TO_MODE: Readonly<Record<string, FilterMode>> =
@@ -201,6 +260,9 @@ export function filterCssFileContent(
   //    恢复那个本已被消除的不确定性。
   return (
     `/* 预生成滤镜 ${mode} @ ${intensity}%(ADR-062/063/069/070)。由 scripts/generate-filter-css.mjs 生成,勿手改。 */\n` +
+    // 🔴 **无门控的自述标记** —— INV-3 在冷缓存下的唯一同步输入,见头注释。
+    //    用 `:root`(而非 `html`)是刻意的,理由见头注释「为什么是 :root」。
+    `:root { ${FILTER_REGISTERED_VAR}: ${filterRegisteredMarker(mode, intensity)}; }\n` +
     `html.ccf-on { filter: ${value} !important; }\n` +
     `html.ccf-on :modal,\n` +
     `html.ccf-on [popover]:popover-open,\n` +

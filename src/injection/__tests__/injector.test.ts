@@ -723,3 +723,183 @@ describe('健壮性', () => {
     ).not.toThrow();
   });
 });
+
+// ───────────────── INV-3:冷缓存下的同步上色(ADR-062 + ADR-069) ─────────────────
+
+describe('🔴 INV-3 · 冷缓存下同步阶段必须上色(声明式注册的自述标记)', () => {
+  /**
+   * 🔴 **本组钉住的是一个真实回归,不是假想场景。**
+   *
+   * ADR-069 给预生成 CSS 加了 `.ccf-on` 门控之后,真实 Chrome 逐帧录屏
+   * 抓到 `coldCache 1/4`、`1/3`、`1/5`、`2/127` 帧带色 —— 根因是:
+   * 冷缓存下 `readFastPath` 返回 `unknown`,同步阶段**什么都不做**,
+   * class 要等异步 `chrome.storage` 读完才加上,JS 被放回了关键路径。
+   *
+   * 门控之前预生成 CSS 是无条件的 `html { filter: … }`,首帧上色**零 JS
+   * 依赖** —— 那正是 ADR-062 零闪烁保证的基础。
+   *
+   * 修法:预生成文件自带一行无门控的 `:root { --ccf-registered: … }`,
+   * 同步读出它即可知道浏览器已判定本 host 该上色。
+   */
+  const registeredReader = (marker: string) => () => ({
+    getPropertyValue: (name: string) =>
+      name === '--ccf-registered' ? marker : '',
+  });
+
+  it('🔴 冷缓存 + 已注册 → `runInjector` **返回之前**滤镜已就位(不 await)', () => {
+    const target = makeTarget();
+    const store = makeStore(); // 空 —— 冷缓存
+
+    const run = runInjector({
+      target,
+      store,
+      url: 'https://sub.example.com/page',
+      readSettings: () =>
+        // 异步权威**永不解析** —— 以此证明同步阶段独立成立。
+        new Promise(() => {
+          /* never */
+        }),
+      getComputedStyle: registeredReader('ccf-gray-100'),
+    });
+
+    // 同步阶段的可观测结果:快路径未命中,但注册自述命中了。
+    expect(run.fastPathHit).toBe(false);
+    expect(run.registeredHit).toBe(true);
+    // 🔴 关键:此刻(同步,未 await 任何东西)页面已是滤镜态。
+    expect(isFilterApplied(target)).toBe(true);
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 100));
+  });
+
+  it('🔴 ADR-069 的两步顺序在这条路径上同样成立:SVG 先于 class', () => {
+    // 冷缓存路径是**新增**的写入点,顺序约束必须在这里也被断言 ——
+    // 否则「先加 class 再插 SVG」会在这条路上悄悄复活,而那正是
+    // ADR-069 定为硬约束的那件事。
+    const target = makeTarget();
+    runInjector({
+      target,
+      store: makeStore(),
+      url: 'https://sub.example.com/',
+      readSettings: () => new Promise(() => {}),
+      getComputedStyle: registeredReader('ccf-redgreen-60'),
+    });
+    const svgAt = target.writes.indexOf('appendChild');
+    const classAt = target.writes.indexOf('class.add:ccf-on');
+    expect(svgAt).toBeGreaterThanOrEqual(0);
+    expect(classAt).toBeGreaterThanOrEqual(0);
+    expect(svgAt).toBeLessThan(classAt);
+    // 被引用的 <filter> 必须真的在容器里,否则 url("#…") 引用不到。
+    expect(target.svgContainer()?.idsWithin()).toContain('ccf-redgreen-60');
+  });
+
+  it('四个模式全部走同一条路径(ADR-070:灰阶不例外)', () => {
+    for (const [marker, mode, intensity] of [
+      ['ccf-gray-100', 'Grayscale', 100],
+      ['ccf-redgreen-60', 'RedGreen', 60],
+      ['ccf-greenred-30', 'GreenRed', 30],
+      ['ccf-blueyellow-7', 'BlueYellow', 7],
+    ] as const) {
+      const target = makeTarget();
+      const run = runInjector({
+        target,
+        store: makeStore(),
+        url: 'https://sub.example.com/',
+        readSettings: () => new Promise(() => {}),
+        getComputedStyle: registeredReader(marker),
+      });
+      expect(run.registeredHit, marker).toBe(true);
+      expect(currentFilterValue(target)).toBe(filterCssValue(mode, intensity));
+      // 灰阶也必须有 SVG 定义 —— 不再走内置 grayscale()。
+      expect(target.svgContainer()?.idsWithin(), marker).toContain(marker);
+    }
+  });
+
+  it('🔴 未注册(无标记)→ 同步阶段什么都不做(与修复前行为一致,向后兼容)', () => {
+    // 绝大多数页面走这条路:没有规则匹配 → 没注册 → 属性不存在。
+    const target = makeTarget();
+    const run = runInjector({
+      target,
+      store: makeStore(),
+      url: 'https://unmatched.test/',
+      readSettings: () => new Promise(() => {}),
+      getComputedStyle: registeredReader(''),
+    });
+    expect(run.registeredHit).toBe(false);
+    expect(isFilterApplied(target)).toBe(false);
+    expect(target.writes).toEqual([]);
+  });
+
+  it('快路径已命中时不再探测注册标记(不做无谓的样式计算)', () => {
+    const target = makeTarget();
+    const store = makeStore();
+    writeFastPath(store, 'sub.example.com', true, { mode: 'RedGreen', intensity: 60 }, Date.now());
+    let asked = 0;
+    const run = runInjector({
+      target,
+      store,
+      url: 'https://sub.example.com/',
+      readSettings: () => new Promise(() => {}),
+      getComputedStyle: () => {
+        asked += 1;
+        return { getPropertyValue: () => 'ccf-gray-100' };
+      },
+    });
+    expect(run.fastPathHit).toBe(true);
+    expect(run.registeredHit).toBe(false);
+    expect(asked).toBe(0);
+    // 用的是快路径的值,不是标记的值。
+    expect(currentFilterValue(target)).toBe(filterCssValue('RedGreen', 60));
+  });
+
+  it('🔴 缺 getComputedStyle 的宿主:退化为旧行为,绝不抛异常', () => {
+    const target = makeTarget();
+    expect(() =>
+      runInjector({
+        target,
+        store: makeStore(),
+        url: 'https://sub.example.com/',
+        readSettings: () => new Promise(() => {}),
+        // 不传 getComputedStyle,且本测试环境全局也没有它。
+      }),
+    ).not.toThrow();
+    expect(isFilterApplied(target)).toBe(false);
+  });
+
+  it('🔴 异步权威结果仍然说话:标记上了色,但权威说不该 → 被撤', async () => {
+    // 多匹配误伤(超集放宽)的收敛路径。这与 ADR-069 之前裸 `html` 时代
+    // 的行为**完全一致**(那时误伤页面同样先上色再被撤),
+    // 故本修复没有扩大误伤窗口 —— 只是把窗口恢复到回归之前。
+    const target = makeTarget();
+    const run = runInjector({
+      target,
+      store: makeStore(),
+      url: 'https://other.test/',
+      // 权威设置里没有任何匹配 other.test 的规则。
+      readSettings: () => Promise.resolve(settingsWith({ rules: [GRAY_RULE] })),
+      getComputedStyle: registeredReader('ccf-gray-100'),
+    });
+    expect(isFilterApplied(target)).toBe(true); // 同步:先上色
+    const settled = await run.settled;
+    expect(settled.registeredHit).toBe(true);
+    expect(settled.authoritative).toBeNull();
+    expect(settled.corrected).toBe(true);
+    expect(isFilterApplied(target)).toBe(false); // 异步:被撤
+  });
+
+  it('🔴 INV-8 不被这条路径绕过:主开关 OFF 时权威阶段仍然彻底止血', async () => {
+    // 主开关 OFF → desiredRegistrations() 返回空集 → CSS 压根不会注册,
+    // 所以生产环境读不到标记。但接收端不能依赖这一点,故断言:
+    // 即便标记存在(陈旧注册尚未被 reconcile 清掉),权威阶段也会撤。
+    const target = makeTarget();
+    const run = runInjector({
+      target,
+      store: makeStore(),
+      url: 'https://sub.example.com/',
+      readSettings: () =>
+        Promise.resolve(settingsWith({ masterEnabled: false, rules: [GRAY_RULE] })),
+      getComputedStyle: registeredReader('ccf-gray-100'),
+    });
+    await run.settled;
+    expect(isFilterApplied(target)).toBe(false);
+    expect(currentFilterValue(target)).toBe('');
+  });
+});
