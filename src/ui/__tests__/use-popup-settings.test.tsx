@@ -26,7 +26,6 @@ const seeded = {
     masterEnabled: true,
     rules: [{ pattern: 'a.com', mode: 'Grayscale', intensity: 100 }],
     lockUntil: null,
-    maxSeenTime: 0,
   },
 };
 

@@ -56,7 +56,7 @@ export const DEFAULT_EXTEND_DURATION: LockDuration = { amount: 1, unit: 'hour' }
 export interface LockCountdownBannerProps {
   /** 绝对到期时间戳(ADR-053)。 */
   readonly lockUntil: number;
-  /** 当前时刻 —— 已过 `effectiveNow` 夹取(ADR-059/INV-15),由 `useLockClock` 提供。 */
+  /** 当前时刻 —— 注入时钟的原始值(ADR-071),由 `useLockClock` 提供。 */
   readonly now: number;
   /**
    * 延长锁定 —— 传出**带单位的时长**(ADR-058),由调用方加到现有

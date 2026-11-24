@@ -11,26 +11,31 @@
  * 锁定中则返回 `kind: 'locked'` 的结构化错误(ADR-046),而不是 throw 或静默丢弃。
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
- * ## 时钟(ADR-059 / INV-15)
+ * ## 时钟(ADR-071)
  *
  * 仓储层接受一个**可注入的时钟**(默认 `Date.now`)。
- * 所有锁定判定一律用 `effectiveNow(clock(), maxSeenTime)` —— **不用裸时钟**,
- * 否则把系统时间往回调就能缩短锁定。每次读写都把
- * `maxSeenTime` 更新为 `max(maxSeenTime, clock())`。
+ * 锁定判定**直接用 `clock()`**,不再包任何单调下界 ——
+ * 原 `maxSeenTime` / `effectiveNow` 已由 **ADR-071 整条废止**:
+ * 改系统时钟绕过锁定本就允许(§4.1),既然不防作弊,这条防范就没有存在理由。
  *
- * ## `maxSeenTime` 不受锁定约束(INV-11 例外 b)
+ * ## 🔴 读路径不写盘(ADR-071)
  *
- * > INV-11 例外 (b):`maxSeenTime` 的单调推进 —— 它是**防御性元数据,不是用户设置**,
- * > **必须在锁定期间继续更新**。若随锁定一起冻结,单调下界会停在锁定开始的那一刻,
- * > 时钟倒退防护立即失效。
+ * `read()` / `isCurrentlyLocked()` **不产生任何 `storage.set`**。
+ * 原 `maxSeenTime` 的读路径回写采用 read-modify-write 整体回写
+ * (读出整个 settings、改一个字段、写回整个对象),期间若用户改了规则,
+ * 那次改动会被旧快照覆盖 —— 实测用户规则被静默吃掉。
+ * 废止该字段后读路径无需写盘,这条竞态**连带消失**。
  *
- * 所以被拒绝的写入**仍会**推进 `maxSeenTime`:被拒绝的是
- * `masterEnabled` / `rules` / `lockUntil` 三者,而非这个字段。
+ * ## INV-11 回到单一语义(ADR-071)
+ *
+ * 锁定期间**一切不可变更**,唯一例外是 `lockUntil` 的延长(INV-12)。
+ * 原「例外 b:`maxSeenTime` 单调推进」随 ADR-071 删除 —— 不再有任何豁免字段,
+ * 故被拒绝的写入之后可以做**全字段深度相等**断言。
  *
  * ## 持久化形状(ADR-025 / ADR-041 / ADR-047)
  *
  * 存下来的对象**只含** `version` / `masterEnabled` / `rules[{pattern,mode,intensity}]` /
- * `lockUntil` / `maxSeenTime`。`ColorMatrix` 是派生值,**绝不持久化**(ADR-025)——
+ * `lockUntil`。`ColorMatrix` 是派生值,**绝不持久化**(ADR-025)——
  * 持久化会产生可漂移的双份真相。读到未知/损坏/缺字段数据时回退默认值且不抛异常(ADR-041)。
  */
 import {
@@ -40,7 +45,6 @@ import {
   canSetLockUntil,
   coerceRule,
   coerceSettings,
-  effectiveNow,
   isLocked,
   validateGlobPattern,
 } from '../domain/index.js';
@@ -67,7 +71,8 @@ export const SETTINGS_KEY = 'filterSettings';
 /**
  * 持久化 JSON 的**完整键集**(ADR-025 gate)。
  *
- * > 存下来的对象只含 `version`、`masterEnabled`、`rules[...]`、`lockUntil`、`maxSeenTime`。
+ * > 存下来的对象只含 `version`、`masterEnabled`、`rules[...]`、`lockUntil`。
+ * > **出现 `maxSeenTime` 即失败**(ADR-071 已废止该字段)。
  * > **出现任何 matrix / 系数 / 派生字段即失败** —— 纯函数 ≠ 不持久化。
  */
 export const PERSISTED_SETTINGS_KEYS = [
@@ -75,13 +80,12 @@ export const PERSISTED_SETTINGS_KEYS = [
   'masterEnabled',
   'rules',
   'lockUntil',
-  'maxSeenTime',
 ] as const;
 
 /** 持久化的单条规则的**完整键集**(ADR-025 / ADR-047 结构稳定性)。 */
 export const PERSISTED_RULE_KEYS = ['pattern', 'mode', 'intensity'] as const;
 
-/** 可注入的时钟。默认 `Date.now`(ADR-059:时钟必须可注入,否则时间边界不可测)。 */
+/** 可注入的时钟。默认 `Date.now`(ADR-071:时钟必须可注入,否则时间边界不可测)。 */
 export type Clock = () => number;
 
 /**
@@ -106,30 +110,10 @@ export const MIN_DEBOUNCE_MS = 300;
  */
 export const MAX_DEBOUNCE_WAIT_MS = 1_000;
 
-/**
- * `maxSeenTime` **读路径回写**的节流窗口(ADR-059 / INV-15)。
- *
- * DESIGN.md §6 T3 逐字要求「**每次读写**时把 `maxSeenTime` 更新为
- * `max(maxSeenTime, clock())`」。写路径一直是对的;**读路径此前只在内存里推进、
- * 从不落盘** —— 而锁定期间所有用户写入都按设计被拒绝,于是一个「只看不写」的
- * 正常用户(popup 打开、content script 读取)会让持久化的单调下界永远冻结在
- * 锁定开始的那一刻。把系统时钟倒拨回锁定开始时间再重启浏览器,
- * 剩余时长就恢复成完整时长,且可以无限次重置 —— INV-15 被彻底绕过。
- *
- * 因此读路径也必须回写。但读是热路径(每个 content script、每次 popup 渲染都读),
- * 逐次回写等于把一次读变成一次读 + 一次写。故用**节流**(throttle,非防抖):
- * 下界至多每 `MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS` 落盘一次。
- *
- * 60 秒的取值依据:这是倒拨时钟所能偷回的**最大**窗口。锁定的量纲是小时 / 天
- * (§4.1),被偷回 ≤ 60 秒既无实际价值,又把读放大的 I/O 压到可忽略
- * (`chrome.storage.local` 无写入频率配额 —— 该限制只存在于 sync)。
- */
-export const MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS = 60_000;
-
 export interface SettingsRepositoryOptions {
   /** 存储端口。默认真实的 `chrome.storage.local`(ADR-010)。 */
   readonly area?: StorageArea;
-  /** 可注入时钟,默认 `Date.now`(ADR-059 / T3 gate I3)。 */
+  /** 可注入时钟,默认 `Date.now`(ADR-071 / T3 gate I3)。 */
   readonly clock?: Clock;
   /** 列表侧连续操作的防抖窗口,**不得小于 `MIN_DEBOUNCE_MS`**。 */
   readonly debounceMs?: number;
@@ -159,15 +143,14 @@ function toPersisted(settings: FilterSettings): Record<string, unknown> {
       intensity: r.intensity,
     })),
     lockUntil: settings.lockUntil,
-    maxSeenTime: settings.maxSeenTime,
   };
 }
 
 /** 锁定判定所需的上下文 —— 见 `readContext()`。 */
 interface WriteContext {
-  /** 当前已持久化的设置(已推进 `maxSeenTime`)。 */
+  /** 当前已持久化的设置。 */
   readonly current: FilterSettings;
-  /** `effectiveNow(clock(), maxSeenTime)` —— **锁定判定一律用它,不用裸时钟**。 */
+  /** 注入时钟 `clock()` 的返回值 —— 锁定判定直接用它(ADR-071)。 */
   readonly now: number;
   /** 该时刻是否处于锁定中。 */
   readonly locked: boolean;
@@ -181,15 +164,6 @@ export class SettingsRepository {
   readonly #listeners = new Set<SettingsListener>();
 
   #changeListener: StorageChangeListener | null = null;
-
-  /**
-   * 上一次把 `maxSeenTime` 落盘时所用的下界值(读路径回写的节流状态)。
-   *
-   * `null` = 本实例尚未落过盘 → 下一次读若发现下界前进了就立刻回写一次
-   * (覆盖「浏览器刚重启、只读不写」这一关键场景:新实例的第一次读
-   * 就把跨会话推进的下界钉到磁盘上)。
-   */
-  #lastWrittenMaxSeenTime: number | null = null;
 
   /**
    * 最近一次**已知的**持久化设置快照 —— 供 `setLockUntilImmediate` 在
@@ -210,7 +184,7 @@ export class SettingsRepository {
    * 防抖中的待写入规则列表(列表侧连续操作)。
    *
    * 只缓存 `rules` —— 落盘时 `replaceRules` 会重新读取当前设置,
-   * 故 `masterEnabled` / `lockUntil` / `maxSeenTime` 取的始终是最新值,
+   * 故 `masterEnabled` / `lockUntil` 取的始终是最新值,
    * 不会被一个陈旧的快照覆盖。
    */
   #pending: {
@@ -243,23 +217,21 @@ export class SettingsRepository {
   /**
    * 读取设置。
    *
-   * - 存储为空 → 返回默认值 `{version, masterEnabled, rules: [], lockUntil: null, maxSeenTime: 0}`,
+   * - 存储为空 → 返回默认值 `{version, masterEnabled, rules: [], lockUntil: null}`,
    *   **不抛异常**(T3 gate)
    * - 垃圾数据 / 缺字段 / 更高 version → 回退默认值且**不抛异常**(ADR-041)
-   * - 同时把 `maxSeenTime` 推进到 `max(maxSeenTime, clock())`(ADR-059:「每次读写」)
+   * - 🔴 **不产生任何写入**(ADR-071)—— 读就只是读。原 `maxSeenTime` 的
+   *   读路径回写已废止,连带消除了整体回写吃掉用户并发写入的竞态。
    *
    * 读路径**永不 throw** —— 底层存储失败也返回默认值。读失败时让扩展彻底不可用,
    * 比回退到「无规则」要糟得多(ADR-041 的同一理由:关掉一个真实崩溃路径)。
    */
   async read(): Promise<FilterSettings> {
     const ctx = await this.#readContext();
-    // ADR-059 / INV-15:「每次**读**写」—— 读路径也要把推进后的单调下界落盘,
-    // 否则锁定期间(所有用户写入都被拒绝)下界只存在于内存,重启即丢失。
-    await this.#writeBackMaxSeenTime(ctx);
     return ctx.current;
   }
 
-  /** 读取并推进 `maxSeenTime`,但**不写回**存储 —— 写回由具体写入方法负责。 */
+  /** 读取当前设置并算出锁定判定上下文。**本方法不写盘**(ADR-071)。 */
   async #readContext(): Promise<WriteContext> {
     let raw: unknown;
     try {
@@ -273,75 +245,14 @@ export class SettingsRepository {
     // coerceSettings 已实现 ADR-041 的全部回退语义(垃圾/缺字段/越界)。
     const stored = coerceSettings(raw);
 
-    // ADR-059 / INV-15:单调推进。**注意这发生在锁定检查之前**,
-    // 因为锁定判定本身要用推进后的 effectiveNow(INV-11 例外 b)。
-    const tick = this.#clock();
-    const maxSeenTime = effectiveNow(
-      typeof tick === 'number' && Number.isFinite(tick) ? tick : stored.maxSeenTime,
-      stored.maxSeenTime,
-    );
-
-    const current: FilterSettings = { ...stored, maxSeenTime };
-    const now = effectiveNow(tick, maxSeenTime);
+    // ADR-071:锁定判定直接用注入的时钟,不再包单调下界。
+    const now = this.#clock();
+    const current: FilterSettings = stored;
 
     // 快照保持新鲜 —— 见 `#cachedSettings` 的说明。
     this.#cachedSettings = current;
 
     return { current, now, locked: isLocked(current, now) };
-  }
-
-  /**
-   * **读路径**上的 `maxSeenTime` 回写(ADR-059 / INV-15)。
-   *
-   * ⚠️ 这条路径是 INV-15 的真正落点,不是优化。没有它,
-   * 「锁定 7 天 → 6 天里只读不写 → 把系统时钟倒拨回锁定开始 → 重启浏览器」
-   * 会让剩余时长回到完整的 7 天,且可无限次重复。
-   * 持久化的下界必须跟着**读**一起前进,因为锁定期间根本不存在成功的用户写入。
-   *
-   * 与 INV-11 的关系:**不冲突**。回写的只有 `maxSeenTime`;
-   * `masterEnabled` / `rules` / `lockUntil` 原样取自刚读到的已持久化值。
-   * INV-11 例外 b 明文规定该字段是防御性元数据,**必须在锁定期间继续推进**。
-   *
-   * 节流:至多每 `MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS` 落盘一次,
-   * 避免把热读路径放大成热写路径。
-   *
-   * 失败**静默忽略** —— 读路径永不 throw(ADR-041),
-   * 且下界推进是尽力而为的加固,不是用户发起的操作。
-   */
-  async #writeBackMaxSeenTime(ctx: WriteContext): Promise<void> {
-    const advanced = ctx.current.maxSeenTime;
-    const last = this.#lastWrittenMaxSeenTime;
-
-    // 只在下界**真的前进了**时才回写 —— 时钟倒退时 effectiveNow 会夹住,
-    // 这里拿到的 advanced 不会变小,于是不产生任何写入。
-    if (last !== null && advanced - last < MAX_SEEN_TIME_WRITEBACK_INTERVAL_MS) {
-      return;
-    }
-
-    // 本实例还没落过盘时(刚构造 / 浏览器刚重启),先比对磁盘上的值:
-    // 已经是最新就不必写,避免每次新建实例都平白产生一次写。
-    if (last === null) {
-      let storedMax: number;
-      try {
-        const got = await this.#area.get(SETTINGS_KEY);
-        storedMax = coerceSettings(got?.[SETTINGS_KEY]).maxSeenTime;
-      } catch {
-        // 读不出来就当磁盘上没有下界,走下面的回写。
-        storedMax = 0;
-      }
-      if (advanced <= storedMax) {
-        // 磁盘上的下界已经不落后 —— 记下它,后续按节流窗口判断即可。
-        this.#lastWrittenMaxSeenTime = storedMax;
-        return;
-      }
-    }
-
-    try {
-      await this.#area.set({ [SETTINGS_KEY]: toPersisted(ctx.current) });
-      this.#lastWrittenMaxSeenTime = advanced;
-    } catch {
-      /* 尽力而为;见上方说明 */
-    }
   }
 
   // ──────────────────────── 锁定强制(INV-14) ────────────────────────
@@ -372,19 +283,12 @@ export class SettingsRepository {
   /**
    * 把设置落盘。**调用前必须已完成锁定检查** —— 本方法不做任何权限判定。
    *
-   * `maxSeenTime` 在此再次推进(INV-11 例外 b:锁定期间也要推进)。
    */
   async #persist(next: FilterSettings): Promise<WriteResult<FilterSettings>> {
-    const tick = this.#clock();
-    const settings: FilterSettings = {
-      ...next,
-      maxSeenTime: effectiveNow(tick, next.maxSeenTime),
-    };
+    const settings: FilterSettings = next;
 
     try {
       await this.#area.set({ [SETTINGS_KEY]: toPersisted(settings) });
-      // 写路径同样落了下界 —— 同步节流状态,免得紧接着的读又写一次。
-      this.#lastWrittenMaxSeenTime = settings.maxSeenTime;
       this.#cachedSettings = settings;
     } catch (cause) {
       // ADR-046:返回结构化错误,**不得只 throw 或只 console.error**。
@@ -394,27 +298,15 @@ export class SettingsRepository {
   }
 
   /**
-   * 仅推进 `maxSeenTime` 并落盘(INV-11 例外 b)。
+   * 写入被拒绝时的统一出口(ADR-071)。
    *
-   * 在**被拒绝的写入**之后调用:用户设置一字未动,但防御性元数据继续前进。
-   * 落盘失败时**静默忽略** —— 调用方已经有一个更重要的拒绝原因要返回,
-   * 且 `maxSeenTime` 的推进是尽力而为的加固,不是用户可见的操作。
+   * 🔴 **拒绝路径不写盘** —— 锁定期间一切不可变更,不再有任何豁免字段
+   * (原 INV-11 例外 b 已随 ADR-071 删除)。故被拒绝的写入之后,
+   * 磁盘上的设置**全字段**与之前深度相等。
+   *
+   * `ctx` 保留在签名里是为了与各写入方法的调用点保持一致的可读性。
    */
-  async #touchMaxSeenTime(ctx: WriteContext): Promise<void> {
-    try {
-      await this.#area.set({ [SETTINGS_KEY]: toPersisted(ctx.current) });
-      this.#lastWrittenMaxSeenTime = ctx.current.maxSeenTime;
-    } catch {
-      /* 尽力而为;见上方说明 */
-    }
-  }
-
-  /** 锁定检查失败时的统一出口:推进 `maxSeenTime`,返回拒绝错误。 */
-  async #reject(
-    ctx: WriteContext,
-    error: WriteError,
-  ): Promise<WriteResult<FilterSettings>> {
-    await this.#touchMaxSeenTime(ctx);
+  #reject(_ctx: WriteContext, error: WriteError): WriteResult<FilterSettings> {
     return writeFail(error);
   }
 
@@ -604,7 +496,7 @@ export class SettingsRepository {
    * 「原子」在此的含义:**一次 `storage.set` 完成,无中间态** ——
    * 不存在「先写 lockUntil 再写 masterEnabled」的窗口。
    *
-   * 判定一律用 `effectiveNow`(ADR-059/INV-15),故把系统时钟往回调不能缩短锁定。
+   * 判定用注入的 `clock()`(ADR-071)—— 系统时钟由用户自行负责,扩展不做防范。
    */
   async setLockUntil(next: number | null): Promise<WriteResult<FilterSettings>> {
     const ctx = await this.#readContext();
@@ -674,8 +566,7 @@ export class SettingsRepository {
    * ⚛️ **ADR-057 的原子性照旧**:启动锁定时 `masterEnabled` 与 `lockUntil`
    * 在**同一次** `storage.set` 里落盘,无中间态。
    *
-   * ADR-059 / INV-15:`maxSeenTime` 照旧用 `effectiveNow` 夹过单调下界,
-   * 故把系统时钟往回调不能缩短锁定。
+   * ADR-071:判定直接用注入的 `clock()`,不再包单调下界。
    * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    */
   setLockUntilImmediate(next: number | null): Promise<WriteResult<FilterSettings>> {
@@ -686,13 +577,8 @@ export class SettingsRepository {
     // 用户根本点不到锁定按钮(见 LockTimerEntry 的 disabled={!loaded})。
     if (cached === null) return this.setLockUntil(next);
 
-    const tick = this.#clock();
-    const maxSeenTime = effectiveNow(
-      typeof tick === 'number' && Number.isFinite(tick) ? tick : cached.maxSeenTime,
-      cached.maxSeenTime,
-    );
-    const current: FilterSettings = { ...cached, maxSeenTime };
-    const now = effectiveNow(tick, maxSeenTime);
+    const now = this.#clock();
+    const current: FilterSettings = cached;
     const ctx: WriteContext = { current, now, locked: isLocked(current, now) };
 
     const verdict = canSetLockUntil(current.lockUntil, next, now);
@@ -703,8 +589,8 @@ export class SettingsRepository {
       const error = ctx.locked
         ? lockedError('lock-write-rejected', lockRejectionMessage(verdict.reason))
         : invalidInputError(lockRejectionMessage(verdict.reason));
-      // 拒绝路径**不需要**同轮落盘(没有用户数据要保),照旧走 `#reject`。
-      return this.#reject(ctx, error);
+      // 拒绝路径**不写盘**(ADR-071),照旧走 `#reject`。
+      return Promise.resolve(this.#reject(ctx, error));
     }
 
     const requested = next as number;
@@ -719,12 +605,7 @@ export class SettingsRepository {
     // ADR-057:启动锁定(快照显示此前未锁定)→ 同一次写入里置 masterEnabled: true。
     const masterEnabled = ctx.locked ? current.masterEnabled : true;
 
-    const settings: FilterSettings = {
-      ...current,
-      lockUntil,
-      masterEnabled,
-      maxSeenTime: effectiveNow(tick, current.maxSeenTime),
-    };
+    const settings: FilterSettings = { ...current, lockUntil, masterEnabled };
 
     // 🔴 关键:**同步**发出 get + set —— 本方法到此为止没有出现过任何 await。
     // 即使 popup 在下一刻被拆掉,两个请求都已经交给浏览器进程了。
@@ -743,7 +624,6 @@ export class SettingsRepository {
       return Promise.resolve(writeFail(classifyStorageError(cause)));
     }
 
-    this.#lastWrittenMaxSeenTime = settings.maxSeenTime;
     this.#cachedSettings = settings;
 
     return this.#settleLockWrite(probing, writing, settings);
@@ -793,11 +673,14 @@ export class SettingsRepository {
     return writeOk(written);
   }
 
-  /** 当前是否处于锁定中(用 `effectiveNow`,ADR-059)。供 UI 置灰这第二道防线使用。 */
+  /**
+   * 当前是否处于锁定中(判定用注入的 `clock()`,ADR-071)。
+   * 供 UI 置灰这第二道防线使用。
+   *
+   * 🔴 同 `read()`:这是一条**读路径,不产生任何写入**(ADR-071)。
+   */
   async isCurrentlyLocked(): Promise<boolean> {
     const ctx = await this.#readContext();
-    // 同 `read()`:这也是一条读路径,同样要回写单调下界(ADR-059 / INV-15)。
-    await this.#writeBackMaxSeenTime(ctx);
     return ctx.locked;
   }
 

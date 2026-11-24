@@ -21,8 +21,6 @@ export interface FilterSettings {
   readonly rules: readonly FilterRule[];
   /** 锁定到期的**绝对时间戳**(epoch ms)。null 或已过期 = 未锁定(ADR-053)。 */
   readonly lockUntil: number | null;
-  /** 已观测到的最大时间戳,用于时钟倒退防范(ADR-059 / INV-15)。 */
-  readonly maxSeenTime: number;
 }
 
 export function defaultSettings(): FilterSettings {
@@ -31,7 +29,6 @@ export function defaultSettings(): FilterSettings {
     masterEnabled: true,
     rules: [],
     lockUntil: null,
-    maxSeenTime: 0,
   };
 }
 
@@ -59,11 +56,6 @@ export function coerceSettings(value: unknown): FilterSettings {
       ? s.lockUntil
       : null;
 
-  const maxSeenTime =
-    typeof s.maxSeenTime === 'number' && Number.isFinite(s.maxSeenTime)
-      ? s.maxSeenTime
-      : base.maxSeenTime;
-
   return {
     version:
       typeof s.version === 'number' && Number.isFinite(s.version)
@@ -73,7 +65,6 @@ export function coerceSettings(value: unknown): FilterSettings {
       typeof s.masterEnabled === 'boolean' ? s.masterEnabled : base.masterEnabled,
     rules,
     lockUntil,
-    maxSeenTime,
   };
 }
 
@@ -106,22 +97,7 @@ export function addRule(
   };
 }
 
-// ───────────────────────────── 锁定(ADR-051/052/053/059)─────────────────────────────
-
-/**
- * `effectiveNow(rawNow, maxSeenTime)` —— 返回 `max(rawNow, maxSeenTime)`(ADR-059 / INV-15)。
- *
- * **所有锁定判定都必须用它,而非裸 `Date.now()`。**
- * 作用:系统时钟倒退时(夏令时、NTP 校时),单调下界保证锁定的
- * 有效剩余时长**不会增加**,也不会因倒退而被误判为未锁定。
- *
- * 注:时钟**调快**可绕过锁定,这是已记录的平台局限(§4.1),不在 INV-15 范围内。
- */
-export function effectiveNow(rawNow: number, maxSeenTime: number): number {
-  if (!Number.isFinite(rawNow)) return maxSeenTime;
-  if (!Number.isFinite(maxSeenTime)) return rawNow;
-  return rawNow > maxSeenTime ? rawNow : maxSeenTime;
-}
+// ───────────────────────────── 锁定(ADR-051/052/053/071)─────────────────────────────
 
 /**
  * `isLocked(settings, now)` —— 纯函数,`now < lockUntil` 即锁定(ADR-051)。
@@ -134,7 +110,8 @@ export function effectiveNow(rawNow: number, maxSeenTime: number): number {
  * - `now === lockUntil`     → **未锁定**(到期即解锁,边界取开区间)
  * - `now > lockUntil`       → 未锁定
  *
- * 调用方应先用 `effectiveNow(rawNow, settings.maxSeenTime)` 算出 `now`(INV-15)。
+ * `now` 由调用方直接传入注入时钟 `clock()` 的结果(ADR-071:
+ * 原 `effectiveNow` 单调下界已废止,系统时钟由用户自行负责)。
  */
 export function isLocked(settings: FilterSettings, now: number): boolean {
   const { lockUntil } = settings;
@@ -157,7 +134,7 @@ export type CanSetLockUntilResult =
  * `canSetLockUntil(current, next, now)` —— 判定 `lockUntil` 的写入是否合法
  * (ADR-052 / INV-12:**加码可以,反悔不行**)。
  *
- * 纯函数,`now` 为注入参数(调用方应传 `effectiveNow(...)` 的结果)。
+ * 纯函数,`now` 为注入参数(调用方直接传注入时钟 `clock()` 的结果,ADR-071)。
  *
  * 判定表(门禁逐条要求):
  * - 未锁定 → 任意**未来**时间戳:**允许**

@@ -728,7 +728,7 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
 
 ### T3 — 持久化(本地存储)
 **depends_on:** T1
-**adr:** ADR-010, ADR-011, ADR-012, ADR-041, ADR-046, ADR-047, ADR-051, ADR-052, ADR-053, ADR-055, ADR-057, ADR-059
+**adr:** ADR-010, ADR-011, ADR-012, ADR-041, ADR-046, ADR-047, ADR-051, ADR-052, ADR-053, ADR-055, ADR-057, ADR-071
 **spec:** 基于 **`chrome.storage.local`**(ADR-010)的仓储层,读写 `FilterSettings`。
 
 > **🔴 锁定强制点在此(INV-14 / ADR-055)—— 这是整个锁定功能的真正实现位置。**

@@ -45,7 +45,6 @@ npm run build          # 产物在 .output/chrome-mv3/(ADR-038:验收一律在 b
          { pattern: '*',                 mode: 'BlueYellow', intensity: 30  },
        ],
        lockUntil: null,
-       maxSeenTime: Date.now(),
      },
    });
    ```
@@ -77,7 +76,6 @@ npm run build          # 产物在 .output/chrome-mv3/(ADR-038:验收一律在 b
        ...(await chrome.storage.local.get('filterSettings')).filterSettings,
        lockUntil: until,
        masterEnabled: true,          // ADR-057:启动锁定时原子置 true
-       maxSeenTime: Date.now(),
      },
    });
    ```
@@ -108,47 +106,60 @@ npm run build          # 产物在 .output/chrome-mv3/(ADR-038:验收一律在 b
    ```js
    // 用打包产物里的仓储层;若无法 import,等价地确认 UI 层之外的写入路径同样被拒。
    // 关键断言:锁定中任何对 masterEnabled / rules 的变更都必须被拒绝,
-   // 且 masterEnabled / rules / lockUntil 三者保持不变(maxSeenTime 可推进,INV-11 例外 b)。
+   // 且**全字段**深度相等 —— ADR-071 废止 maxSeenTime 后不再有任何豁免字段(INV-11)。
    ```
 
 ---
 
-## GATE-3 · 时钟倒退不缩短锁定,且只读会话不丢单调下界(INV-15 / ADR-059)
+## GATE-3 · 读路径不写盘,且并发写入不被吃掉(ADR-071)
 
-> **背景(本轮修复的缺陷)**:`maxSeenTime` 此前只在**写**路径落盘。
-> 而锁定期间所有用户写入都按设计被拒绝,于是「只看不写」的正常使用
-> (打开 popup、content script 读取)会让持久化的单调下界**永远冻结在锁定开始那一刻**。
-> 把系统时钟倒拨回锁定开始时间再重启浏览器,剩余时长就恢复成完整时长,且可无限次重置。
-> 现在**读**路径也会回写下界(节流 60s),本门禁就是在真实 Chrome 中验这一点。
+> **背景(ADR-071 废止了什么)**:原设计额外持久化 `maxSeenTime` 作为时钟倒退的
+> 单调下界(旧 ADR-059 / INV-15)。为维持下界,**读**路径也必须更新它,
+> 而实现采用 read-modify-write **整体回写** —— 读出整个 settings、改一个字段、
+> 写回整个对象。期间若用户改了规则,那次改动就被旧快照覆盖
+> (实测规则数应为 1 实际为 0,**用户规则被静默吃掉**)。
+>
+> 产品负责人拍板**整条废止**:改系统时钟绕过锁定本就允许(§4.1 记录为无法防范
+> 的途径),既然不防作弊,这条防范就失去了存在理由。废止比修竞态更彻底 ——
+> 竞态连带消失。本门禁就是在真实 Chrome 中验「读路径零写入」这条核心保证。
+>
+> **已接受的代价**:时钟若被拨慢(含夏令时、NTP 校时),锁定会意外变长且
+> 无法提前结束(ADR-052)。场景很窄,已接受。
 
-1. 启动一个 **1 小时**的锁定,记下 `lockUntil` 与此刻的 `maxSeenTime`:
+1. 启动一个 **1 小时**的锁定,打印存储:
 
    ```js
    const r = () => chrome.storage.local.get('filterSettings').then(o => o.filterSettings);
    console.log(await r());
    ```
 
-2. **不做任何写入操作**,只打开 / 关闭 popup 若干次,并访问几个被规则命中的网页
-   (触发 content script 的读)。等待 **至少 5 分钟**(> 60s 的回写节流窗口)。
+   **断言:打印出来的对象里没有 `maxSeenTime` 键**(ADR-071 已废止该字段;
+   旧版本留下的该键会在下一次写入时被 `toPersisted` 的逐字段拷贝清掉)。
 
-3. 再次打印存储,确认 `maxSeenTime` **已经前进**到接近当前时刻:
+2. 装一个写入探针,然后**只读不写**:打开 / 关闭 popup 若干次,
+   并访问几个被规则命中的网页(触发 content script 的读)。等待至少 **5 分钟**。
 
    ```js
-   const s = await r();
-   console.log('maxSeenTime =', s.maxSeenTime, '  now =', Date.now());
-   console.log('下界落后(秒) =', (Date.now() - s.maxSeenTime) / 1000);
+   let writes = 0;
+   chrome.storage.onChanged.addListener((c, a) => {
+     if (a === 'local' && c.filterSettings) { writes += 1; console.log('write #', writes); }
+   });
    ```
 
-4. **把系统时钟往回拨**到第 1 步锁定开始的时刻(macOS:系统设置 → 通用 → 日期与时间,
-   关闭自动设置后手动改),**完全退出并重启 Chrome**,再打印存储与锁定状态。
+3. **断言:`writes === 0`** —— 读路径一次 `storage.set` 都不许产生。
+   任何非零都说明读路径仍在写盘,那条吃掉并发写入的竞态就还有复活的土壤。
+
+4. 并发安全(这是废止要换来的东西):锁定**到期后**,在一个窗口里连续添加
+   3 条规则,同时在另一个窗口反复打开 popup(持续触发读)。
 
 **通过判据(全部满足):**
 
-- 第 3 步的「下界落后(秒)」**≤ 60** —— 证明读路径确实在回写,而不是冻结在锁定开始
-- 倒拨 + 重启后,**仍在锁定中**为 `true`
-- 剩余时长 = `lockUntil - max(Date.now(), maxSeenTime)`,**≤ 第 1 步设定的 1 小时减去已过去的真实时长**。
-  **若剩余变回完整的 1 小时,即为 INV-15 失败** —— 倒拨时钟成了一键重置锁定
-- 反复「倒拨 → 重启」多次,剩余时长**单调递减**,绝不回涨
+- 第 1 步存储里**不存在** `maxSeenTime` 键
+- 第 3 步的 `writes` 为 **0**
+- 第 4 步结束后,3 条规则**一条不少**地留在磁盘上 ——
+  **若规则数少于 3,即为 ADR-071 的核心保证失败**(读路径又在用旧快照覆盖写入)
+- 锁定期间的写入仍被拒绝,且被拒绝之后存储**全字段**与之前相同
+  (不再有「例外 b」那样的豁免字段)
 
 ---
 

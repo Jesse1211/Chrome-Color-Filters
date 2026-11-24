@@ -102,8 +102,8 @@ export function durationToMs(duration: LockDuration): number | null {
 /**
  * 由「当前时刻 + 带单位的时长」算出 `lockUntil` 的**绝对时间戳**(ADR-053)。
  *
- * 🔴 `now` 是**注入**参数 —— 调用方须传 `effectiveNow(Date.now(), maxSeenTime)`
- * 的结果(ADR-059 / INV-15),本函数内绝不调用 `Date.now()`,否则时间边界不可测。
+ * 🔴 `now` 是**注入**参数 —— 调用方须传注入时钟 `clock()` 的结果(ADR-071),
+ * 本函数内绝不调用 `Date.now()`,否则时间边界不可测。
  *
  * 🔴 这是 UI 能产出 `lockUntil` 的**唯一**函数。界面上没有任何
  * 「直接填一个时间戳」的路径 —— ADR-058 的界面层保证正落在这里。

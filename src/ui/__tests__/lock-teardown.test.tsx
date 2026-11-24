@@ -77,14 +77,12 @@ function makeClock(start = T0) {
 const seeded = (over: {
   masterEnabled?: boolean;
   lockUntil?: number | null;
-  maxSeenTime?: number;
 }) => ({
   [SETTINGS_KEY]: {
     version: 1,
     masterEnabled: over.masterEnabled ?? true,
     rules: [{ pattern: '*.weibo.*', mode: 'Grayscale', intensity: 100 }],
     lockUntil: over.lockUntil ?? null,
-    maxSeenTime: over.maxSeenTime ?? 0,
   },
 });
 
@@ -317,7 +315,6 @@ describe('🔴 对照:销毁后才发出的写入确实到不了存储(替身有
         masterEnabled: true,
         rules: [],
         lockUntil: T0 + HOUR,
-        maxSeenTime: 0,
       },
     });
     await drain();
@@ -341,7 +338,6 @@ describe('🔴 对照:销毁后才发出的写入确实到不了存储(替身有
           masterEnabled: true,
           rules: [],
           lockUntil: T0 + HOUR,
-          maxSeenTime: 0,
         },
       });
     })();
@@ -414,7 +410,6 @@ describe('锁定写入活过拆除后,既有保障不得退化', () => {
         masterEnabled: true,
         rules: [],
         lockUntil: T0 + 10 * HOUR,
-        maxSeenTime: 0,
       },
     });
     await drain();
@@ -450,7 +445,6 @@ describe('锁定写入活过拆除后,既有保障不得退化', () => {
         masterEnabled: true,
         rules: [],
         lockUntil: T0 + 2 * HOUR,
-        maxSeenTime: 0,
       },
     });
     await drain();

@@ -53,7 +53,6 @@ await chrome.storage.local.set({
     masterEnabled: true,
     rules: [{ pattern: '*.wikipedia.org', mode: 'Grayscale', intensity: 100 }],
     lockUntil: null,
-    maxSeenTime: Date.now(),
   },
 });
 ```

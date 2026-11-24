@@ -79,7 +79,7 @@ function rule(pattern, mode = 'Grayscale', intensity = 100) {
 }
 
 function settings(rules, masterEnabled = true) {
-  return { version: 1, masterEnabled, rules, lockUntil: null, maxSeenTime: Date.now() };
+  return { version: 1, masterEnabled, rules, lockUntil: null };
 }
 
 module.exports = { launch, getWorker, seed, rule, settings, EXT, CHROME };
