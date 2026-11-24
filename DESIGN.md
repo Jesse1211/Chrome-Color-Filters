@@ -35,12 +35,12 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `pattern` | GlobPattern (VO) | 通配符模式,匹配域名 |
-| `mode` | FilterMode (VO) | 四选一,互斥 |
+| `mode` | FilterMode (VO) | **仅 `Grayscale`**(ADR-075) |
 | `intensity` | Intensity (VO) | 0–100 |
 
 **值对象 (Value Objects)**
 
-- `FilterMode` = `Grayscale | RedGreen | GreenRed | BlueYellow`
+- `FilterMode` = `Grayscale`(**ADR-075:仅此一个**;原 `RedGreen | GreenRed | BlueYellow` 已删除)
 - `LockUntil` = epoch 毫秒时间戳。**存绝对时间而非剩余时长** —— 否则重启浏览器就是一键绕过(INV-13)
 - `Intensity` = 整数 0–100
 - `GlobPattern` = 通配符字符串。合法字符:字面字符 + `*`。**无分组、无量词嵌套、无转义序列**。长度上限 **253 字符**(DNS 域名最大长度)
@@ -69,11 +69,15 @@ x.com         仅匹配 x.com
 
 - **INV-1 · UI 零影响** — 滤镜开启后,页面除**像素颜色**外,一切可观察行为与关闭时完全一致:布局几何、滚动行为、`position:fixed`/`sticky` 的定位基准、点击命中区域、文本选中、动画、video/canvas 播放、页面自身 JS 读到的计算样式。
 - **INV-2 · 模式互斥** — 任一时刻单个规则最多一个 `FilterMode` 生效。
+  > ADR-075 后 `FilterMode` 只有 `Grayscale` 一个取值,本不变式退化为平凡真;
+  > **保留它**是为了将来加回模式时约束仍在(删掉会让后人以为从未要求过互斥)。
 - **INV-3 · 零闪烁** — 在匹配到规则的页面上,用户绝不可见任何未滤镜的帧。
-  > **🔴 已知例外(ADR-072,产品负责人裁定):冷启动 + 会话恢复 + 多标签页**。
-  > 该场景下实测 20–40% 的标签页首帧未滤镜(5/5 轮复现,14/50 标签页实例,
-  > 其中 1 次确认 `visibility: visible` 即用户可见)。**其余三态
-  > (newTab / restart / hot)仍为硬性要求,不得退让。**
+  > **🔴 ADR-072 的例外已随 ADR-075 消失 —— 本不变式恢复为无例外的硬性要求。**
+  > 该例外只存在于被删除的三个 CVD 模式(它们没有自包含的首帧值)。
+  > Grayscale 走 CSS 内置 `grayscale(amount)`,首帧零 JS、零 SVG 节点:
+  > 冷启动+会话恢复+多标签页实测 **0/50**(修复前 14/50),
+  > coldCache / newTab / restart / hot 四态 **5/5 全绿**。
+  > **四态 + 多标签页全部为硬性要求,连续 5 轮全绿,不得退让。**
 - **INV-4 · 同源一致** — 匹配同一规则的所有 tab 显示完全相同的滤镜状态。
 - **INV-5 · 存活性** — 站点脚本移除注入样式后,滤镜必须自动恢复。
 - **INV-6 · 首个命中胜** — 多条规则命中时,`rules` 中**索引最小**的那条生效,且**只有它**生效。
@@ -157,7 +161,8 @@ x.com         仅匹配 x.com
 | **ADR-066** | **`COMPILE_CMD`(`tsc --noEmit`)是独立的第三道门禁**,与 `TEST_CMD`/`LINT_CMD` 并列,每个任务都必须跑 | 实测教训:T4a 第三轮 `npm test` 737 个全绿、`npm run lint` 零错误,但 `tsc --noEmit` 报两个类型错误(且干净 main 上退出码 0,证明是新引入)。**vitest 不做类型检查,eslint 未配类型感知规则** —— 一个 TypeScript 项目的验收门禁里没有编译检查是漏洞。其中一个错误有实质后果:`mode: 'R-G'` 不是合法 `FilterMode`,该测试的规则根本没按预期构造,断言可能空转。类型错误能让测试**看起来绿而实际空转**,这正是本账本要防的自欺 |
 | **ADR-062** | **首帧滤镜改为声明式注册**:service worker 用 `chrome.scripting.registerContentScripts()` 为每组 `(mode, intensity)` 注册一条带预生成 CSS 文件的 content script(`persistAcrossSessions: true`),**取代「content script 运行时查询该用什么滤镜」** | **这是零闪烁的根本解法,取代 ADR-060 的缓存思路。** 原架构内含「必须查询」,而查询必然异步 —— 闪烁是架构的必然结果而非实现缺陷(五次独立测量,失败位置从未移动)。声明式方案把异步工作**挪到规则创建时**(此刻 SW 必然活着、延迟免费),页面加载路径上**不再有任何查询**。关键机制(已核实 Chromium 源码 `extension_user_script_loader.cc`):持久化注册在**扩展加载时从磁盘 StateStore 恢复**,**不依赖 SW 先启动**。API 文档原文:`css` 文件「在页面的任何 DOM 被构建**或显示**之前」注入,且 **CSS 不受 `runAt` 约束** —— 比 `document_start` 的 JS 更早。**冷缓存失败因此消失:不再有缓存需要填充** |
 | **ADR-071** | **废止 `maxSeenTime` 与整条时钟倒退防范(原 ADR-059 / INV-15)。系统时钟由用户自行负责,扩展不做任何处理** | 产品负责人决定:改系统时钟绕过锁定**本就允许**(§4.1 已记录为无法防范的途径之一),既然不防作弊,这条防范就失去了存在理由。<br><br>**它还引入了一个真实的数据丢失缺陷:** `maxSeenTime` 必须在**读路径**也更新(以维持单调下界),而实现采用 read-modify-write 整体回写 —— 读出整个 settings、改一个字段、写回整个对象。期间若用户改了规则,那次改动被旧快照覆盖。实测:2 个单测红灯 + 锁定端到端 41/42,三次独立运行稳定失败,规则数应为 1 实际为 0(**用户规则被静默吃掉**)。<br><br>根因是**我的规格漏洞** —— ADR-059 写了「每次读写时更新 maxSeenTime」但没规定**怎么**更新,Dev 按最自然的整体回写实现就撞上竞态。<br><br>**废止比修竞态更彻底:竞态连带消失,不必去修一个本来不需要的东西。** 读路径因此不再写盘,INV-11 也回到「锁定期间一切不可变更」的单一语义(例外 b 随之删除)。<br><br>**已接受的代价:** 夏令时切换或 NTP 校时若把时钟拨慢,锁定会意外变长且无法提前结束(ADR-052)。此场景很窄 —— 一年两次、需恰好跨越切换时刻、且仅影响约一小时;相比 ADR-054「不设时长上限」允许用户主动锁数月,一小时的量级无关紧要 |
-| **ADR-072** | **接受「冷启动 + 会话恢复 + 多标签页」场景下的首帧未滤镜缺口**,不再尝试消除。INV-3 相应收窄(见上),门禁只对该场景外的三态设硬性要求 | 产品负责人拍板。这是一个**真实的交换,不是放弃**:<br><br>**ADR-069 买到的** —— 三个色觉滤镜在 CSP 站点上从**确定性静默全死**变为可用(news.ycombinator.com 实测四滤镜全生效、零 CSP 违规)。静默失效是最坏的缺陷形态:用户以为开着,其实没开,且无任何报错。<br><br>**付出的代价** —— 冷启动恢复多标签页时 20–40% 标签页首帧未滤镜(5/5 轮复现)。<br><br>**为什么不能两全(五个方向均已实测排除,不是没试):**<br>① 裸 `html` + SVG 稍后插入 → 实测**引用不存在时整条 filter 被忽略、首帧原色**,赌引擎重解析无济于事;<br>② manifest 静态 CSS 通道投送 SVG → **机制上不存在**,CSS 通道只能送样式表、送不了 DOM 节点;<br>③ CSS 内置函数近似(`saturate`/`sepia`/`hue-rotate` 三元组合最优解)→ 中位 ΔE 10.9–19.4、>10 占比 54–85%(**明显异色**),且 **GreenRed 的近似比完全不上色还差**(13.1 → 14.7),感知收益约等于零;<br>④ exact/relaxed 分流注册 → 代价是 404→808 文件、破坏 `registrationId()` 纯函数性、重写 `assertNoUnintendedAllUrls`,而它要防的超集误伤**已由「放宽必须有界」+ `inexpressible` 不注册**覆盖;<br>⑤ `data:` URI → 见 ADR-073,本来就不工作。<br><br>**代价有天然边界:** 仅限冷启动会话恢复。正常点链接、开新标签页、浏览器重启后新导航均不受影响 |
+| **ADR-075** | **🔴 砍掉 RedGreen / GreenRed / BlueYellow 三个色觉滤镜,只保留 Grayscale。连带删除整套同文档 SVG 机制** —— `url("#id")` 引用、`ccf-on`/`ccf-off` class 门控、SVG 节点注入、404 个预生成文件(降为 101 个)、CSP 门禁。滤镜值回到纯 CSS 内置 `html { filter: grayscale(amount) }` | **产品负责人拍板:「这三个不要了,太费劲了,就要 Grayscale」。**<br><br>**这不只是删三个选项,而是删掉本项目绝大部分复杂度的来源。** 三个 CVD 滤镜是以下全部难题的**唯一**成因:<br>① **CSP 静默失效**(ADR-069/073)—— 只打中 SVG 路径,**灰阶自始至终无恙**(ADR-070 原文已记载);<br>② **首帧闪烁**(ADR-072/074)—— 只有它们没有自包含的 CSS 内置等价值,实测 coldCache 首访首帧 `filter:none`(RedGreen t=665ms / GreenRed t=284ms / BlueYellow t=285ms),而 Grayscale 同场景 `grayscale(1)` 已在首帧;<br>③ **ADR-070 与 INV-3 的直接冲突** —— 「四模式统一走 SVG」要求灰阶也等 JS 建节点;<br>④ **`styles.cjs` 两条判据互斥** —— `ccf-off` 压制 class 是功能本体却被计为残留。<br><br>**删除后 ①②③④ 全部消失**,首帧机制回到 main 上那个已 5/5 全绿、零闪烁、不受任何 CSP 影响的形态:`grayscale(amount)` 是 CSS 内置函数,不产生资源加载,无从被 `img-src` 拦截,也不需要任何 DOM 节点。<br><br>**保真度零损失:** W3C Filter Effects Level 1 §8.5 规定 `grayscale(amount)` **就是**用 BT.709 系数在恒等与满强度之间插值,与 `toColorMatrix('Grayscale', n)` 数学上完全等价(实测 216 个采样点 CIE ΔE 全为 0.0)。<br><br>**已接受的代价:** 失去红绿/蓝黄色觉辅助能力。研究层面本就只有「CVD daltonization」与「暗色模式」两类有真实证据(前期两个 research agent 的结论),而本功能的核心诉求是降低屏幕色彩刺激 —— 灰阶独立满足该诉求。若将来要加回色觉辅助,这套 SVG 机制需重建,ADR-069/072/073/074 的全部实测结论**保留在账本中以备重用** |
+| ~~**ADR-072**~~ | **(已由 ADR-075 失效 —— 该缺口只存在于被删除的三个 CVD 模式;Grayscale 实测 0/50)** ~~接受「冷启动 + 会话恢复 + 多标签页」场景下的首帧未滤镜缺口~~,不再尝试消除。INV-3 相应收窄(见上),门禁只对该场景外的三态设硬性要求 | 产品负责人拍板。这是一个**真实的交换,不是放弃**:<br><br>**ADR-069 买到的** —— 三个色觉滤镜在 CSP 站点上从**确定性静默全死**变为可用(news.ycombinator.com 实测四滤镜全生效、零 CSP 违规)。静默失效是最坏的缺陷形态:用户以为开着,其实没开,且无任何报错。<br><br>**付出的代价** —— 冷启动恢复多标签页时 20–40% 标签页首帧未滤镜(5/5 轮复现)。<br><br>**为什么不能两全(五个方向均已实测排除,不是没试):**<br>① 裸 `html` + SVG 稍后插入 → 实测**引用不存在时整条 filter 被忽略、首帧原色**,赌引擎重解析无济于事;<br>② manifest 静态 CSS 通道投送 SVG → **机制上不存在**,CSS 通道只能送样式表、送不了 DOM 节点;<br>③ CSS 内置函数近似(`saturate`/`sepia`/`hue-rotate` 三元组合最优解)→ 中位 ΔE 10.9–19.4、>10 占比 54–85%(**明显异色**),且 **GreenRed 的近似比完全不上色还差**(13.1 → 14.7),感知收益约等于零;<br>④ exact/relaxed 分流注册 → 代价是 404→808 文件、破坏 `registrationId()` 纯函数性、重写 `assertNoUnintendedAllUrls`,而它要防的超集误伤**已由「放宽必须有界」+ `inexpressible` 不注册**覆盖;<br>⑤ `data:` URI → 见 ADR-073,本来就不工作。<br><br>**代价有天然边界:** 仅限冷启动会话恢复。正常点链接、开新标签页、浏览器重启后新导航均不受影响 |
 | **ADR-073** | **更正 ADR-069 的立论:`data:` URI 形式的 SVG filter 在 Chrome 158 上「即使没有任何 CSP 也不生效」** —— 不只是被 `img-src` 拦 | 实测(干净测试页,排除 favicon 与内联样式噪声):<br>· 无 CSP → 像素**仍彩色**,CSP 违规 **0 条**<br>· `img-src 'self'` → 仍彩色,违规 1 条<br>· `img-src 'none'` → 仍彩色,违规 1 条<br><br>而同文档 `url("#id")`(SVG 在文档内)在**三种策略下全部生效、零违规**。<br><br>**换掉 `data:` URI 的决定是对的,但原记载的理由不完整** —— 若不更正,后人会以为「放行 `data:` 即可恢复」,从而走进一条根本不通的路。同文档引用不受 CSP 管辖这一点**已实测确认**,ADR-069 的方向成立 |
 | **ADR-069** | **滤镜矩阵改用同文档 SVG + class 开关**:content script 在 `document_start` 的**同步段**内先把 `<svg><filter id="ccf-{mode}-{intensity}">` 挂到 `documentElement` 下,**再**给 `documentElement` 加 `ccf-on` class;预生成的 CSS 写成 `html.ccf-on { filter: url("#ccf-{mode}-{intensity}") !important; }` | **取代原 `data:` URI 方案。** 实测缺陷:`data:` URI 形式的 SVG 被浏览器归类为图片资源,受站点 CSP 的 `img-src` 管辖 —— 在不放行 `data:` 的站点上三个色觉矫正滤镜**静默失效**(像素与关闭态完全相同、无任何报错),确定性复现于 `img-src 'self'` / 无 `img-src` 的 `default-src` / `img-src 'none'`。**同文档 `url("#id")` 引用不产生资源加载,CSP 无从拦截。** 相比打包 SVG 走 `chrome-extension://`:不需要 `web_accessible_resources`、无指纹暴露、无需任何服务器。<br><br>**class 开关是关键** —— 它让前向引用问题**根本不存在**:CSS 注入时(t=0)`html` 还没有 `ccf-on` class,规则不匹配任何元素,浏览器压根不去解析那个 `url("#...")`;等 class 加上去时 `#ccf-…` 已在 DOM 里,filter 值是新算出来的。**即使某个引擎缓存了「找不到」也不受影响** —— 这是消除不确定性,不是赌对。<br><br>**首帧安全性:** `document_start` 时 `documentElement` 已存在(`<head>`/`<body>` 尚无,但 SVG 直接挂 `html` 即可);content script 在主线程**同步执行**,期间解析器与渲染都停着,所以「插 SVG → 加 class」两步在首帧之前必然完成。实测对照:同步 fragment 路径 0 次闪烁,而异步 storage 路径 4 次中闪 1 次 —— **异步等待才是闪烁根源,JS 本身不是**。<br><br>**附带收益:** 开关滤镜只需切换 class,不增删样式表;INV-8(主开关 OFF)与 ADR-049(实时预览)的撤销/恢复同样简化为改 class 或改矩阵值 |
 | **ADR-070** | **四个滤镜统一走 SVG `feColorMatrix`**,灰阶也不例外(不再用 CSS 内置 `grayscale()`) | 灰阶本身就是一个颜色矩阵,用内置函数只是巧合可行。若灰阶走内置函数、另三个走 SVG,**两条注入路径会各自演化**,又多一类「只在某条路径上出现的 bug」—— 本次 CSP 缺陷恰好只打中 SVG 路径而灰阶无恙,正是这种分裂的代价。统一路径也让 ADR-063 的预生成文件结构一致 |
@@ -303,12 +308,15 @@ focus     outline: 2px solid var(--accent) · outline-offset: 2px   (ADR-043)
 | 滤镜 | 渐变 | 名称 | 副标题 |
 |---|---|---|---|
 | Grayscale | `#9AA0A6 → #D5D8DC` | 灰阶 | 完全去除色彩 |
-| RedGreen | `#C25B4E → #5B9E55` | 红绿 | 红色弱 · 红绿色觉辅助 |
-| GreenRed | `#5B9E55 → #C25B4E` | 绿红 | 绿色弱 · 红绿色觉辅助 |
-| BlueYellow | `#4C6FD4 → #D9C25A` | 蓝黄 | 蓝黄色觉辅助 |
 
-> **⚠️ 硬性约束:** 红绿与绿红的色块对红绿色盲用户**无法分辨** —— 而他们正是这两个滤镜的目标用户。
-> 因此**色块绝不可单独承载语义**,必须始终与文字名称并列出现。任何「只有色块没有文字」的位置都是缺陷。
+> **ADR-075:只剩这一个模式。** 原 RedGreen / GreenRed / BlueYellow 三行已删除。
+> **编辑视图不再需要模式单选组** —— 只有一个模式时单选组是无意义的控件。
+> 规则的 `mode` 字段仍然保留(类型只有一个取值),以便将来加回模式时数据结构不变。
+
+> **📌 ADR-030 的原硬性约束已随 ADR-075 失效但保留于此备用:**
+> 原文要求「色块绝不可在没有文字名称的情况下出现」—— 因为红绿与绿红的色块
+> 对红绿色盲用户**无法分辨**,而他们正是那两个滤镜的目标用户。
+> 现在只剩灰阶一个模式,该冲突不存在;**但若将来加回色觉滤镜,这条必须同时恢复。**
 
 ### 5.3 列表视图
 
@@ -678,18 +686,21 @@ html.ccf-on { filter: url("#ccf-{mode}-{intensity}") !important; }
 **10. 领域层(原 T2 的全部内容)**
 
 实现纯领域层,零 Chrome API 依赖。
-- 值对象:`FilterMode`(四个)、`Intensity`、`GlobPattern`(含 253 字符上限与语法校验)
+- 值对象:`FilterMode`(**仅 `Grayscale`** —— ADR-075)、`Intensity`、`GlobPattern`(含 253 字符上限与语法校验)
 - `FilterRule`、`FilterSettings` 聚合
 - `matchGlob(pattern, host)` — 通配符匹配,`*` 跨点号(ADR-006)。**必须线性时间**(INV-10)
 - `resolveRule(settings, url)` — 取 host,按序首个命中(INV-6)
-- `toColorMatrix(mode, intensity)` — 纯函数产出 feColorMatrix 系数
+- ~~`toColorMatrix(mode, intensity)`~~ — **ADR-075 删除**。滤镜值改为纯 CSS 内置
+  `grayscale(amount)`,不再需要颜色矩阵。`amount` 由 `intensity/100` 直接得出
+  (W3C Filter Effects §8.5 与 BT.709 矩阵插值等价,实测 ΔE 全为 0)
 - `isLocked(settings, now)` — 纯函数,`now < lockUntil` 即锁定(ADR-051)。
   **注入 `now` 而非内部调用 `Date.now()`** —— 否则无法测试时间边界
 - `canSetLockUntil(current, next, now)` — 纯函数,判定 `lockUntil` 的写入是否合法(ADR-052):
   未锁定时任意未来时间合法;锁定中**仅 `next > current` 合法**(只能延长)
 
 
-R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而非随手捏造的系数 —— 请在代码注释中引用所采用的来源。
+~~R/G、G/R、B/Y 需采用公认的色觉辅助矩阵~~ —— **ADR-075 已删除这三个模式**,本要求失效。
+灰阶用 CSS 内置 `grayscale()`,其系数由 W3C 规范规定(BT.709),无需自行选取来源。
 
 **gate:**
 - **证明由 CLI 生成** —— 交付注明 `npx wxt@latest init` 及 WXT 版本号。手搓的直接驳回(ADR-035)
@@ -720,7 +731,8 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
   - `x.com` 仅匹配 `x.com`,不匹配 `sub.x.com` 或 `notx.com`
   - `*` 匹配任意 host
   - **无回溯验证**:病态模式(如 100 个连续 `*` 对 1000 字符输入)必须在线性时间内返回,设硬性耗时断言(INV-10)
-- **首个命中胜**:规则 `[x.com→Gray, *→B/Y]` 对 `x.com` 返回 Gray;对 `other.com` 返回 B/Y(INV-6)
+- **首个命中胜**:规则 `[x.com→Gray@100, *→Gray@30]` 对 `x.com` 返回 100 档;
+  对 `other.com` 返回 30 档(INV-6)。**ADR-075 后只有一个模式,故用强度区分两条规则**
 - `GlobPattern` 拒绝超过 253 字符的输入
 - 第 21 条规则被拒绝(INV-7)
 - URL 解析:`https://x.com/path?q=1` 的 host 为 `x.com`(ADR-007)
@@ -1294,7 +1306,10 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
   证据中 `runs` 必须为 5 —— 出现更小值即视为门禁被削弱,不予通过
 - **【回归】** INV-4:匹配同规则的多 tab 状态一致
 - **【回归】** INV-5:SPA 站内跳转后滤镜仍在
-- **【新增】** INV-6:**端到端**验证优先级 —— popup 里建两条规则 `[x.com→Gray, *→B/Y]`,真实打开 x.com 得 Gray、其他站得 B/Y。上游只在单元层验过 `resolveRule`,此处首次验证「UI 建的规则 → 实际渲染」整条链路
+- **【新增】** INV-6:**端到端**验证优先级 —— popup 里建两条规则
+  `[x.com→Gray@100, *→Gray@30]`,真实打开 x.com 得 100 档、其他站得 30 档
+  (**ADR-075 后只有一个模式,用强度区分**)。上游只在单元层验过 `resolveRule`,
+  此处首次验证「UI 建的规则 → 实际渲染」整条链路
 - **【回归】** INV-7:第 21 条被拒,提示明确
 - **【回归】** INV-8:主开关 OFF → 全站无滤镜、规则保留、图标全灰;ON → 全部恢复
 - **【回归】** INV-9:按 T4 的三项机械判定法(静态断言 a/b + Network 实测 c)复验,不接受人工通读(ADR-026)
@@ -1305,10 +1320,11 @@ R/G、G/R、B/Y 需采用公认的色觉辅助矩阵(Machado/Brettel 一类),而
   **主开关自动变 ON**(ADR-057)→ 尝试改规则、关主开关、**缩短计时器全部失败** → **延长成功**
   → **完全退出并重启浏览器** → 锁定仍有效、剩余时间正确 → 等待到期 → 自动解锁且设置可改
 - **【新增】** 持久化(ADR-010):配置规则 → **完全退出 Chrome 并重启** → 规则与顺序完好。改用 `storage.local` 后这是持久化的完整验收面,**无需第二个 Google 账号**
-- **【新增】** 🔴 CSP 抗性(ADR-069):在 **news.ycombinator.com** 与严格 CSP 测试页矩阵上,
-  **四个滤镜像素均确实改变**且**零 CSP violation** —— 这是上一轮 visual-modes 34/40、
-  csp-matrix 23/26 两条红灯的闭合条件
-- **【新增】** 四个滤镜在真实网页上视觉正确(截图留档,供人类复核色彩矩阵是否合理)
+- **【新增】** 🔴 CSP 无关性(ADR-075):`grayscale()` 是 CSS 内置函数,不产生资源加载,
+  **结构上无从被 CSP 拦截**。仍须在 **news.ycombinator.com**(已确认其 CSP 拦 `data:`)
+  上实测灰阶像素确实改变 + 零 CSP violation,以证明删除 SVG 机制后该缺陷确已消失
+- **【新增】** 灰阶在真实网页上视觉正确(截图留档),且**抽查若干强度档**
+  与 `grayscale(intensity/100)` 逐位一致
 - **blindSpots 必须显式申报** —— 列出未覆盖的站点类型与场景
 
 ---
