@@ -3,15 +3,17 @@
  * 预生成滤镜 CSS 文件门禁(ADR-063)。
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
- * DESIGN.md §6 第 9 条 / T1 gate 的原文:
+ * DESIGN.md §6 第 9 条 / T1 gate 的原文(ADR-063):
  *
  * > **`public/filters/` 下存在 404 个 CSS 文件**(4 模式 × 101 档),且抽查
  * > 若干个的 `filter` 值与 `toColorMatrix(mode, intensity)` 的输出**逐位一致**
- * > (ADR-063,防止两条路径漂移)
  *
- * 🔴 本文件**不抽查,而是全查** —— 404 个文件逐一与
- * `filterCssValue`(内部复用 `toColorMatrix`)比对。抽查会漏:
- * 漂移最可能发生在某几个特定强度档(如浮点格式化的边界),
+ * 🔴 **ADR-075 更新了这两个数:1 模式 × 101 档 = 101 个文件**,
+ * 且 `toColorMatrix` 已删除(三个 CVD 模式与整套 SVG 机制一并删除),
+ * 比对基准改为 `filterCssValue`。
+ *
+ * 🔴 本文件**不抽查,而是全查** —— 101 个文件逐一与 `filterCssValue` 比对。
+ * 抽查会漏:漂移最可能发生在某几个特定强度档(如浮点格式化的边界),
  * 而抽查恰好跳过它们的概率不低。全查的成本是几十毫秒。
  *
  * ## 为什么这条门禁如此重要
@@ -32,9 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   FILTER_MODES,
-  type FilterMode,
   filterCssValue,
-  toColorMatrix,
 } from '../src/domain/index.js';
 import {
   ALL_INTENSITIES,
@@ -48,7 +48,7 @@ import {
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FILTERS_DIR = resolve(ROOT, 'public/filters');
 
-describe('ADR-063 · public/filters/ 的 404 个文件', () => {
+describe('ADR-063/075 · public/filters/ 的 101 个文件', () => {
   it('🔴 目录存在(漏跑 npm run filters 时硬失败)', () => {
     expect(
       existsSync(FILTERS_DIR),
@@ -56,10 +56,38 @@ describe('ADR-063 · public/filters/ 的 404 个文件', () => {
     ).toBe(true);
   });
 
-  it('🔴 恰好 404 个 .css 文件(4 模式 × 101 档)', () => {
+  it('🔴 ADR-075:恰好 101 个 .css 文件(1 模式 × 101 档)', () => {
     const files = readdirSync(FILTERS_DIR).filter((f) => f.endsWith('.css'));
-    expect(FILTER_CSS_FILE_COUNT).toBe(404);
-    expect(files).toHaveLength(404);
+    expect(FILTER_CSS_FILE_COUNT).toBe(101);
+    expect(files).toHaveLength(101);
+  });
+
+  it('🔴 ADR-075:三个已删除模式的文件一个都不残留', () => {
+    // 孤儿文件不只是垃圾:它们的内容是 `filter: url("data:image/svg+xml,…")`,
+    // 即 ADR-069/073 记载的 CSP 静默失效载体。留一个在产物里,
+    // 就有可能被某条旧注册引用到(扩展更新时注册会被清除重建,
+    // 但用户的磁盘上可能还有旧的 StateStore 记录)。
+    const files = readdirSync(FILTERS_DIR);
+    for (const slug of ['redgreen', 'greenred', 'blueyellow']) {
+      expect(
+        files.filter((f) => f.startsWith(`${slug}-`)),
+        `${slug}-*.css 仍在 public/filters/ 里`,
+      ).toEqual([]);
+    }
+  });
+
+  it('🔴 ADR-075:产物里没有任何一个文件含 data: URI(CSP 无关性)', () => {
+    const offenders: string[] = [];
+    for (const name of readdirSync(FILTERS_DIR)) {
+      const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
+      if (text.includes('data:')) offenders.push(`${name}(含 data:)`);
+      if (text.includes('url(')) offenders.push(`${name}(含 url())`);
+      if (text.includes('feColorMatrix')) offenders.push(`${name}(含 SVG 矩阵)`);
+    }
+    expect(
+      offenders,
+      '预生成 CSS 含会被站点 CSP 拦截的资源引用 —— ADR-069/073 的静默失效回归',
+    ).toEqual([]);
   });
 
   it('目录内**只有** .css,无孤儿文件', () => {
@@ -73,9 +101,9 @@ describe('ADR-063 · public/filters/ 的 404 个文件', () => {
     expect(ALL_INTENSITIES[100]).toBe(100);
   });
 
-  it('四种模式的短名各不相同(文件名不可碰撞)', () => {
+  it('每个模式的短名各不相同(文件名不可碰撞)', () => {
     const slugs = FILTER_MODES.map((m) => FILTER_MODE_SLUGS[m]);
-    expect(new Set(slugs).size).toBe(4);
+    expect(new Set(slugs).size).toBe(FILTER_MODES.length);
   });
 
   it('短名全小写(跨平台大小写安全 —— macOS 不敏感、Linux 敏感)', () => {
@@ -91,7 +119,7 @@ describe('ADR-063 · public/filters/ 的 404 个文件', () => {
   });
 });
 
-describe('🔴 ADR-063 · 404 个文件全部与 toColorMatrix 逐位一致(防漂移)', () => {
+describe('🔴 ADR-063/075 · 101 个文件全部与 filterCssValue 逐位一致(防漂移)', () => {
   it('每个文件的磁盘内容 === filterCssFileContent(mode, intensity)', () => {
     const mismatched: string[] = [];
     for (const file of allFilterCssFiles()) {
@@ -125,34 +153,34 @@ describe('🔴 ADR-063 · 404 个文件全部与 toColorMatrix 逐位一致(防�
     );
   });
 
-  it('🔴 非 Grayscale 模式的矩阵系数来自 toColorMatrix(不是另写的公式)', () => {
-    // Grayscale 走 CSS 原生 grayscale(),无矩阵;其余三种内联 feColorMatrix。
-    for (const mode of ['RedGreen', 'GreenRed', 'BlueYellow'] as FilterMode[]) {
-      for (const intensity of [0, 1, 37, 50, 99, 100]) {
-        const name = `${FILTER_MODE_SLUGS[mode]}-${intensity}.css`;
-        const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
-        const matrix = toColorMatrix(mode, intensity);
-        // 取矩阵的第一个非平凡系数,确认它确实出现在文件里。
-        // 这是「公式同源」的独立证据 —— 不经 filterCssValue 这一层。
-        const coefficients = Object.values(matrix).filter(
-          (v): v is number => typeof v === 'number',
-        );
-        expect(coefficients.length).toBeGreaterThan(0);
-        // 文件里的系数是 URL 转义过的,空格 → %20;取一个确定存在的数字串。
-        const sample = coefficients
-          .map((c) => formatLikeDomain(c))
-          .find((s) => s !== '0' && s !== '1');
-        if (sample !== undefined) {
-          expect(
-            text,
-            `${name} 不含 toColorMatrix 的系数 ${sample}`,
-          ).toContain(sample);
-        }
+  /*
+   * 🔴 原「非 Grayscale 模式的矩阵系数来自 toColorMatrix」已随 ADR-075 删除:
+   * 那三个模式与 `toColorMatrix` 都不存在了,该断言无从构造。
+   *
+   * 它守的性质是「预生成 CSS 的滤镜值与领域层同源,不是另写的公式」——
+   * 该性质由上面那条「每个文件的 filter 值 === filterCssValue」全量覆盖,
+   * 再加下面这条**不经 filterCssValue** 的独立复算作为第二道证据。
+   */
+  it('🔴 滤镜值的独立复算 —— 不经 filterCssValue,防「两处同错」', () => {
+    // 上一条用 filterCssValue 比对:若 filterCssValue 本身写错了,
+    // 它与文件会「一致地错」。故这里按 ADR-075 的规格**独立**算一遍 amount:
+    // amount = intensity / 100,定小数位、截掉尾随零。
+    const mismatched: string[] = [];
+    for (const intensity of ALL_INTENSITIES) {
+      const f = intensity / 100;
+      const amount = Number.isInteger(f)
+        ? String(f)
+        : f.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+      const name = `gray-${intensity}.css`;
+      const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
+      if (!text.includes(`filter: grayscale(${amount}) !important;`)) {
+        mismatched.push(`${name} 期望 grayscale(${amount})`);
       }
     }
+    expect(mismatched, `${mismatched.length} 个文件的 amount 与规格不符`).toEqual([]);
   });
 
-  it('Grayscale 用 CSS 原生 grayscale()(W3C 定义即 BT.709 插值,与矩阵等价)', () => {
+  it('Grayscale 用 CSS 原生 grayscale()(W3C 定义即 BT.709 插值,与原矩阵等价)', () => {
     expect(readFileSync(resolve(FILTERS_DIR, 'gray-100.css'), 'utf8')).toContain(
       'grayscale(1)',
     );
@@ -161,12 +189,6 @@ describe('🔴 ADR-063 · 404 个文件全部与 toColorMatrix 逐位一致(防�
     );
   });
 });
-
-/** 复刻 `colorMatrixToValues` 的格式化,仅用于上面那条独立证据。 */
-function formatLikeDomain(value: number): string {
-  if (Number.isInteger(value)) return String(value);
-  return value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
-}
 
 describe('🔴 ADR-062/063 / INV-1 · 文件内的选择器是裸 html,注入目标是根元素', () => {
   it('🔴 主规则选择器**精确**为裸 `html`(不是 body,也**不带属性门控**)', () => {
@@ -182,7 +204,7 @@ describe('🔴 ADR-062/063 / INV-1 · 文件内的选择器是裸 html,注入目
     ).toBe('html {');
   });
 
-  it('🔴 404 个文件中**没有一个**用 body 作注入目标', () => {
+  it('🔴 101 个文件中**没有一个**用 body 作注入目标', () => {
     // 上一轮实测:把 html[...] 改成 body[...] 后单元测试全绿 296/296,
     // 因为旧断言用子串匹配,而残留的 top-layer 规则里仍含该字符串。
     // T0 实测 body{filter} 会让固定头部跳到 y=-1000(INV-1 最脆弱点)。
@@ -195,7 +217,7 @@ describe('🔴 ADR-062/063 / INV-1 · 文件内的选择器是裸 html,注入目
     expect(offenders).toEqual([]);
   });
 
-  it('🔴 404 个文件中**没有一个**带 [data-ccf-on] 门控(ADR-062 的要害)', () => {
+  it('🔴 101 个文件中**没有一个**带 [data-ccf-on] 门控(ADR-062 的要害)', () => {
     // 门控会把 JS 重新放回页面加载的关键路径 —— 真实 Chrome 实测:
     // 属性要到 readyState=complete 才设上,首帧 computed filter 为 none,
     // coldCache 3/3 站点出现未滤镜彩色帧。这是本轮亲手踩过并修掉的缺陷,
@@ -232,7 +254,7 @@ describe('🔴 ADR-062/063 / INV-1 · 文件内的选择器是裸 html,注入目
   });
 
   it('🔴 每条规则都带 !important(对抗站点自身的 html{filter})', () => {
-    for (const name of ['gray-100.css', 'redgreen-50.css', 'blueyellow-7.css']) {
+    for (const name of ['gray-100.css', 'gray-50.css', 'gray-7.css', 'gray-0.css']) {
       const text = readFileSync(resolve(FILTERS_DIR, name), 'utf8');
       const filterLines = text
         .split('\n')
@@ -267,6 +289,7 @@ describe('filterCssFileContent · 纯函数(同输入恒同输出)', () => {
 
   it('路径与内容一一对应,无碰撞', () => {
     const paths = new Set(allFilterCssFiles().map((f) => f.path));
-    expect(paths.size).toBe(404);
+    expect(paths.size).toBe(101);
+    expect(paths.size).toBe(FILTER_CSS_FILE_COUNT);
   });
 });

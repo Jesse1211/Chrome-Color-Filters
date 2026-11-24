@@ -97,8 +97,8 @@ function userSettings(s: FilterSettings) {
 describe('T3 gate · 写入 → 读取 → 深度相等,且顺序一致', () => {
   it('写入的规则读回来深度相等', async () => {
     const { repo } = makeRepo();
-    const a = rule('x.com', { mode: 'RedGreen', intensity: 42 });
-    const b = rule('*.baidu.*', { mode: 'BlueYellow', intensity: 7 });
+    const a = rule('x.com', { mode: 'Grayscale', intensity: 42 });
+    const b = rule('*.baidu.*', { mode: 'Grayscale', intensity: 7 });
 
     await repo.addRule(a);
     await repo.addRule(b);
@@ -193,7 +193,7 @@ describe('T3 gate · 20 条满配的序列化体积(配额 10MB,留足三个数�
 
     for (let i = 0; i < MAX_RULES; i++) {
       const p = `${String(i).padStart(2, '0')}${longPattern.slice(2)}`;
-      const res = await repo.addRule(rule(p, { mode: 'BlueYellow', intensity: 100 }));
+      const res = await repo.addRule(rule(p, { mode: 'Grayscale', intensity: 100 }));
       expect(res.ok).toBe(true);
     }
 
@@ -488,11 +488,11 @@ describe('T3 gate · onChanged 订阅(INV-4 多 tab 即时同步的基础机制)
     const seen: FilterSettings[] = [];
     repo.subscribe((s) => seen.push(s));
 
-    await repo.addRule(rule('x.com', { mode: 'GreenRed', intensity: 30 }));
+    await repo.addRule(rule('x.com', { mode: 'Grayscale', intensity: 30 }));
 
     expect(seen).toHaveLength(1);
     expect(seen[0]?.rules.map((r) => r.pattern)).toEqual(['x.com']);
-    expect(seen[0]?.rules[0]?.mode).toBe('GreenRed');
+    expect(seen[0]?.rules[0]?.intensity).toBe(30);
   });
 
   it('取消订阅后不再收到回调,并摘掉底层监听器', async () => {
@@ -571,7 +571,7 @@ describe('T3 gate · 持久化 JSON 的键集(ADR-025:派生字段一个都不�
 
   it('rules[] 元素只含 pattern/mode/intensity', async () => {
     const { repo, area } = makeRepo();
-    await repo.addRule(rule('x.com', { mode: 'RedGreen', intensity: 55 }));
+    await repo.addRule(rule('x.com', { mode: 'Grayscale', intensity: 55 }));
 
     const stored = persisted(area);
     const rules = stored.rules as Record<string, unknown>[];
@@ -659,6 +659,165 @@ describe('T3 gate · 未知/损坏数据不崩溃(ADR-041)', () => {
     const repo = new SettingsRepository({ area, clock: () => T0 });
 
     expect((await repo.read()).rules).toHaveLength(MAX_RULES);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+/**
+ * 🔴 ADR-075 的存储迁移 —— **真实升级路径**,不是假想场景。
+ *
+ * 用户装的是旧版本,磁盘上**已经**有带 `RedGreen` / `GreenRed` / `BlueYellow`
+ * 的规则。扩展更新后这些字符串在类型上已不存在。
+ *
+ * ## 选定的迁移策略:读时收敛,不写回,不动 version
+ *
+ * `coerceFilterMode` 对任何不在 `FILTER_MODES` 中的输入回退 `Grayscale`,
+ * 与它原本处理垃圾数据的语义完全相同(上一个 describe 已覆盖垃圾数据)。
+ * 于是迁移**零新增机制**:
+ *
+ *   - 不需要 schema `version` 跃迁 —— 没有「哪个版本号对应哪套字段」要维护;
+ *   - 不需要一次性迁移脚本 —— 不存在「迁移没跑过」的中间态,
+ *     也不存在「迁移跑一半断电」的半迁移态;
+ *   - 读路径**不写盘** —— ADR-071 刚因为读路径写盘而废止了 `maxSeenTime`,
+ *     并让 INV-11 回到「锁定期间一切不可变更」的单一语义。
+ *     一个「读到旧模式就写回 Grayscale」的迁移会把那个坑原样挖回来:
+ *     锁定期间的一次读取就会变成一次写入。本 describe 的最后一条断言
+ *     就是守这件事。
+ *
+ * 旧值在用户下一次保存该规则时自然被覆盖。
+ *
+ * ## 为什么不是「丢弃带旧模式的规则」
+ *
+ * 那等于静默删除用户配过的规则。ADR-012:「配过的规则莫名失效会严重
+ * 损害辅助工具的信任」。用户要的是「这个站点别那么刺眼」,
+ * 把它降级成灰阶仍然满足该诉求;删掉它则什么都不满足。
+ */
+describe('🔴 T3 gate · ADR-075 存储迁移(旧 CVD 模式 → Grayscale)', () => {
+  /** 一份「旧版本留在磁盘上」的真实形状设置。 */
+  function legacyBlob() {
+    return {
+      version: 1,
+      masterEnabled: true,
+      lockUntil: null,
+      rules: [
+        { pattern: 'a.com', mode: 'RedGreen', intensity: 42 },
+        { pattern: 'b.com', mode: 'GreenRed', intensity: 7 },
+        { pattern: 'c.com', mode: 'BlueYellow', intensity: 100 },
+        { pattern: 'd.com', mode: 'Grayscale', intensity: 55 },
+      ],
+    };
+  }
+
+  it('读出来每条规则的 mode 都是 Grayscale', async () => {
+    const area = new MemoryStorageArea();
+    area.seed({ [SETTINGS_KEY]: legacyBlob() });
+    const repo = new SettingsRepository({ area, clock: () => T0 });
+
+    const s = await repo.read();
+    expect(s.rules.map((r) => r.mode)).toEqual([
+      'Grayscale',
+      'Grayscale',
+      'Grayscale',
+      'Grayscale',
+    ]);
+  });
+
+  it('🔴 一条规则都不丢 —— 旧模式不是「损坏数据」(ADR-012)', async () => {
+    const area = new MemoryStorageArea();
+    area.seed({ [SETTINGS_KEY]: legacyBlob() });
+    const repo = new SettingsRepository({ area, clock: () => T0 });
+
+    const s = await repo.read();
+    expect(s.rules).toHaveLength(4);
+    expect(s.rules.map((r) => r.pattern)).toEqual([
+      'a.com',
+      'b.com',
+      'c.com',
+      'd.com',
+    ]);
+  });
+
+  it('🔴 pattern / intensity / 顺序一律原样保留 —— 迁移只碰 mode', async () => {
+    const area = new MemoryStorageArea();
+    area.seed({ [SETTINGS_KEY]: legacyBlob() });
+    const repo = new SettingsRepository({ area, clock: () => T0 });
+
+    const s = await repo.read();
+    expect(s.rules).toEqual([
+      { pattern: 'a.com', mode: 'Grayscale', intensity: 42 },
+      { pattern: 'b.com', mode: 'Grayscale', intensity: 7 },
+      { pattern: 'c.com', mode: 'Grayscale', intensity: 100 },
+      { pattern: 'd.com', mode: 'Grayscale', intensity: 55 },
+    ]);
+    // 顺序即优先级(INV-6/ADR-008)—— 迁移不得重排。
+    expect(s.rules[0]?.pattern).toBe('a.com');
+  });
+
+  it('masterEnabled / lockUntil / version 不受迁移影响', async () => {
+    const area = new MemoryStorageArea();
+    area.seed({
+      [SETTINGS_KEY]: { ...legacyBlob(), masterEnabled: false, lockUntil: T0 + 60_000 },
+    });
+    const repo = new SettingsRepository({ area, clock: () => T0 });
+
+    const s = await repo.read();
+    expect(s.masterEnabled).toBe(false);
+    expect(s.lockUntil).toBe(T0 + 60_000);
+    expect(s.version).toBe(1);
+  });
+
+  it('🔴 迁移**不写盘** —— 读一次后磁盘上的 JSON 逐字节未变(ADR-071)', async () => {
+    const area = new MemoryStorageArea();
+    const before = legacyBlob();
+    area.seed({ [SETTINGS_KEY]: before });
+    const beforeJson = JSON.stringify(area.snapshot());
+
+    const repo = new SettingsRepository({ area, clock: () => T0 });
+    await repo.read();
+    await repo.read();
+    await repo.read();
+
+    // 磁盘上**仍然**是旧值 —— 迁移发生在内存里,不产生写入。
+    expect(JSON.stringify(area.snapshot())).toBe(beforeJson);
+    expect(persisted(area).rules).toEqual(before.rules);
+  });
+
+  it('🔴 锁定期间读取带旧模式的设置也不写盘(INV-11 的单一语义)', async () => {
+    // 这是上一条的要害场景:若迁移在读路径写回,锁定期间的一次读取
+    // 就成了一次设置变更 —— 直接违反 INV-11「锁定期间一切不可变更」。
+    const area = new MemoryStorageArea();
+    area.seed({ [SETTINGS_KEY]: { ...legacyBlob(), lockUntil: T0 + 3_600_000 } });
+    const beforeJson = JSON.stringify(area.snapshot());
+
+    const repo = new SettingsRepository({ area, clock: () => T0 });
+    const s = await repo.read();
+
+    expect(s.rules.every((r) => r.mode === 'Grayscale')).toBe(true);
+    expect(JSON.stringify(area.snapshot())).toBe(beforeJson);
+  });
+
+  it('迁移后写入一次 → 磁盘上的旧模式才被覆盖', async () => {
+    // 迁移的「落盘」时机:用户下一次保存。这条证明它确实会落盘,
+    // 否则旧值会永远留在磁盘上(虽无害,但会让排障时看到矛盾的数据)。
+    const area = new MemoryStorageArea();
+    area.seed({ [SETTINGS_KEY]: legacyBlob() });
+    const repo = new SettingsRepository({
+      area,
+      clock: () => T0,
+      scheduler: (fn) => fn(),
+    });
+
+    const res = await repo.updateRule(0, { intensity: 80 });
+    expect(res.ok).toBe(true);
+
+    const stored = persisted(area).rules as Record<string, unknown>[];
+    expect(stored.map((r) => r['mode'])).toEqual([
+      'Grayscale',
+      'Grayscale',
+      'Grayscale',
+      'Grayscale',
+    ]);
+    expect(stored[0]?.['intensity']).toBe(80);
   });
 });
 
@@ -1179,13 +1338,13 @@ describe('T3 · 未锁定时的正常写入路径', () => {
     expect((await h.repo.read()).masterEnabled).toBe(false);
   });
 
-  it('updateRule 修改模式与强度(ADR-021)', async () => {
+  it('updateRule 修改强度(ADR-021;ADR-075 后模式无可改项)', async () => {
     await h.repo.addRule(rule('x.com'));
-    const res = await h.repo.updateRule(0, { mode: 'BlueYellow', intensity: 33 });
+    const res = await h.repo.updateRule(0, { mode: 'Grayscale', intensity: 33 });
     expect(res.ok).toBe(true);
 
     const r = (await h.repo.read()).rules[0];
-    expect(r?.mode).toBe('BlueYellow');
+    expect(r?.mode).toBe('Grayscale');
     expect(r?.intensity).toBe(33);
     expect(r?.pattern).toBe('x.com');
   });

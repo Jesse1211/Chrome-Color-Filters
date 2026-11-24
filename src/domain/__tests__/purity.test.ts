@@ -106,7 +106,10 @@ describe('ADR-036 · src/domain 纯度静态检查', () => {
     const mod = await import('../index.js');
     expect(typeof mod.matchGlob).toBe('function');
     expect(typeof mod.resolveRule).toBe('function');
-    expect(typeof mod.toColorMatrix).toBe('function');
+    // ADR-075:`toColorMatrix` 已随三个 CVD 模式删除(整个 color-matrix.ts 已删)。
+    // 派生滤镜值的纯函数现在是 `filterCssValue` —— 它才是本断言要守的东西:
+    // 领域层能在纯 Node 下算出滤镜值,不需要任何浏览器/框架 shim。
+    expect(typeof mod.filterCssValue).toBe('function');
     expect(typeof mod.isLocked).toBe('function');
     expect(typeof mod.canSetLockUntil).toBe('function');
   });

@@ -151,9 +151,25 @@ describe.skipIf(!built)('T4a · 预生成滤镜 CSS 进了产物(ADR-062/063)', 
     ).toBe(true);
   });
 
-  it('🔴 产物内恰好 404 个滤镜 CSS(4 模式 × 101 档)', () => {
+  it('🔴 ADR-075:产物内恰好 101 个滤镜 CSS(1 模式 × 101 档)', () => {
     const files = readdirSync(filtersDir).filter((f) => f.endsWith('.css'));
-    expect(files).toHaveLength(404);
+    expect(files).toHaveLength(101);
+  });
+
+  it('🔴 ADR-075:产物里没有已删除模式的文件,也没有任何 data: URI', () => {
+    // 产物是真正装进浏览器的那份。源码目录干净但产物里有孤儿(例如
+    // `public/` 没清、或 WXT 增量拷贝)同样是缺陷:旧注册可能引用到它们,
+    // 而它们的内容正是会被站点 CSP 拦掉的 `url("data:image/svg+xml,…")`。
+    const files = readdirSync(filtersDir);
+    for (const slug of ['redgreen', 'greenred', 'blueyellow']) {
+      expect(files.filter((f) => f.startsWith(`${slug}-`))).toEqual([]);
+    }
+    const offenders: string[] = [];
+    for (const name of files.filter((f) => f.endsWith('.css'))) {
+      const text = readFileSync(resolve(filtersDir, name), 'utf8');
+      if (text.includes('data:') || text.includes('url(')) offenders.push(name);
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('🔴 DESIGN.md §6 T4a 示例路径在产物内可解析(filters/gray-100.css)', () => {
@@ -161,7 +177,7 @@ describe.skipIf(!built)('T4a · 预生成滤镜 CSS 进了产物(ADR-062/063)', 
   });
 
   it('🔴 产物里的滤镜 CSS 与源码逐字节一致(public 拷贝链路没改内容)', () => {
-    for (const name of ['gray-100.css', 'redgreen-50.css', 'blueyellow-0.css']) {
+    for (const name of ['gray-100.css', 'gray-50.css', 'gray-0.css']) {
       const built = readFileSync(resolve(filtersDir, name), 'utf8');
       const source = readFileSync(
         resolve(ROOT, 'public/filters', name),

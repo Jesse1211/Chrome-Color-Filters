@@ -9,8 +9,15 @@
  * 注入,且**不受 `runAt` 约束**)。两者相乘,结论唯一:
  * **每一个 `(mode, intensity)` 组合都必须有一个预生成的文件。**
  *
- * 4 模式 × 101 档强度 = **404 个文件**。取 101 档而非 5 的倍数,是为了
- * 保留 ADR-003 的「强度无级可调」—— 每文件仅一行,总计几 KB。
+ * **ADR-075:1 模式 × 101 档强度 = 101 个文件**(原 4 × 101 = 404)。
+ * 取 101 档而非 5 的倍数,是为了保留 ADR-003 的「强度无级可调」——
+ * 每文件仅几行,总计几 KB。
+ *
+ * 文件数从 404 降到 101 不是「顺手清理」:被删掉的 303 个文件里写的是
+ * `filter: url("data:image/svg+xml,…")`,而那个 `data:` URI 正是
+ * ADR-069/073 记载的 CSP 静默失效的载体(news.ycombinator.com 的 CSP
+ * 会把它拦掉,滤镜无声无息地不生效)。ADR-075 后产物里**不再有任何
+ * `data:` URI**,CSP 无关性因此是结构性的,不靠「恰好没被拦」。
  *
  * ───────────────────────────────────────────────────────────────────────────
  * ## 🔴 为什么本模块必须复用 `filterCssValue`(ADR-063 的强制项)
@@ -23,13 +30,17 @@
  * | 预生成 CSS 文件(声明式注册) | **下一次导航**的首帧 | 本模块 |
  * | JS content script(`apply-filter.ts`) | **已打开**的页面(实时更新) | `filterCssValue` |
  *
- * 若本模块另写一份矩阵公式,两条路径就会产出**不同的颜色**:同一个站点,
+ * 若本模块另写一份滤镜值公式,两条路径就会产出**不同的颜色**:同一个站点,
  * 首帧是 A 色、JS 跑完变成 B 色 —— 一次用户可见的跳变,且因为两边各自
  * 「自测通过」,这种漂移极难被发现。ADR-063 为此明文禁止另写公式。
  *
  * 故本模块**只做字符串拼装**,滤镜值一律取自
- * `filterCssValue(mode, intensity)`(它内部复用 `toColorMatrix`,
- * 见 `src/domain/filter-css.ts`)。
+ * `filterCssValue(mode, intensity)`(见 `src/domain/filter-css.ts`)。
+ *
+ * 📌 ADR-075 后 `filterCssValue` 只剩一行 `grayscale(<amount>)`,
+ * 「另写一份」看起来已无从出错 —— 但复用仍是**强制项**:
+ * 强度→amount 的格式化(`intensityToCssAmount` 的定小数位与截零)
+ * 依然是两条路径必须逐位一致的那部分。
  *
  * ───────────────────────────────────────────────────────────────────────────
  * ## 🔴 选择器是**裸 `html`**,**绝不可**加属性门控 —— 实测血的教训
@@ -141,20 +152,19 @@ export const FILTER_CSS_DIR = 'filters';
 /**
  * 滤镜文件名中代表模式的短名。
  *
- * 为什么不直接用 `FilterMode` 的字面量(`Grayscale`/`RedGreen`/…):
+ * 为什么不直接用 `FilterMode` 的字面量(`Grayscale`):
  * 文件名进了注册记录、也进了扩展包清单,**全小写、无大小写歧义**的短名
  * 在跨平台(macOS 默认大小写不敏感、Linux 敏感)时更安全 ——
  * 一个大小写不一致的路径在 macOS 上能跑、在 Linux 上注册即失败,
  * 而注册失败的表现是「滤镜静默不生效」,排障成本极高。
  *
- * 📌 短名取 DESIGN.md §6 T4a 示例中的 `gray-100.css` 为准,其余三个
- * 按同一构词法(模式名小写、去驼峰分隔)。
+ * 📌 短名取 DESIGN.md §6 T4a 示例中的 `gray-100.css` 为准。
+ * **ADR-075:只剩这一项**(原 `redgreen` / `greenred` / `blueyellow` 已删除)。
+ * 保留映射表而不摊平成常量,是为了与 `FilterMode` 的留口形态一致
+ * (见 `filter-mode.ts`:加回模式时只需加一项)。
  */
 export const FILTER_MODE_SLUGS: Readonly<Record<FilterMode, string>> = {
   Grayscale: 'gray',
-  RedGreen: 'redgreen',
-  GreenRed: 'greenred',
-  BlueYellow: 'blueyellow',
 };
 
 /** 短名 → 模式的反查(诊断与测试用,避免手写第二份映射)。 */
@@ -193,6 +203,10 @@ export function filterCssFilePath(
  *   所以这条规则在这里同样必需。
  *
  * 末尾带换行:文本文件的常规,也让 `git diff` 不产生 "No newline" 噪音。
+ *
+ * 🔴 **ADR-075 后本函数的输出是 INV-3 的全部**:`grayscale(<amount>)` 自包含,
+ * 首帧不需要任何 JS、不需要任何 DOM 节点、不加载任何资源。INV-3 因此恢复为
+ * **无例外**的硬性要求(ADR-072 的冷启动多标签页例外随三个 CVD 模式一起消失)。
  */
 export function filterCssFileContent(
   mode: FilterMode,
@@ -218,7 +232,14 @@ export const ALL_INTENSITIES: readonly Intensity[] = Array.from(
   (_unused, i) => INTENSITY_MIN + i,
 );
 
-/** 需要生成的文件总数(ADR-063 gate:404)。 */
+/**
+ * 需要生成的文件总数。
+ *
+ * **ADR-075 gate:101**(1 模式 × 101 档)。原 ADR-063 的 404 已失效。
+ * 仍由 `FILTER_MODES.length` 算出而非写死 101 —— 加回模式时本常量自动跟上,
+ * 而门禁(`tests/filter-css-files.test.ts`、`scripts/generate-filter-css.mjs`)
+ * 全部引用本常量,不会出现「某处还写着旧数字」的分叉。
+ */
 export const FILTER_CSS_FILE_COUNT =
   FILTER_MODES.length * ALL_INTENSITIES.length;
 

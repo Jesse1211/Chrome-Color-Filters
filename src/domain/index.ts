@@ -8,7 +8,6 @@
 export * from './filter-mode.js';
 export * from './intensity.js';
 export * from './glob.js';
-export * from './color-matrix.js';
 export * from './filter-rule.js';
 export * from './filter-settings.js';
 export * from './resolve-rule.js';

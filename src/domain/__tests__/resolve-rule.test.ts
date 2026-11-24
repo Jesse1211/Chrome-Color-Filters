@@ -39,33 +39,41 @@ describe('hostFromUrl · 只匹配 URL 的 host 部分(ADR-007)', () => {
   });
 });
 
+/*
+ * 🔴 ADR-075:只剩一个模式,故两条规则一律用**强度**区分
+ * (DESIGN.md §6 原文:「ADR-075 后只有一个模式,故用强度区分两条规则」)。
+ *
+ * 这不是把断言放宽 —— 本组测的是 INV-6「索引最小的那条胜」,
+ * 判别器是「命中的是哪一条」,用 intensity 当标签与用 mode 当标签等效,
+ * 且 intensity 的取值空间(101 档)比原先的 4 个模式更大,区分力不降。
+ */
 describe('resolveRule · 首个命中胜(INV-6 / ADR-008)', () => {
   const rules = [
     createRule('x.com', 'Grayscale', 100),
-    createRule('*', 'BlueYellow', 80),
+    createRule('*', 'Grayscale', 80),
   ];
 
-  it('规则 [x.com→Gray, *→B/Y] 对 x.com 返回 Gray', () => {
+  it('规则 [x.com→100, *→80] 对 x.com 返回 100 档那条', () => {
     const hit = resolveRule(settingsWith(rules), 'https://x.com/');
-    expect(hit?.rule.mode).toBe('Grayscale');
+    expect(hit?.rule.intensity).toBe(100);
     expect(hit?.index).toBe(0);
   });
 
-  it('规则 [x.com→Gray, *→B/Y] 对 other.com 返回 B/Y', () => {
+  it('规则 [x.com→100, *→80] 对 other.com 返回 80 档那条', () => {
     const hit = resolveRule(settingsWith(rules), 'https://other.com/');
-    expect(hit?.rule.mode).toBe('BlueYellow');
+    expect(hit?.rule.intensity).toBe(80);
     expect(hit?.index).toBe(1);
   });
 
   it('命中后立即停止 —— 后面即使也命中也不生效(只有索引最小的那条)', () => {
     const many = [
-      createRule('*.example.com', 'RedGreen', 10),
-      createRule('*', 'GreenRed', 20),
+      createRule('*.example.com', 'Grayscale', 10),
+      createRule('*', 'Grayscale', 20),
       createRule('a.example.com', 'Grayscale', 30),
     ];
     const hit = resolveRule(settingsWith(many), 'https://a.example.com/');
     expect(hit?.index).toBe(0);
-    expect(hit?.rule.mode).toBe('RedGreen');
+    expect(hit?.rule.intensity).toBe(10);
   });
 
   it('无规则命中 → null(不套滤镜)', () => {

@@ -25,6 +25,7 @@ import {
   type FilterMode,
   type FilterSettings,
   type Intensity,
+  FILTER_MODES,
   defaultSettings,
 } from '../../domain/index.js';
 import {
@@ -189,18 +190,17 @@ describe('🔴 组合门禁:converter × reconcile —— 放宽的 glob 绝不�
     //   `inexpressible`。它与 `zhihu.com` **同组**(同一个
     //   `(mode,intensity)` = 同一个 id `ccf-gray-100`),所以它顺带
     //   钉死「同组内一条被跳过,不得把整组拖成全网、也不得让精确那条消失」。
-    // - `*weibo*`(RedGreen@70)—— 最长字面段 `weibo` 不含点号 →
-    //   同样 `inexpressible`,且它**独占一组**(`ccf-redgreen-70`),
+    // - `*weibo*`(Grayscale@70)—— 最长字面段 `weibo` 不含点号 →
+    //   同样 `inexpressible`,且它**独占一组**(`ccf-gray-70`),
     //   于是钉死「整组都表达不出来时,该组不产出注册(而非产出全网注册)」。
-    //   📌 `mode` 必须是合法的 `FilterMode` 字面量:原先写的 `'R-G'`
-    //   不在 `FILTER_MODES` 里(ADR-066 的 TS2322),会让 `registrationId`
-    //   算出 `ccf-undefined-70` —— 这条规则就**没按预期构造**,它想验的
-    //   「独占一组且该组不注册」也就无从谈起。
+    //   📌 ADR-075 后只剩一个模式,「独占一组」改由**强度**构造(70 ≠ 100)。
+    //   这个角色要的只是「与另两条不同组」,强度与模式在分组上是对等维度
+    //   (`registrationId(mode, intensity)` 两者都进 id)。
     // - `zhihu.com`(Grayscale@100)—— 纯字面 host,`exact`,**必然注册**。
     //   它是下面那条非空性断言的来源:没有它,循环会在空集上空转(vacuous green)。
     const settings = settingsWith([
       { pattern: '*.baidu.*', mode: 'Grayscale', intensity: 100 },
-      { pattern: '*weibo*', mode: 'RedGreen', intensity: 70 },
+      { pattern: '*weibo*', mode: 'Grayscale', intensity: 70 },
       { pattern: 'zhihu.com', mode: 'Grayscale', intensity: 100 },
     ]);
     const result = await reconcile(port, settings);
@@ -224,7 +224,7 @@ describe('🔴 组合门禁:converter × reconcile —— 放宽的 glob 绝不�
     ]);
     // 🔴 `*weibo*` 独占的那一组确实**没有**注册 —— 若有人日后把
     //    `inexpressible` 改回兜底成全网,这里会先炸。
-    expect(port.registered.has('ccf-redgreen-70')).toBe(false);
+    expect(port.registered.has('ccf-gray-70')).toBe(false);
   });
 
   it('🔴 assertNoUnintendedAllUrls 会对伪造的全网注册抛错(断言本身有效)', () => {
@@ -291,24 +291,37 @@ describe('desiredRegistrations · 按 (mode,intensity) 分组(ADR-064)', () => {
     expect(byId.get('ccf-gray-50')!.css).toEqual(['filters/gray-50.css']);
   });
 
-  it('不同 mode → 两条独立注册', () => {
+  /*
+   * 🔴 ADR-075:原「不同 mode → 两条独立注册」已不可构造(只剩一个模式)。
+   *
+   * 它想守的性质是 ADR-064 的「注册按 `(mode, intensity)` 分组」——
+   * 即**分组键的任一维度不同就分成两条**。mode 维度已退化为常量,
+   * 故改由 intensity 维度承担该断言。这不是放宽:分组键的实现
+   * (`registrationId(mode, intensity)`)对两个维度是同一段代码,
+   * 且 intensity 的取值空间(101)远大于原先的 mode(4)。
+   */
+  it('不同 intensity → 两条独立注册(ADR-064 的分组键)', () => {
     const desired = desiredRegistrations(
       settingsWith([
         { pattern: 'a.com', mode: 'Grayscale', intensity: 100 },
-        { pattern: 'b.com', mode: 'RedGreen', intensity: 100 },
+        { pattern: 'b.com', mode: 'Grayscale', intensity: 30 },
       ]),
     );
     expect(desired.map((d) => d.id).sort()).toEqual([
       'ccf-gray-100',
-      'ccf-redgreen-100',
+      'ccf-gray-30',
     ]);
+    // 且两条注册各自指向**自己**那个预生成文件,不得共用一个。
+    const byId = new Map(desired.map((d) => [d.id, d]));
+    expect(byId.get('ccf-gray-100')?.css).toEqual(['filters/gray-100.css']);
+    expect(byId.get('ccf-gray-30')?.css).toEqual(['filters/gray-30.css']);
   });
 
   it('🔴 每条注册的四个必需字段(DESIGN.md §6 T4a gate)', () => {
     const desired = desiredRegistrations(
       settingsWith([
         { pattern: 'a.com', mode: 'Grayscale', intensity: 100 },
-        { pattern: 'b.com', mode: 'BlueYellow', intensity: 7 },
+        { pattern: 'b.com', mode: 'Grayscale', intensity: 7 },
       ]),
     );
     expect(desired.length).toBeGreaterThan(0);
@@ -327,9 +340,10 @@ describe('desiredRegistrations · 按 (mode,intensity) 分组(ADR-064)', () => {
   it('结果按 id 排序 —— 顺序这个自由度被消掉(diff 稳定性)', () => {
     const ids = desiredRegistrations(
       settingsWith([
-        { pattern: 'a.com', mode: 'RedGreen', intensity: 100 },
+        // ADR-075:排序这个自由度现在靠**强度**产生多条注册。
+        { pattern: 'a.com', mode: 'Grayscale', intensity: 7 },
         { pattern: 'b.com', mode: 'Grayscale', intensity: 100 },
-        { pattern: 'c.com', mode: 'BlueYellow', intensity: 100 },
+        { pattern: 'c.com', mode: 'Grayscale', intensity: 50 },
       ]),
     ).map((d) => d.id);
     expect(ids).toEqual([...ids].sort());
@@ -410,7 +424,7 @@ describe('🔴 INV-8 / ADR-027 · 主开关 OFF 时期望注册为空集', () =>
 describe('🔴 reconcile · 幂等(ADR-064,四个触发点可能并发)', () => {
   const settings = settingsWith([
     { pattern: 'weibo.com', mode: 'Grayscale', intensity: 100 },
-    { pattern: 'zhihu.com', mode: 'RedGreen', intensity: 60 },
+    { pattern: 'zhihu.com', mode: 'Grayscale', intensity: 60 },
   ]);
 
   it('连续调用两次,注册集合不变(断言 getRegisteredContentScripts 结果相同)', async () => {
@@ -433,7 +447,7 @@ describe('🔴 reconcile · 幂等(ADR-064,四个触发点可能并发)', () => 
     expect(isNoOpPlan(result.plan)).toBe(true);
     expect([...result.plan.unchangedIds].sort()).toEqual([
       'ccf-gray-100',
-      'ccf-redgreen-60',
+      'ccf-gray-60',
     ]);
   });
 
@@ -441,10 +455,10 @@ describe('🔴 reconcile · 幂等(ADR-064,四个触发点可能并发)', () => 
     for (let i = 0; i < 5; i++) await reconcile(port, settings);
     expect([...port.registered.keys()].sort()).toEqual([
       'ccf-gray-100',
-      'ccf-redgreen-60',
+      'ccf-gray-60',
     ]);
     // 只有第一次产生了变更。
-    expect(port.mutations).toEqual(['register:ccf-gray-100,ccf-redgreen-60']);
+    expect(port.mutations).toEqual(['register:ccf-gray-100,ccf-gray-60']);
   });
 
   it('并发两次 reconcile 不会因重复 id 抛错(端口复刻了 Chrome 的 Duplicate 行为)', async () => {
@@ -474,23 +488,21 @@ describe('🔴 reconcile · 基于 diff(只动变化部分)', () => {
 
     const after = settingsWith([
       { pattern: 'a.com', mode: 'Grayscale', intensity: 100 },
-      { pattern: 'b.com', mode: 'RedGreen', intensity: 30 },
+      { pattern: 'b.com', mode: 'Grayscale', intensity: 30 },
     ]);
     const result = await reconcile(port, after);
 
-    expect(result.plan.toRegister.map((r) => r.id)).toEqual([
-      'ccf-redgreen-30',
-    ]);
+    expect(result.plan.toRegister.map((r) => r.id)).toEqual(['ccf-gray-30']);
     expect(result.plan.toUpdate).toEqual([]);
     expect(result.plan.toUnregisterIds).toEqual([]);
     expect(result.plan.unchangedIds).toEqual(['ccf-gray-100']);
-    expect(port.mutations).toEqual(['register:ccf-redgreen-30']);
+    expect(port.mutations).toEqual(['register:ccf-gray-30']);
   });
 
   it('🔴 规则删除后对应注册被 unregister', async () => {
     const before = settingsWith([
       { pattern: 'a.com', mode: 'Grayscale', intensity: 100 },
-      { pattern: 'b.com', mode: 'RedGreen', intensity: 30 },
+      { pattern: 'b.com', mode: 'Grayscale', intensity: 30 },
     ]);
     await reconcile(port, before);
     port.calls.length = 0;
@@ -501,7 +513,7 @@ describe('🔴 reconcile · 基于 diff(只动变化部分)', () => {
     await reconcile(port, after);
 
     expect([...port.registered.keys()]).toEqual(['ccf-gray-100']);
-    expect(port.mutations).toEqual(['unregister:ccf-redgreen-30']);
+    expect(port.mutations).toEqual(['unregister:ccf-gray-30']);
   });
 
   it('🔴 规则改强度 → css 路径被 **update** 到新文件(不是 unregister+register)', async () => {
@@ -558,7 +570,7 @@ describe('🔴 reconcile · 基于 diff(只动变化部分)', () => {
     port.calls.length = 0;
     await reconcile(
       port,
-      settingsWith([{ pattern: 'a.com', mode: 'RedGreen', intensity: 100 }]),
+      settingsWith([{ pattern: 'a.com', mode: 'Grayscale', intensity: 30 }]),
     );
     const mutations = port.mutations;
     const registerIdx = mutations.findIndex((m) => m.startsWith('register:'));
@@ -588,15 +600,15 @@ describe('🔴 reconcile · 基于 diff(只动变化部分)', () => {
 describe('🔴 ADR-065 · 扩展更新恢复(强制项)', () => {
   const settings = settingsWith([
     { pattern: 'a.com', mode: 'Grayscale', intensity: 100 },
-    { pattern: 'b.com', mode: 'BlueYellow', intensity: 80 },
+    { pattern: 'b.com', mode: 'Grayscale', intensity: 80 },
   ]);
 
   it('模拟 onInstalled(reason: update)→ 注册被完整重建', async () => {
     // 1. 正常状态:注册已建立。
     await reconcile(port, settings);
     expect([...port.registered.keys()].sort()).toEqual([
-      'ccf-blueyellow-80',
       'ccf-gray-100',
+      'ccf-gray-80',
     ]);
 
     // 2. 扩展更新:Chrome **清除**全部动态注册(已核实的平台行为)。
@@ -608,8 +620,9 @@ describe('🔴 ADR-065 · 扩展更新恢复(强制项)', () => {
 
     expect(result.ok).toBe(true);
     expect([...port.registered.keys()].sort()).toEqual([
-      'ccf-blueyellow-80',
+      // 字典序:`ccf-gray-100` < `ccf-gray-80`(字符串比较,不是数值)。
       'ccf-gray-100',
+      'ccf-gray-80',
     ]);
   });
 
@@ -645,8 +658,9 @@ describe('🔴 ADR-065 · 扩展更新恢复(强制项)', () => {
     expect(mutations[0]).toMatch(/^unregister:/);
     expect(mutations.some((m) => m.startsWith('register:'))).toBe(true);
     expect([...port.registered.keys()].sort()).toEqual([
-      'ccf-blueyellow-80',
+      // 字典序:`ccf-gray-100` < `ccf-gray-80`(字符串比较,不是数值)。
       'ccf-gray-100',
+      'ccf-gray-80',
     ]);
   });
 
@@ -701,32 +715,28 @@ describe('registrationId · 分组键的纯函数(幂等性的基础)', () => {
     expect(registrationId('Grayscale', 100)).toBe('ccf-gray-100');
   });
 
-  it('四种模式 × 边界强度都产出唯一 id', () => {
+  it('模式 × 全部 101 档强度都产出唯一 id', () => {
+    // ADR-075 后 mode 维度只有一个取值,故改为**穷举全部 101 档强度**
+    // (原先只取 5 个边界值 × 4 模式 = 20 个样本)。
+    // 这比原断言更强:它排除了任何两档强度撞 id 的可能,
+    // 而撞 id 的后果是两组站点共用一个预生成文件 —— 一组会显示错误强度。
     const ids = new Set<string>();
-    for (const mode of [
-      'Grayscale',
-      'RedGreen',
-      'GreenRed',
-      'BlueYellow',
-    ] as FilterMode[]) {
-      for (const intensity of [0, 1, 50, 99, 100]) {
+    for (const mode of FILTER_MODES) {
+      for (let intensity = 0; intensity <= 100; intensity++) {
         ids.add(registrationId(mode, intensity));
       }
     }
-    expect(ids.size).toBe(4 * 5);
+    expect(ids.size).toBe(FILTER_MODES.length * 101);
   });
 
   it('🔴 id 与 css 文件路径同源(避免两处各写一份短名映射而漂移)', () => {
-    for (const mode of [
-      'Grayscale',
-      'RedGreen',
-      'GreenRed',
-      'BlueYellow',
-    ] as FilterMode[]) {
-      const id = registrationId(mode, 73);
-      const path = filterCssFilePath(mode, 73);
-      // ccf-<slug>-73  ↔  filters/<slug>-73.css
-      expect(path).toBe(`filters/${id.slice('ccf-'.length)}.css`);
+    for (const mode of FILTER_MODES) {
+      for (const intensity of [0, 1, 73, 99, 100]) {
+        const id = registrationId(mode, intensity);
+        const path = filterCssFilePath(mode, intensity);
+        // ccf-<slug>-<n>  ↔  filters/<slug>-<n>.css
+        expect(path).toBe(`filters/${id.slice('ccf-'.length)}.css`);
+      }
     }
   });
 });
@@ -737,7 +747,7 @@ describe('planReconcile · 纯函数,可直接断言 diff', () => {
     const desired = desiredRegistrations(
       settingsWith([
         { pattern: 'a.com', mode: 'Grayscale', intensity: 100 },
-        { pattern: 'b.com', mode: 'RedGreen', intensity: 50 },
+        { pattern: 'b.com', mode: 'Grayscale', intensity: 50 },
       ]),
     );
     const plan = planReconcile([], desired);

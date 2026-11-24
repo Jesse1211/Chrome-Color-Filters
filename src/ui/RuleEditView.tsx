@@ -10,8 +10,6 @@
  * │ │ *.weibo.*                    │ │  等宽字体 (ADR-033)
  * │ └──────────────────────────────┘ │
  * │ ● 匹配当前网站 weibo.com · 生效中  │  ← 状态行,见 §5.6
- * │ 滤镜                              │
- * │ │ ◉ 灰阶   完全去除色彩      ▰  │ │
  * │ 强度                              │
  * │ ▓▓▓▓▓▓▓▓▓▓●──────   100%         │
  * │ ● 拖动时当前页面实时预览           │
@@ -25,10 +23,12 @@
  * - **ADR-001** 规则是用户**手动输入**的,不绑定当前 tab ——
  *   故**没有**「使用当前网站」自动填充按钮(gate 负向断言:
  *   「这是看起来很贴心因而最容易被自作主张加上的东西」)
- * - **ADR-002 / INV-2** 四滤镜互斥单选(实现见 `FilterModeOption`)
+ * - **ADR-075** 模式单选组**已删除**(只剩一个模式,单选组是无意义的控件);
+ *   `mode` 字段仍在规则里保留,见下方 `mode` 状态的说明。
+ *   INV-2(模式互斥)因此退化为平凡真,DESIGN.md 明文保留该不变式
  * - **ADR-003** 每条规则带 Intensity 滑块(0–100,两端均可达)
- * - **ADR-020** 新建规则默认 Grayscale @ 100%,输入框为空
- * - **ADR-021** 已有规则可展开编辑(模式、强度、网址)
+ * - **ADR-020** 新建规则默认 Grayscale @ 100%(ADR-075 后这是唯一模式),输入框为空
+ * - **ADR-021** 已有规则可展开编辑(强度、网址;模式已无可编辑项,见 ADR-075)
  * - **ADR-022** 双视图:本组件是编辑视图,「返回」通过 `onBack` 上抛
  * - **ADR-028** 负向:**无 Color Tint 选项,无 Hue 滑块**
  * - **ADR-033** 网址模式一律等宽字体
@@ -56,17 +56,15 @@
  * **滑块拖动不写存储**,只在点保存时单次写入(ADR-049 + ADR-061)。
  */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   type FilterMode,
   type FilterRule,
   type FilterSettings,
-  FILTER_MODES,
   INTENSITY_MAX,
   INTENSITY_MIN,
 } from '../domain/index.js';
-import { FilterModeOption } from './components/FilterModeOption.js';
 import { type SaveErrorBanner, toSaveErrorBanner } from './save-error.js';
 import { type ActionResult } from './RuleListView.js';
 import { type TabState } from './tab-state.js';
@@ -83,7 +81,6 @@ import {
   CREATE_TITLE,
   DELETE_LABEL,
   EDIT_TITLE,
-  FILTER_LABEL,
   INTENSITY_LABEL,
   INTENSITY_SLIDER_LABEL,
   MOVE_TO_TOP_LABEL,
@@ -194,13 +191,22 @@ export function RuleEditView({
    * 另一个窗口的写入(INV-4 的 `onChanged`)覆盖掉 —— 那是数据丢失。
    */
   const [pattern, setPattern] = useState<string>(existing?.pattern ?? '');
-  const [mode, setMode] = useState<FilterMode>(existing?.mode ?? 'Grayscale');
+  /*
+   * 🔴 ADR-075:`mode` 只有初值,**没有 setter** —— 唯一的写入者
+   * (模式单选组)已随三个 CVD 模式一起删除。保留这个状态而不直接内联
+   * `'Grayscale'`,是因为 ADR-075 要求 `mode` 字段在数据结构里存活:
+   * 编辑既有规则时要把它原值带回 `onSave`(ADR-021),
+   * 而将来加回模式时这里只需补回 setter。
+   *
+   * 📌 读到的旧规则可能带 `'RedGreen'` 等已删除的模式字符串,
+   * 但它在仓储层的读路径上已被 `coerceFilterMode` 收敛成 `'Grayscale'`
+   * (见 `domain/filter-mode.ts` 的迁移说明),故这里拿到的恒为合法值。
+   */
+  const [mode] = useState<FilterMode>(existing?.mode ?? 'Grayscale');
   const [intensity, setIntensity] = useState<number>(existing?.intensity ?? INTENSITY_MAX);
 
   /** ADR-046:写入失败的红色报错条(与列表视图同一组件语义)。 */
   const [saveError, setSaveError] = useState<SaveErrorBanner | null>(null);
-
-  const radioGroupName = useId();
 
   // ── §5.6 两维状态行(纯函数判定,见 pattern-status.ts) ──
   const status: PatternStatus = useMemo(
@@ -379,15 +385,6 @@ export function RuleEditView({
     //    在这里猜一次会与它们重复发送。
   }, []);
 
-  const handleModeChange = useCallback(
-    (next: FilterMode) => {
-      setMode(next);
-      // 滤镜换了 → 预览立即跟上(§5.7:拖动即改当前页面,无需确认)。
-      pushPreview(next, intensity);
-    },
-    [pushPreview, intensity],
-  );
-
   const handleIntensityChange = useCallback(
     (next: number) => {
       setIntensity(next);
@@ -494,34 +491,31 @@ export function RuleEditView({
           )}
         </div>
 
-        {/* ── 滤镜:四选一(§5.5 / ADR-002 / INV-2) ── */}
-        <div className="field">
-          <span className="field__label" id="filter-group-label">
-            {FILTER_LABEL}
-          </span>
-          {/*
-            🔴 ADR-028 负向:**只有** FILTER_MODES 这四项 ——
-               无 Color Tint 选项,无 Hue 滑块。四项由常量数组驱动,
-               想加第五项必须先改领域层的 ADR-002 定义。
-          */}
-          <div
-            className="options"
-            role="radiogroup"
-            aria-labelledby="filter-group-label"
-            data-testid="filter-options"
-          >
-            {FILTER_MODES.map((m) => (
-              <FilterModeOption
-                key={m}
-                mode={m}
-                name={radioGroupName}
-                checked={mode === m}
-                disabled={editingDisabled}
-                onSelect={handleModeChange}
-              />
-            ))}
-          </div>
-        </div>
+        {/*
+          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          🔴 **ADR-075:滤镜模式单选组已删除。**
+
+          原先这里是一个 `role="radiogroup"`,四项分别是灰阶 / 红绿 / 绿红 / 蓝黄。
+          ADR-075 砍掉后三项后,**单选组成了一个只有一个选项的控件** ——
+          它既不能表达选择(没有别的可选),也不能被取消(radio 无取消语义),
+          点它永远是 no-op。ADR-030 为此明文:
+          「编辑视图不再需要模式单选组 —— 只有一个模式时单选组是无意义的控件」。
+
+          ## 为什么不留一个「禁用的单项 radio」占位
+
+          那会给用户一个永远点不动的控件,是比没有控件更差的无障碍结果:
+          屏幕阅读器会播报一个 radiogroup 并提示可选,而实际不可选。
+
+          ## `mode` 状态为什么**仍然保留**在本组件里
+
+          规则的 `mode` 字段按 ADR-075 保留(单取值),`onSave` 仍要把它交出去。
+          去掉的只是「让用户改它」的 UI,不是这个字段 ——
+          将来加回模式时,数据流原样可用,只需把单选组加回这个位置。
+
+          滤镜身份(色块 + 文字名称)仍在列表视图由 `FilterSwatch` 呈现
+          (ADR-030 的「色块绝不可无文字名称」在那里依然成立)。
+          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        */}
 
         {/* ── 强度(§5.5 / ADR-003) ── */}
         <div className="field field--last">

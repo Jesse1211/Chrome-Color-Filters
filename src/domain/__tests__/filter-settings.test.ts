@@ -92,7 +92,7 @@ describe('ADR-041 · 损坏数据回退默认值且不抛异常', () => {
   it('丢弃 pattern 非法的规则,保留合法的', () => {
     const s = coerceSettings({
       rules: [
-        { pattern: 'ok.com', mode: 'RedGreen', intensity: 50 },
+        { pattern: 'ok.com', mode: 'Grayscale', intensity: 50 },
         { pattern: '(bad|regex).com', mode: 'Grayscale', intensity: 100 },
         { pattern: 'also-ok.com', mode: 'nonsense', intensity: 999 },
       ],
@@ -101,6 +101,32 @@ describe('ADR-041 · 损坏数据回退默认值且不抛异常', () => {
     // 未知 mode 回退默认、越界 intensity 被夹住。
     expect(s.rules[1]?.mode).toBe('Grayscale');
     expect(s.rules[1]?.intensity).toBe(100);
+  });
+
+  it('🔴 ADR-075 迁移:整份旧设置读进来时逐条规则的旧模式都被收敛', () => {
+    // 这是迁移的**聚合层**断言:上一条只证了单条规则,
+    // 真实读路径(`SettingsRepository.read`)走的是 coerceSettings,
+    // 若它漏掉某条规则(例如只处理 rules[0]),用户的其余规则会带着
+    // 一个类型上已不存在的 mode 流进 UI 与注册逻辑。
+    const s = coerceSettings({
+      version: 1,
+      masterEnabled: true,
+      lockUntil: null,
+      rules: [
+        { pattern: 'a.com', mode: 'RedGreen', intensity: 10 },
+        { pattern: 'b.com', mode: 'GreenRed', intensity: 20 },
+        { pattern: 'c.com', mode: 'BlueYellow', intensity: 30 },
+        { pattern: 'd.com', mode: 'Grayscale', intensity: 40 },
+      ],
+    });
+    expect(s.rules).toEqual([
+      { pattern: 'a.com', mode: 'Grayscale', intensity: 10 },
+      { pattern: 'b.com', mode: 'Grayscale', intensity: 20 },
+      { pattern: 'c.com', mode: 'Grayscale', intensity: 30 },
+      { pattern: 'd.com', mode: 'Grayscale', intensity: 40 },
+    ]);
+    // 迁移不动 schema 版本号 —— 读时收敛不需要版本跃迁。
+    expect(s.version).toBe(1);
   });
 });
 

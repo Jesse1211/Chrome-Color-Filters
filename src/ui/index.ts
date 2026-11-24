@@ -19,7 +19,6 @@ export * from './edit-strings.js';
 export * from './pattern-status.js';
 export * from './preview-port.js';
 export * from './usePreview.js';
-export * from './components/FilterModeOption.js';
 export * from './RuleEditView.js';
 
 /* ── 锁定 UI(T6c · §5.4 第六种状态变体)── */
