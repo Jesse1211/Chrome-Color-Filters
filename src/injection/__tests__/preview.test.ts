@@ -129,7 +129,13 @@ const URL = 'https://a.example.com/page';
 const HOST = 'a.example.com';
 const GRAY_100 = filterCssValue('Grayscale', 100);
 const GRAY_30 = filterCssValue('Grayscale', 30);
-const REDGREEN_70 = filterCssValue('RedGreen', 70);
+/*
+ * 🔴 ADR-075:只剩一个模式,故「另一个滤镜值」一律用**强度**构造
+ * (DESIGN.md §6:「ADR-075 后只有一个模式,用强度区分」)。
+ * 本文件里这个常量的角色始终是「与 GRAY_100 不同的某个值」,
+ * 判别器是「值变了没」,与它由哪个模式产生无关。
+ */
+const GRAY_70 = filterCssValue('Grayscale', 70);
 
 // ─────────────────── 契约收敛(ADR-049 + ADR-041) ───────────────────
 
@@ -138,10 +144,36 @@ describe('ADR-049 · 消息契约收敛', () => {
     expect(
       coercePreviewMessage({
         type: 'PREVIEW_FILTER',
-        mode: 'RedGreen',
+        mode: 'Grayscale',
         intensity: 70,
       }),
-    ).toEqual({ type: PREVIEW_FILTER, mode: 'RedGreen', intensity: 70 });
+    ).toEqual({ type: PREVIEW_FILTER, mode: 'Grayscale', intensity: 70 });
+  });
+
+  it('🔴 ADR-075:带已删除模式的 PREVIEW_FILTER 被判为契约不符(返回 null)', () => {
+    /*
+     * 这不是「顺手补一条」—— 它守的是 `coercePreviewMessage` 里那条刻意的
+     * 设计:`mode` 必须**原样合法**才接受,**不走 coerce 的默认回退**。
+     *
+     * 若这里改成静默回退成 Grayscale,一个版本错配的 popup
+     * (旧 popup + 新 content script)发来的 `RedGreen` 预览会被当成
+     * 合法的灰阶预览接受,表现为「预览总是灰阶」—— 比「无反应」更难诊断。
+     *
+     * 📌 注意这与**存储**路径的处置刻意相反:存储里的旧模式必须被收敛
+     * (ADR-075 的迁移,见 domain/filter-mode.ts),因为那是用户已有的数据,
+     * 丢弃它等于静默删规则(ADR-012)。而消息是瞬时的、可重发的,
+     * 对它严格更安全。两处语义不同是有意的。
+     */
+    for (const gone of ['RedGreen', 'GreenRed', 'BlueYellow']) {
+      expect(
+        coercePreviewMessage({
+          type: 'PREVIEW_FILTER',
+          mode: gone,
+          intensity: 70,
+        }),
+        `${gone} 必须被拒绝`,
+      ).toBeNull();
+    }
   });
 
   it('合法 PREVIEW_CLEAR 被接受', () => {
@@ -192,9 +224,9 @@ describe('🔴 gate · 收到 PREVIEW_FILTER 后页面滤镜立即变化,且 sto
     const port = makePort();
     attachPreviewPort(port, arbiter);
 
-    port.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: 70 });
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 70 });
 
-    expect(currentFilterValue(target)).toBe(REDGREEN_70);
+    expect(currentFilterValue(target)).toBe(GRAY_70);
     expect(isFilterApplied(target)).toBe(true);
   });
 
@@ -257,11 +289,12 @@ describe('🔴 gate · 收到 PREVIEW_FILTER 后页面滤镜立即变化,且 sto
 
     const port = makePort();
     onConnect.connect(port);
-    port.send({ type: 'PREVIEW_FILTER', mode: 'BlueYellow', intensity: 13 });
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 13 });
 
-    // 条目逐字节未变 —— 预览没有把 (BlueYellow,13) 写进去。
+    // 条目逐字节未变 —— 预览没有把 (Grayscale,13) 写进去。
     expect(store.data.get(`__ccf_fp_${HOST}`)).toBe(cachedAfterRules);
-    expect(cachedAfterRules).not.toContain('BlueYellow');
+    // 判别器:缓存里存的是规则值 100 档,13 这个预览强度不得出现。
+    expect(cachedAfterRules).not.toContain('13');
   });
 
   it('连续拖动:每一条都渲染(不合并、不防抖)', () => {
@@ -289,8 +322,8 @@ describe('🔴 gate · 收到 PREVIEW_CLEAR 后恢复按规则解析的结果', 
     const port = makePort();
     attachPreviewPort(port, arbiter);
 
-    port.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: 70 });
-    expect(currentFilterValue(target)).toBe(REDGREEN_70);
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 70 });
+    expect(currentFilterValue(target)).toBe(GRAY_70);
 
     port.send({ type: 'PREVIEW_CLEAR' });
 
@@ -341,7 +374,7 @@ describe('🔴 gate · 端口断开(popup 关闭)自动恢复,页面不残留预
     const port = makePort();
     attachPreviewPort(port, arbiter);
 
-    port.send({ type: 'PREVIEW_FILTER', mode: 'BlueYellow', intensity: 42 });
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 42 });
     expect(currentFilterValue(target)).not.toBe(GRAY_100);
 
     // popup 关闭(Chrome 弹窗一失焦即销毁)→ tab 端口 onDisconnect。
@@ -430,8 +463,8 @@ describe('🔴 gate · 预览期间导航到新页面,新页面按规则渲染�
 
     const port = makePort();
     oldOnConnect.connect(port);
-    port.send({ type: 'PREVIEW_FILTER', mode: 'BlueYellow', intensity: 7 });
-    expect(currentFilterValue(oldTarget)).toBe(filterCssValue('BlueYellow', 7));
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 7 });
+    expect(currentFilterValue(oldTarget)).toBe(filterCssValue('Grayscale', 7));
 
     // ── 导航:同一个 store(同 origin 的 localStorage)被新文档继承 ──
     //    这一格的要害正是**共享 store**:若预览值曾落盘,它会在这里浮现。
@@ -446,7 +479,7 @@ describe('🔴 gate · 预览期间导航到新页面,新页面按规则渲染�
     // 同步阶段(首帧之前)就已按**规则**值上色,不是预览值。
     expect(currentFilterValue(newTarget)).toBe(GRAY_100);
     expect(currentFilterValue(newTarget)).not.toBe(
-      filterCssValue('BlueYellow', 7),
+      filterCssValue('Grayscale', 7),
     );
 
     const result = await newRun.settled;
@@ -554,8 +587,8 @@ describe('🔴 gate · 预览活动期间收到 onChanged,页面不重绘;PREVIE
     // 用户在权威结果返回**之前**就开始拖动滑块。
     const port = makePort();
     onConnect.connect(port);
-    port.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: 70 });
-    expect(currentFilterValue(target)).toBe(REDGREEN_70);
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 70 });
+    expect(currentFilterValue(target)).toBe(GRAY_70);
     const rendersAfterPreview = run.arbiter.renders();
 
     resolveSettings!(settingsWith({ rules: [RULE_GRAY_100] }));
@@ -563,7 +596,7 @@ describe('🔴 gate · 预览活动期间收到 onChanged,页面不重绘;PREVIE
 
     // 刚拖出来的预览色没有被规则色盖掉,连一帧都没有。
     expect(run.arbiter.renders()).toBe(rendersAfterPreview);
-    expect(currentFilterValue(target)).toBe(REDGREEN_70);
+    expect(currentFilterValue(target)).toBe(GRAY_70);
 
     port.send({ type: 'PREVIEW_CLEAR' });
     expect(currentFilterValue(target)).toBe(GRAY_100);
@@ -630,7 +663,7 @@ describe('🔴 存活性(INV-5)守护的是**当前**真相 —— 含预览覆�
 
     const port = makePort();
     onConnect.connect(port);
-    port.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: 70 });
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 70 });
 
     // 站点脚本把注入物摘掉。
     target.removeAttribute('data-ccf-on');
@@ -638,7 +671,7 @@ describe('🔴 存活性(INV-5)守护的是**当前**真相 —— 含预览覆�
     fire!();
 
     // 🔴 恢复成**预览**值 —— 否则用户拖动的效果会在站点清理时丢失。
-    expect(currentFilterValue(target)).toBe(REDGREEN_70);
+    expect(currentFilterValue(target)).toBe(GRAY_70);
     expect(run.liveness?.stats().restores).toBe(1);
   });
 });
@@ -842,15 +875,20 @@ describe('🔴 ADR-049 · 两个活端口并存时,陈旧端口的收尸不得�
     onConnect.connect(portB);
     for (let i = 0; i <= 50; i += 1) {
       portA.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: i });
-      portB.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: i });
+      // 两个端口用**不同强度**争抢(ADR-075 后强度是唯一的区分维度)。
+      portB.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 100 - i });
     }
     portA.disconnect();
     portB.disconnect();
 
     expect(store.writes.length).toBe(writesBefore);
     expect(store.removes.length).toBe(removesBefore);
-    // 并且没有任何一条存储项里出现预览用过的 RedGreen。
-    for (const v of store.data.values()) expect(v).not.toContain('RedGreen');
+    // 并且没有任何一条存储项里出现预览用过的强度值
+    // (预览扫过 0–50 与 50–100 两段,规则值是 100 档)。
+    for (const v of store.data.values()) {
+      const parsed = JSON.parse(v) as { intensity?: number };
+      expect(parsed.intensity).toBe(100);
+    }
   });
 
   it('两个端口都走 onConnect 时,stats 如实计数', () => {
@@ -908,11 +946,11 @@ describe('🔴 边界 · intensity 0 的预览是 identity 滤镜,不是「无�
 
     const port = makePort();
     attachPreviewPort(port, arbiter);
-    port.send({ type: 'PREVIEW_FILTER', mode: 'RedGreen', intensity: 0 });
+    port.send({ type: 'PREVIEW_FILTER', mode: 'Grayscale', intensity: 0 });
 
     expect(isFilterSuppressed(target)).toBe(false);
     expect(isFilterApplied(target)).toBe(true);
-    expect(currentFilterValue(target)).toBe(filterCssValue('RedGreen', 0));
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 0));
   });
 
   it('预览 0 后 PREVIEW_CLEAR → 回到规则结果,不残留 identity', () => {

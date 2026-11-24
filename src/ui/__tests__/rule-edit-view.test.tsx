@@ -22,7 +22,7 @@
  *
  * ⚠️ §8 第 8 条:jsdom 下的绿灯**不构成** REAL_STACK_GATE 的通过。
  */
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -49,7 +49,6 @@ import {
   CREATE_TITLE,
   DELETE_LABEL,
   EDIT_TITLE,
-  FILTER_LABEL,
   INTENSITY_LABEL,
   MOVE_TO_TOP_LABEL,
   PATTERN_LABEL,
@@ -233,14 +232,15 @@ describe('§5.5 · 编辑视图结构', () => {
     expect(screen.getByTestId('edit-title').textContent).toBe(CREATE_TITLE);
   });
 
-  it('三个字段标签与 §5.5 一致', () => {
+  it('两个字段标签与 §5.5 一致(ADR-075 后「滤镜」标签随单选组一并移除)', () => {
     renderEdit();
     const body = document.querySelector('.edit__body');
     expect(body).not.toBeNull();
     const text = (body as HTMLElement).textContent ?? '';
     expect(text).toContain(PATTERN_LABEL);
-    expect(text).toContain(FILTER_LABEL);
     expect(text).toContain(INTENSITY_LABEL);
+    // 🔴 「滤镜」标签不得残留 —— 一个没有控件的标签是无主文案。
+    expect(text).not.toContain('滤镜');
   });
 
   it('底栏有保存与删除(§5.5)', () => {
@@ -262,26 +262,43 @@ describe('ADR-020 / ADR-021 · 初值', () => {
   it('ADR-020:新建规则默认 Grayscale @ 100%,输入框为空', () => {
     renderEdit({ editingIndex: null, settings: settingsWith({ rules: [] }) });
     expect((screen.getByTestId('pattern-input') as HTMLInputElement).value).toBe('');
-    expect(
-      (screen.getByTestId('filter-radio-Grayscale') as HTMLInputElement).checked,
-    ).toBe(true);
     expect((screen.getByTestId('intensity-slider') as HTMLInputElement).value).toBe(
       '100',
     );
     expect(screen.getByTestId('intensity-value').textContent).toBe('100%');
   });
 
-  it('ADR-021:已有规则以现值为初值(模式 / 强度 / 网址均可编辑)', () => {
+  it('🔴 ADR-020 的「默认 Grayscale」由保存出去的 rule 证明(没有单选组可查)', async () => {
+    // ADR-075 删掉单选组后,「默认是 Grayscale」不再有可见控件可断言 ——
+    // 若只删掉旧断言而不补这一条,该默认值就变成了没人检查的注释。
+    // 故改为从**数据出口**证明它:保存出去的 rule.mode 必须是 Grayscale。
+    const onSave = vi.fn(() => ({ ok: true }) as const);
     renderEdit({
-      settings: settingsWith({ rules: [rule('x.com', 'BlueYellow', 60)] }),
+      editingIndex: null,
+      settings: settingsWith({ rules: [] }),
+      onSave,
+    });
+    fireEvent.change(screen.getByTestId('pattern-input'), {
+      target: { value: 'x.com' },
+    });
+    fireEvent.click(screen.getByTestId('save-button'));
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({
+        pattern: 'x.com',
+        mode: 'Grayscale',
+        intensity: 100,
+      });
+    });
+  });
+
+  it('ADR-021:已有规则以现值为初值(强度 / 网址可编辑)', () => {
+    renderEdit({
+      settings: settingsWith({ rules: [rule('x.com', 'Grayscale', 60)] }),
       editingIndex: 0,
     });
     expect((screen.getByTestId('pattern-input') as HTMLInputElement).value).toBe(
       'x.com',
     );
-    expect(
-      (screen.getByTestId('filter-radio-BlueYellow') as HTMLInputElement).checked,
-    ).toBe(true);
     expect((screen.getByTestId('intensity-slider') as HTMLInputElement).value).toBe(
       '60',
     );
@@ -293,74 +310,76 @@ describe('ADR-020 / ADR-021 · 初值', () => {
   });
 });
 
-/* ═══════════════════════ ADR-002 / INV-2 四滤镜单选 ═══════════════════════ */
+/* ═════════════ 🔴 ADR-075 · 模式单选组已删除 ═════════════ */
 
-describe('🔴 ADR-002 / INV-2 · 四滤镜互斥单选', () => {
-  it('恰好四个选项,与 §5.2 表格一致', () => {
+/*
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 原「ADR-002 / INV-2 · 四滤镜互斥单选」整个 describe 已删除,
+ * 因为它测的那个控件**已不存在**(ADR-075 砍掉三个模式后,
+ * 单选组成了只有一个选项的无意义控件 —— ADR-030 明文)。
+ *
+ * 被删掉的五条断言与它们各自的处置:
+ *   1. 「恰好四个选项」            → 控件没了;下面第 1 条反向钉死「不得有单选组」
+ *   2. 「选中新的取消旧的(INV-2)」 → INV-2 退化为平凡真(只有一个取值,
+ *                                   DESIGN.md 明文保留该不变式但不再有行为可测);
+ *                                   数据层仍受约束,见 value-objects.test.ts
+ *   3. 「四项共享同一 radio name」  → 同 1
+ *   4. 「ADR-030 色块必带文字名称」 → **职责转移,未丢失**:
+ *                                   列表视图的 `FilterSwatch` 仍受此约束,
+ *                                   断言在 design-tokens.test.ts 与
+ *                                   rule-list-view.test.tsx
+ *   5. 「四个渐变色值与表格一致」   → 剩下的那一个在 design-tokens.test.ts 里逐值比对
+ *
+ * 替代断言(本 describe)不是「补个数」—— 它们守的是**删除本身的完整性**:
+ * 删了控件但留下 `data-testid`、留下 radiogroup role、
+ * 或顺手把强度滑块一起删掉,都是真实会发生的回归。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+describe('🔴 ADR-075 · 编辑视图不再有模式单选组', () => {
+  it('🔴 不存在任何 radio 输入 / radiogroup', () => {
     renderEdit();
-    const group = screen.getByTestId('filter-options');
-    const radios = group.querySelectorAll('input[type="radio"]');
-    expect(radios).toHaveLength(4);
+    expect(document.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+    expect(document.querySelectorAll('[role="radiogroup"]')).toHaveLength(0);
+  });
+
+  it('🔴 模式相关的 testid 一个都不残留', () => {
+    renderEdit();
+    expect(screen.queryByTestId('filter-options')).toBeNull();
     for (const mode of ['Grayscale', 'RedGreen', 'GreenRed', 'BlueYellow']) {
-      expect(screen.getByTestId(`filter-radio-${mode}`)).toBeDefined();
+      expect(screen.queryByTestId(`filter-option-${mode}`)).toBeNull();
+      expect(screen.queryByTestId(`filter-radio-${mode}`)).toBeNull();
+      expect(screen.queryByTestId(`filter-swatch-${mode}`)).toBeNull();
+      expect(screen.queryByTestId(`filter-name-${mode}`)).toBeNull();
     }
   });
 
-  it('选中新的取消旧的(INV-2:任一时刻仅一个滤镜)', () => {
-    renderEdit();
-    fireEvent.click(screen.getByTestId('filter-radio-RedGreen'));
-    expect(
-      (screen.getByTestId('filter-radio-RedGreen') as HTMLInputElement).checked,
-    ).toBe(true);
-    expect(
-      (screen.getByTestId('filter-radio-Grayscale') as HTMLInputElement).checked,
-    ).toBe(false);
-
-    fireEvent.click(screen.getByTestId('filter-radio-GreenRed'));
-    const checked = Array.from(
-      document.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
-    ).filter((r) => r.checked);
-    expect(checked).toHaveLength(1);
-    expect(checked[0]?.value).toBe('GreenRed');
-  });
-
-  it('四项共享同一个 radio group name —— 互斥由平台保证', () => {
-    renderEdit();
-    const names = new Set(
-      Array.from(
-        document.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
-      ).map((r) => r.name),
-    );
-    expect(names.size).toBe(1);
-    expect([...names][0]).not.toBe('');
-  });
-
-  it('🔴 ADR-030:每个色块都与文字名称并列出现,色块绝不单独承载语义', () => {
-    renderEdit();
-    for (const mode of ['Grayscale', 'RedGreen', 'GreenRed', 'BlueYellow']) {
-      const option = screen.getByTestId(`filter-option-${mode}`);
-      expect(within(option).getByTestId(`filter-swatch-${mode}`)).toBeDefined();
-      const name = within(option).getByTestId(`filter-name-${mode}`);
-      expect((name.textContent ?? '').length).toBeGreaterThan(0);
+  it('🔴 三个已删除模式的名称一个都不出现在编辑视图里', () => {
+    renderEdit({
+      settings: settingsWith({ rules: [rule('x.com', 'Grayscale', 60)] }),
+      editingIndex: 0,
+    });
+    const text = document.body.textContent ?? '';
+    for (const gone of ['红绿', '绿红', '蓝黄']) {
+      expect(text).not.toContain(gone);
     }
   });
 
-  it('§5.2:四个渐变色值与表格完全一致', () => {
+  it('🔴 不留「禁用的单项 radio」占位 —— 那比没有控件更差', () => {
+    // 一个永远点不动的 radiogroup 会被屏幕阅读器播报为「可选」,
+    // 而实际不可选。上面第 1 条已覆盖,这里显式说明意图并覆盖锁定态
+    // (最容易被用「反正都 disabled」说服自己留下占位的那个场景)。
+    renderEdit({ locked: true });
+    expect(document.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+  });
+
+  it('🔴 强度滑块与它的实时预览**仍在** —— 删的是单选组,不是整块字段', () => {
     renderEdit();
-    const expected: Record<string, readonly [string, string]> = {
-      Grayscale: ['#9AA0A6', '#D5D8DC'],
-      RedGreen: ['#C25B4E', '#5B9E55'],
-      GreenRed: ['#5B9E55', '#C25B4E'],
-      BlueYellow: ['#4C6FD4', '#D9C25A'],
-    };
-    for (const [mode, [from, to]] of Object.entries(expected)) {
-      const swatch = screen.getByTestId(`filter-swatch-${mode}`);
-      // jsdom 把 hex 归一化为 `rgb(...)`,故按归一化后的值比对
-      // (与 `design-tokens.test.ts` 的色块断言同一手法)。
-      expect(computed(swatch, 'background-image')).toBe(
-        `linear-gradient(90deg, ${hexToRgb(from)}, ${hexToRgb(to)})`,
-      );
-    }
+    const slider = screen.getByTestId('intensity-slider') as HTMLInputElement;
+    expect(slider).toBeDefined();
+    expect(slider.type).toBe('range');
+    expect(slider.min).toBe('0');
+    expect(slider.max).toBe('100');
+    expect(screen.getByTestId('intensity-value')).toBeDefined();
   });
 });
 
@@ -568,7 +587,7 @@ describe('🔴 §5.6 · 被遮蔽解释框与一键修复', () => {
     const { spy } = renderEdit(
       shadowedHarness({
         settings: settingsWith({
-          rules: [rule('*.weibo.*'), rule('*.com', 'BlueYellow', 60)],
+          rules: [rule('*.weibo.*'), rule('*.com', 'Grayscale', 60)],
         }),
       }),
     );
@@ -580,7 +599,9 @@ describe('🔴 §5.6 · 被遮蔽解释框与一键修复', () => {
     // 推的必须是**本条**的滤镜 —— 这个按钮的全部意义就是改变用户看到的东西。
     expect(spy.filters().at(-1)).toEqual({
       type: PREVIEW_FILTER,
-      mode: 'BlueYellow',
+      mode: 'Grayscale',
+      // 🔴 必须是 **60** —— 本条规则自己的强度,不是另一条的 100。
+      //    这是本断言的判别器:ADR-075 后强度是区分两条规则的唯一维度。
       intensity: 60,
     });
   });
@@ -649,14 +670,28 @@ describe('🔴 ADR-049 · 实时预览经 PREVIEW_FILTER 直推', () => {
     ]);
   });
 
-  it('换滤镜也立即推一帧(§5.7:拖动即改当前页面,无需确认)', () => {
+  /*
+   * 🔴 原「换滤镜也立即推一帧」已随 ADR-075 删除 —— 没有换滤镜这个动作了。
+   *
+   * 它守的性质是「编辑视图的任一改动都立即反映到当前页面」(§5.7)。
+   * 该性质的另一半(改强度立即推)由上一条断言覆盖,且那是现在**唯一**
+   * 能改变滤镜的动作,故性质未失守。
+   */
+  it('🔴 预览消息里的 mode 恒为 Grayscale(ADR-075:唯一取值)', () => {
     const { spy } = renderEdit();
-    fireEvent.click(screen.getByTestId('filter-radio-GreenRed'));
+    fireEvent.change(screen.getByTestId('intensity-slider'), {
+      target: { value: '55' },
+    });
     expect(spy.filters().at(-1)).toEqual({
       type: PREVIEW_FILTER,
-      mode: 'GreenRed',
-      intensity: 100,
+      mode: 'Grayscale',
+      intensity: 55,
     });
+    // 契约层面:接收端对非 Grayscale 的 mode 会判为契约不符并丢弃
+    // (见 src/injection/__tests__/preview.test.ts),故发送端绝不能发别的。
+    for (const m of spy.filters()) {
+      expect((m as { mode: string }).mode).toBe('Grayscale');
+    }
   });
 
   it('🔴 端口连的是 GET_TAB_STATE 给出的那个 tabId —— popup 不自己查 tab', () => {
@@ -680,7 +715,6 @@ describe('🔴 ADR-049 · 实时预览经 PREVIEW_FILTER 直推', () => {
     for (const v of ['90', '70', '50', '30', '10']) {
       fireEvent.change(slider, { target: { value: v } });
     }
-    fireEvent.click(screen.getByTestId('filter-radio-RedGreen'));
 
     expect(onSave).not.toHaveBeenCalled();
     expect(onDelete).not.toHaveBeenCalled();
@@ -932,15 +966,16 @@ describe('F20 / ADR-022 · 保存、删除与导航', () => {
     fireEvent.change(screen.getByTestId('pattern-input'), {
       target: { value: 'x.com' },
     });
-    fireEvent.click(screen.getByTestId('filter-radio-BlueYellow'));
     fireEvent.change(screen.getByTestId('intensity-slider'), {
       target: { value: '55' },
     });
     fireEvent.click(screen.getByTestId('save-button'));
     await waitFor(() => {
+      // 🔴 ADR-075:`mode` 字段**仍在三元组里**(数据结构为将来加回模式留口),
+      //    只是用户不再能改它。少了这个字段就是破坏存储兼容。
       expect(onSave).toHaveBeenCalledWith({
         pattern: 'x.com',
-        mode: 'BlueYellow',
+        mode: 'Grayscale',
         intensity: 55,
       });
     });
@@ -1001,7 +1036,7 @@ describe('F20 / ADR-022 · 保存、删除与导航', () => {
 /* ═══════════════════════ 🔒 ADR-051 锁定中 ═══════════════════════ */
 
 describe('🔒 ADR-051 · 锁定中编辑视图全部控件禁用', () => {
-  it('pattern 输入、四个滤镜、滑块、保存、删除、一键修复全部禁用', () => {
+  it('pattern 输入、滑块、保存、删除、一键修复全部禁用(ADR-075:已无滤镜单选组)', () => {
     renderEdit({
       settings: settingsWith({ rules: [rule('*.weibo.*'), rule('*.com')] }),
       editingIndex: 1,
@@ -1016,11 +1051,6 @@ describe('🔒 ADR-051 · 锁定中编辑视图全部控件禁用', () => {
     expect((screen.getByTestId('pattern-input') as HTMLInputElement).disabled).toBe(
       true,
     );
-    for (const mode of ['Grayscale', 'RedGreen', 'GreenRed', 'BlueYellow']) {
-      expect(
-        (screen.getByTestId(`filter-radio-${mode}`) as HTMLInputElement).disabled,
-      ).toBe(true);
-    }
     expect(
       (screen.getByTestId('intensity-slider') as HTMLInputElement).disabled,
     ).toBe(true);

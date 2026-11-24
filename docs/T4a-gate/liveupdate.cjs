@@ -24,6 +24,26 @@
 //    两者缺一不可:只测后者的话,一个「每次变更都强制重载所有标签页」的
 //    实现也能过 —— 那会破坏用户的页面状态,不是本条款要的东西。
 //
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🔴 **ADR-075:原 (b)「模式变化 Grayscale→RedGreen」整节已删除**
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//
+// 删的是三条断言:①「模式切换后已打开页面换成新值」②「新值形态确为
+// 矩阵模式的 data: URI」③「(b) 页面未重新导航」。
+//
+// 理由**不是**「它变红了」,而是:`FilterMode` 现在只有 `Grayscale` 一个
+// 取值(ADR-075),「用户切换滤镜模式」**已不是一个可能发生的用户动作**。
+// 测一个不存在的动作是负资产 —— 尤其 ② 断言的 `data:` URI 形态连实现机制
+// 都被 ADR-075 一并删掉了,留着它只会在将来加回模式时给出虚假信心。
+//
+// ⚠️ **强度维度的覆盖必须保留并已加强**:拖动强度滑条仍是真实用户动作,
+// 是本条款现存的主要驱动源。故 (a) 增加了「形态必须是 CSS 内置
+// `grayscale()`」与「变量值精确等于 grayscale(0.3)」两条,并新增 (a2)
+// 再拖一档 30→75 —— 删掉的覆盖面由此在仍然存在的那个维度上补回来。
+//
+// (d)/(e)/(f) 的播种值从 `BlueYellow` 改成 `Grayscale`:它们断言的是
+// 「加规则→上色」「主开关 OFF/ON」,与模式无关,模式只是个载荷。
+//
 // 🔴 ADR-038:在 npm run build 产物上跑。
 const path = require('path');
 const os = require('os');
@@ -99,17 +119,21 @@ const filtered = (st) => st.filter !== '' && st.filter !== 'none';
   log(filtered(sA) && sA.filter !== grayValue,
     `(a) 强度 100→30:已打开页面换成新值 filter=${JSON.stringify(sA.filter.slice(0, 40))}（旧值=${JSON.stringify(grayValue.slice(0, 40))}）`);
   log(page.url() === urlBefore, '(a) 页面未重新导航（实时更新不得靠重载实现）');
+  // 🔴 值的**形态**必须是 CSS 内置 `grayscale()`(ADR-075 后唯一形态),
+  //    且强度确实落在新档位上 —— 只断言「变了」挡不住「变成了垃圾值」。
+  log(/^grayscale\(/.test(sA.filter),
+    `(a) 新值形态确为 CSS 内置 grayscale()（ADR-075:不再有 data: URI 形态）filter=${JSON.stringify(sA.filter)}`);
+  log(sA.varValue === 'grayscale(0.3)',
+    `(a) 强度 30 对应的变量值精确为 grayscale(0.3),实际=${JSON.stringify(sA.varValue)}`);
 
-  // ── (b) 模式变化 Grayscale → RedGreen ───────────────────────────────
-  await push(b, settings([rule('*', 'RedGreen', 100)], true));
-  const sB = await state(page);
-  results.modeChange = sB;
-  log(filtered(sB) && sB.filter !== sA.filter && sB.filter !== grayValue,
-    `(b) 模式 Grayscale→RedGreen:已打开页面换成新值 filter=${JSON.stringify(sB.filter.slice(0, 60))}`);
-  // RedGreen 走 SVG feColorMatrix 的 data: URI,灰阶走 grayscale() —— 形态可区分。
-  log(sB.filter.indexOf('url(') === 0,
-    `(b) 新值形态确为矩阵模式的 data: URI（不是 grayscale()）`);
-  log(page.url() === urlBefore, '(b) 页面未重新导航');
+  // ── (a2) 再拖一档 30 → 75：强度维度是连续的，不是只有一次性切换 ──────
+  //    拖动强度滑条是 ADR-075 之后**仅存**的实时更新用户动作,故多测一档。
+  await push(b, settings([rule('*', 'Grayscale', 75)], true));
+  const sA2 = await state(page);
+  results.intensityChange2 = sA2;
+  log(filtered(sA2) && sA2.varValue === 'grayscale(0.75)',
+    `(a2) 强度 30→75:已打开页面再次换值,变量值=${JSON.stringify(sA2.varValue)}`);
+  log(page.url() === urlBefore, '(a2) 页面未重新导航');
 
   // ── (c) 匹配规则被整条删除 ──────────────────────────────────────────
   await push(b, settings([], true));
@@ -125,7 +149,7 @@ const filtered = (st) => st.filter !== '' && st.filter !== 'none';
   log(page.url() === urlBefore, '(c) 页面未重新导航');
 
   // ── (d) 重新加一条匹配规则 → 原本未滤镜的已打开页面立即上色 ──────────
-  await push(b, settings([rule('*', 'BlueYellow', 70)], true));
+  await push(b, settings([rule('*', 'Grayscale', 70)], true));
   const sD = await state(page);
   results.ruleAdded = sD;
   log(filtered(sD) && sD.on === true && sD.off === false,
@@ -133,7 +157,7 @@ const filtered = (st) => st.filter !== '' && st.filter !== 'none';
   log(page.url() === urlBefore, '(d) 页面未重新导航');
 
   // ── (e) 主开关 OFF(INV-8 在本路径同样成立) ─────────────────────────
-  await push(b, settings([rule('*', 'BlueYellow', 70)], false));
+  await push(b, settings([rule('*', 'Grayscale', 70)], false));
   const sE = await state(page);
   results.masterOff = sE;
   log(!filtered(sE) && sE.off === true,
@@ -141,7 +165,7 @@ const filtered = (st) => st.filter !== '' && st.filter !== 'none';
   log((await regIds(w)).length === 0, '(e) 注册被清空（ADR-027 彻底止血）');
 
   // ── (f) 主开关开回 → 恢复上色 ───────────────────────────────────────
-  await push(b, settings([rule('*', 'BlueYellow', 70)], true));
+  await push(b, settings([rule('*', 'Grayscale', 70)], true));
   const sF = await state(page);
   results.masterBackOn = sF;
   log(filtered(sF) && sF.on === true && sF.off === false,

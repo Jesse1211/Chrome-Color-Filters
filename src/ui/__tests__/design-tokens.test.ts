@@ -204,11 +204,9 @@ describe('§5.1 字体', () => {
 });
 
 describe('§5.2 滤镜渐变 — 与表格完全一致', () => {
+  // §5.2 表格,ADR-075 后只剩一行(原三行色觉辅助滤镜已删除)。
   const EXPECTED = {
     Grayscale: ['#9AA0A6', '#D5D8DC', '灰阶', '完全去除色彩'],
-    RedGreen: ['#C25B4E', '#5B9E55', '红绿', '红色弱 · 红绿色觉辅助'],
-    GreenRed: ['#5B9E55', '#C25B4E', '绿红', '绿色弱 · 红绿色觉辅助'],
-    BlueYellow: ['#4C6FD4', '#D9C25A', '蓝黄', '蓝黄色觉辅助'],
   } as const;
 
   it.each(FILTER_MODES)('%s 的渐变、名称、副标题逐值一致', (mode) => {
@@ -243,13 +241,37 @@ describe('§5.2 滤镜渐变 — 与表格完全一致', () => {
     }
   });
 
-  it('红绿与绿红的渐变**互为反向** —— 正因如此色块不能单独承载语义(ADR-030)', () => {
-    expect(FILTER_IDENTITY.RedGreen.gradientFrom).toBe(
-      FILTER_IDENTITY.GreenRed.gradientTo,
-    );
-    expect(FILTER_IDENTITY.RedGreen.gradientTo).toBe(
-      FILTER_IDENTITY.GreenRed.gradientFrom,
-    );
+  /*
+   * 🔴 原「红绿与绿红的渐变互为反向」已随 ADR-075 删除 ——
+   * 那两个模式不存在了,该断言无从构造(不是放宽,是前提消失)。
+   *
+   * 它守的 ADR-030 结论「色块不能单独承载语义」在 §5.2 被记为
+   * 「失效但保留备用」。**但色块必带文字名称的做法保留**
+   * (见 filter-identity.ts 文件头的两条理由),故改为直接断言那件事 ——
+   * 这比原断言更贴近真正要防的回归:有人为了「更简洁」把名称拆掉。
+   */
+  it('🔴 每个模式的标识都带非空文字名称 —— 色块绝不可单独出现', () => {
+    expect(FILTER_MODES.length).toBeGreaterThan(0);
+    for (const mode of FILTER_MODES) {
+      const identity = FILTER_IDENTITY[mode];
+      expect(identity.name, `${mode} 缺文字名称`).toBeTruthy();
+      expect(identity.name.trim().length).toBeGreaterThan(0);
+      // 副标题也在,它承载「这个滤镜做什么」。
+      expect(identity.subtitle.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('🔴 ADR-075:已删除的三个模式不得残留在标识表里', () => {
+    const keys = Object.keys(FILTER_IDENTITY);
+    expect(keys).toEqual(['Grayscale']);
+    for (const gone of ['RedGreen', 'GreenRed', 'BlueYellow']) {
+      expect(keys).not.toContain(gone);
+    }
+    // 连带:三个旧滤镜的渐变色值也不得留在代码里。
+    const identities = JSON.stringify(FILTER_IDENTITY).toUpperCase();
+    for (const banned of ['#C25B4E', '#5B9E55', '#4C6FD4', '#D9C25A']) {
+      expect(identities).not.toContain(banned);
+    }
   });
 });
 

@@ -1,13 +1,18 @@
 /**
- * 生成预生成滤镜 CSS 文件(ADR-063)—— `public/filters/{slug}-{intensity}.css`。
+ * 生成预生成滤镜 CSS 文件(ADR-063/075)—— `public/filters/{slug}-{intensity}.css`。
  *
- * 4 模式 × 101 档强度 = **404 个文件**。
+ * **ADR-075:1 模式 × 101 档强度 = 101 个文件**(原 4 × 101 = 404)。
+ * 被删掉的 303 个文件里写的是 `filter: url("data:image/svg+xml,…")`,
+ * 即 ADR-069/073 记载的 CSP 静默失效载体;ADR-075 后产物里不再有任何 `data:` URI。
  *
- * 🔴 **本脚本不含任何颜色公式。** 文件名与内容全部来自
+ * 🔴 **本脚本不含任何滤镜值公式。** 文件名与内容全部来自
  * `src/injection/filter-file-css.ts` 的 `allFilterCssFiles()`,它内部
- * 复用 `filterCssValue` → `toColorMatrix`(领域层)。ADR-063 明文要求
- * 复用而非另写一份公式 —— 否则预生成 CSS 与 JS 两条路径会漂移,
- * 表现为「首帧一个颜色、JS 跑完变另一个颜色」,且两边各自自测通过,极难发现。
+ * 复用 `filterCssValue`(领域层)。ADR-063 明文要求复用而非另写一份公式 ——
+ * 否则预生成 CSS 与 JS 两条路径会漂移,表现为「首帧一个颜色、JS 跑完变另一个颜色」,
+ * 且两边各自自测通过,极难发现。
+ *
+ * 📌 文件总数由 `FILTER_CSS_FILE_COUNT` 断言(下方两处),本脚本不写死数字 ——
+ * 旧值 404 在任何一处残留都会让「恰好 101 个」变成一句没人检查的注释。
  *
  * ## 为什么用 rolldown 现场打包,而不是直接 import .ts
  *
@@ -78,7 +83,7 @@ if (files.length !== FILTER_CSS_FILE_COUNT) {
 }
 
 // 先清空:改了命名规则时不留孤儿文件(孤儿文件会让 ADR-063 的
-// 「恰好 404 个」门禁失败,那正是我们希望它失败的情形)。
+// 「恰好 FILTER_CSS_FILE_COUNT 个」门禁失败,那正是我们希望它失败的情形)。
 rmSync(OUT_DIR, { recursive: true, force: true });
 mkdirSync(OUT_DIR, { recursive: true });
 

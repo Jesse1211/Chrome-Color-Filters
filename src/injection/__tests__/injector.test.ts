@@ -299,12 +299,16 @@ describe('🔴 已打开标签页的实时更新(ADR-062:注册变更不影响�
   it('(b) 模式变化 → 已打开页面立即换成新模式的 filter 值', async () => {
     const { target, push } = await openedTab(settingsWith({ rules: [GRAY_RULE] }));
 
+    // 🔴 ADR-075:只剩一个模式,故「换滤镜」只能用强度表达
+    //    (DESIGN.md §6:「ADR-075 后只有一个模式,用强度区分」)。
+    //    本例测的是「已打开页面跟上新的滤镜值」,判别器是「值变了没」,
+    //    用强度与用模式等效。
     push(settingsWith({
-      rules: [{ pattern: '*.example.com', mode: 'RedGreen', intensity: 100 }],
+      rules: [{ pattern: '*.example.com', mode: 'Grayscale', intensity: 30 }],
     }));
 
     expect(isFilterApplied(target)).toBe(true);
-    expect(currentFilterValue(target)).toBe(filterCssValue('RedGreen', 100));
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 30));
     expect(currentFilterValue(target)).not.toBe(filterCssValue('Grayscale', 100));
   });
 
@@ -355,7 +359,7 @@ describe('🔴 已打开标签页的实时更新(ADR-062:注册变更不影响�
     const { store, push } = await openedTab(settingsWith({ rules: [GRAY_RULE] }));
 
     const next = settingsWith({
-      rules: [{ pattern: '*.example.com', mode: 'RedGreen', intensity: 40 }],
+      rules: [{ pattern: '*.example.com', mode: 'Grayscale', intensity: 40 }],
     });
     push(next);
 
@@ -369,7 +373,7 @@ describe('🔴 已打开标签页的实时更新(ADR-062:注册变更不影响�
       readSettings: async () => next,
     });
     expect(fastPathHit).toBe(true);
-    expect(currentFilterValue(t2)).toBe(filterCssValue('RedGreen', 40));
+    expect(currentFilterValue(t2)).toBe(filterCssValue('Grayscale', 40));
     settled.catch(() => {});
   });
 
@@ -587,9 +591,9 @@ describe('🔴 ADR-060 · 快路径必须跨「标签页 / 浏览器重启」存
       target,
       store,
       url: 'https://a.example.com/',
-      // 权威设置其实已改成 RedGreen 40。
+      // 权威设置其实已改成 Grayscale 40（ADR-075 后用强度区分新旧值）。
       readSettings: async () =>
-        settingsWith({ rules: [{ pattern: '*.example.com', mode: 'RedGreen', intensity: 40 }] }),
+        settingsWith({ rules: [{ pattern: '*.example.com', mode: 'Grayscale', intensity: 40 }] }),
     });
 
     // 同步阶段先按陈旧推测上色（有色总比无色好 —— INV-3 优先于短暂的色相不准）。
@@ -600,13 +604,13 @@ describe('🔴 ADR-060 · 快路径必须跨「标签页 / 浏览器重启」存
 
     // 1) 渲染被更新为权威值。
     expect(r.corrected).toBe(true);
-    expect(currentFilterValue(target)).toBe(filterCssValue('RedGreen', 40));
+    expect(currentFilterValue(target)).toBe(filterCssValue('Grayscale', 40));
 
     // 2) 缓存被刷新 —— 否则下一次加载还会先闪一下旧色相。
     const entry = JSON.parse(store.data.get('__ccf_fp_a.example.com')!) as {
       mode: string; intensity: number;
     };
-    expect(entry.mode).toBe('RedGreen');
+    expect(entry.mode).toBe('Grayscale');
     expect(entry.intensity).toBe(40);
   });
 
@@ -665,15 +669,14 @@ describe('🔴 ADR-025 · 缓存里绝不出现派生值（不制造第二份真
     const { settled } = runInjector({
       target: makeTarget(),
       store,
-      // RedGreen 走 feColorMatrix 路径 —— 派生值最「胖」、最容易被顺手存下来的那种。
       url: 'https://a.example.com/',
       readSettings: async () =>
-        settingsWith({ rules: [{ pattern: '*.example.com', mode: 'RedGreen', intensity: 60 }] }),
+        settingsWith({ rules: [{ pattern: '*.example.com', mode: 'Grayscale', intensity: 60 }] }),
     });
     await settled;
 
     const raw = [...store.data.values()][0] as string;
-    const derived = filterCssValue('RedGreen', 60);
+    const derived = filterCssValue('Grayscale', 60);
 
     // 逐字的派生串不得出现。
     expect(raw).not.toContain(derived);
@@ -684,13 +687,13 @@ describe('🔴 ADR-025 · 缓存里绝不出现派生值（不制造第二份真
 
     // 存的就是那两个设置值本身。
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    expect(parsed['mode']).toBe('RedGreen');
+    expect(parsed['mode']).toBe('Grayscale');
     expect(parsed['intensity']).toBe(60);
   });
 
   it('派生值在读取时现算：改了 filterCssValue 的输入即刻反映，不会沿用旧串', () => {
     const store = makeStore();
-    writeFastPath(store, 'a.example.com', true, { mode: 'RedGreen', intensity: 60 }, Date.now());
+    writeFastPath(store, 'a.example.com', true, { mode: 'Grayscale', intensity: 60 }, Date.now());
 
     const target = makeTarget();
     const { settled } = runInjector({
@@ -700,22 +703,22 @@ describe('🔴 ADR-025 · 缓存里绝不出现派生值（不制造第二份真
       readSettings: async () => settingsWith({ rules: [] }),
     });
     // 同步阶段用的值 === 由存储里那两个设置值现算出来的值。
-    expect(target.props.get('--ccf-filter')).toBe(filterCssValue('RedGreen', 60));
+    expect(target.props.get('--ccf-filter')).toBe(filterCssValue('Grayscale', 60));
     settled.catch(() => {});
   });
 });
 
 // ─────────────────────────── 解析语义 ───────────────────────────
 
-describe('decide · 首个命中胜（INV-6）与四种模式', () => {
+describe('decide · 首个命中胜（INV-6）', () => {
   it('首个命中的规则生效，且只有它生效', () => {
     const s = settingsWith({
       rules: [
-        { pattern: '*.example.com', mode: 'RedGreen', intensity: 60 },
+        { pattern: '*.example.com', mode: 'Grayscale', intensity: 60 },
         { pattern: '*', mode: 'Grayscale', intensity: 100 },
       ],
     });
-    expect(decide(s, 'https://a.example.com/')).toBe(filterCssValue('RedGreen', 60));
+    expect(decide(s, 'https://a.example.com/')).toBe(filterCssValue('Grayscale', 60));
   });
 
   it('无规则命中 → 不套滤镜', () => {

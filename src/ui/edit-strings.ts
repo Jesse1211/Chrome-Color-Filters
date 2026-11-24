@@ -13,9 +13,14 @@ export const EDIT_TITLE = '编辑规则';
 /** 新建时的标题 —— 设计稿第三张图用的就是「添加规则」。 */
 export const CREATE_TITLE = '添加规则';
 
-/** §5.5 字段标签。 */
+/**
+ * §5.5 字段标签。
+ *
+ * 📌 原 `FILTER_LABEL = '滤镜'` 已随 ADR-075 删除 ——
+ * 它是模式单选组的标签,而该控件已不存在(只剩一个模式时单选组无意义)。
+ * 留一个没有控件的标签会在产物里留下一段无主文案。
+ */
 export const PATTERN_LABEL = '网址模式';
-export const FILTER_LABEL = '滤镜';
 export const INTENSITY_LABEL = '强度';
 
 /** §5.5 底栏。 */

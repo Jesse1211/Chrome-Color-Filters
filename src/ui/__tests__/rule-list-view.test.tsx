@@ -141,27 +141,38 @@ describe('§5.3 · 列表视图结构', () => {
 
 // ─────────────────────────── ADR-030 色块 + 名称 ───────────────────────────
 
-describe('🔴 ADR-030 · 色块绝不单独出现,必须与文字名称并列', () => {
-  it.each([
-    ['Grayscale', '灰阶'],
-    ['RedGreen', '红绿'],
-    ['GreenRed', '绿红'],
-    ['BlueYellow', '蓝黄'],
-  ] as const)('%s 行同时出现色块与名称「%s」', (mode, name) => {
-    renderView({ settings: settingsWith({ rules: [rule('a.com', mode)] }) });
-    const pair = screen.getByTestId('swatch-pair');
-    expect(within(pair).getByTestId('swatch')).toBeDefined();
-    expect(within(pair).getByTestId('swatch-name').textContent).toBe(name);
-  });
+/*
+ * 🔴 **本 describe 必须继续通过。**
+ *
+ * ADR-030 的原硬性约束(「红绿/绿红色块对色盲用户无法分辨,故色块必须
+ * 始终与文字名称并列」)随 ADR-075 失去了原始理由,DESIGN.md §5.2 把它
+ * 记为「已失效但保留于此备用」,并明确「不要删除色块的文字标签」。
+ *
+ * 故这里**不是**删掉断言,而是把它从「四个模式各自成立」缩减为
+ * 「现存的每个模式都成立 + 列表里不存在裸色块」——
+ * 后半条是真正防回归的那条,且与模式数量无关。
+ */
+describe('🔴 ADR-030(保留部分)· 色块绝不单独出现,必须与文字名称并列', () => {
+  it.each([['Grayscale', '灰阶']] as const)(
+    '%s 行同时出现色块与名称「%s」',
+    (mode, name) => {
+      renderView({ settings: settingsWith({ rules: [rule('a.com', mode)] }) });
+      const pair = screen.getByTestId('swatch-pair');
+      expect(within(pair).getByTestId('swatch')).toBeDefined();
+      expect(within(pair).getByTestId('swatch-name').textContent).toBe(name);
+    },
+  );
 
   it('🔴 §6.1 冲突第 3 条:整个列表中不存在「有色块却无名称」的位置', () => {
+    // 多条规则用**强度**区分(ADR-075 后唯一的区分维度),
+    // 以确保这条断言仍然扫过多行、而不是退化成单行。
     renderView({
       settings: settingsWith({
         rules: [
-          rule('a.com', 'Grayscale'),
-          rule('b.com', 'RedGreen'),
-          rule('c.com', 'GreenRed'),
-          rule('d.com', 'BlueYellow'),
+          rule('a.com', 'Grayscale', 100),
+          rule('b.com', 'Grayscale', 60),
+          rule('c.com', 'Grayscale', 30),
+          rule('d.com', 'Grayscale', 0),
         ],
       }),
     });
@@ -180,7 +191,7 @@ describe('🔴 ADR-030 · 色块绝不单独出现,必须与文字名称并列',
 
 describe('🔴 ADR-032 / §6.1 冲突第 1、2 条 · 被遮蔽行', () => {
   const shadowedSettings = settingsWith({
-    rules: [rule('*.weibo.*'), rule('*.com', 'BlueYellow', 60), rule('x.com')],
+    rules: [rule('*.weibo.*'), rule('*.com', 'Grayscale', 60), rule('x.com')],
   });
 
   it('整行淡化(opacity < 1)', () => {
@@ -729,7 +740,7 @@ describe('§5.4 状态变体 ⑤存储失败(ADR-046)', () => {
 
 describe('🔴 负向断言 —— 这些 ADR 没有正向产物,只能靠负向门禁守住', () => {
   const populated = settingsWith({
-    rules: [rule('a.com'), rule('b.com', 'RedGreen', 60), rule('c.com', 'BlueYellow', 30)],
+    rules: [rule('a.com'), rule('b.com', 'Grayscale', 60), rule('c.com', 'Grayscale', 30)],
   });
 
   it('ADR-009:无 per-rule 开关 / 启用禁用控件', () => {

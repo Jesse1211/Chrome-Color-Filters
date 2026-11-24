@@ -253,9 +253,9 @@ describe('ADR-022 · 列表 ⇄ 编辑双向导航', () => {
 
     expect(screen.getByTestId('popup').dataset.view).toBe('edit');
     expect((screen.getByTestId('pattern-input') as HTMLInputElement).value).toBe('');
-    expect(
-      (screen.getByTestId('filter-radio-Grayscale') as HTMLInputElement).checked,
-    ).toBe(true);
+    // ADR-075:无单选组可查「Grayscale 被选中」;默认模式由落盘的 rule 证明
+    // (见下方「新建规则 → 落盘」那条,它断言 mode: 'Grayscale')。
+    expect(screen.queryByTestId('filter-options')).toBeNull();
     expect((screen.getByTestId('intensity-slider') as HTMLInputElement).value).toBe(
       '100',
     );
@@ -302,7 +302,6 @@ describe('🔴 F20 · 点保存后规则持久化并立即生效', () => {
     fireEvent.change(screen.getByTestId('pattern-input'), {
       target: { value: '*.weibo.*' },
     });
-    fireEvent.click(screen.getByTestId('filter-radio-BlueYellow'));
     fireEvent.change(screen.getByTestId('intensity-slider'), {
       target: { value: '60' },
     });
@@ -314,14 +313,16 @@ describe('🔴 F20 · 点保存后规则持久化并立即生效', () => {
     });
 
     const stored = await persisted(area);
+    // 🔴 `mode` 字段仍在落盘的形状里(ADR-075 为将来加回模式留口),
+    //    且值为默认的 Grayscale —— 这是 ADR-020 默认值的端到端证据。
     expect(stored.rules).toEqual([
-      { pattern: '*.weibo.*', mode: 'BlueYellow', intensity: 60 },
+      { pattern: '*.weibo.*', mode: 'Grayscale', intensity: 60 },
     ]);
 
     // 「立即生效」= 规则解析在匹配的 URL 上确实命中它(INV-6 的同一判据)。
     const resolved = resolveActiveRule(stored, 'https://news.weibo.com/feed');
     expect(resolved?.index).toBe(0);
-    expect(resolved?.rule.mode).toBe('BlueYellow');
+    expect(resolved?.rule.mode).toBe('Grayscale');
     expect(resolved?.rule.intensity).toBe(60);
   });
 
@@ -441,11 +442,16 @@ describe('🔴 ADR-049 · 预览不写 storage', () => {
     for (const v of ['90', '80', '70', '60', '50']) {
       fireEvent.change(slider, { target: { value: v } });
     }
-    fireEvent.click(screen.getByTestId('filter-radio-RedGreen'));
-
     await Promise.resolve();
     expect(setSpy).not.toHaveBeenCalled();
     // 预览确实发出去了 —— 否则「没写存储」是因为什么都没做。
+    // ADR-075:原先 5 次拖动 + 1 次换模式 = 6 帧;换模式的动作已不存在,
+    // 故改为 6 次拖动,帧数不变 —— 判别器(「有发,但没写盘」)也不变。
+    for (const v of ['40']) {
+      fireEvent.change(slider, { target: { value: v } });
+    }
+    await Promise.resolve();
+    expect(setSpy).not.toHaveBeenCalled();
     expect(preview.filters()).toHaveLength(6);
   });
 
@@ -483,8 +489,9 @@ describe('🔴 S13 · 一键修复改变顺序 → 优先级确实改变', () =>
   it('点「把这条移到最上面 ↑」后落盘顺序改变,resolveActiveRule 命中本条', async () => {
     const area = new MemoryStorageArea(
       seeded([
-        { pattern: '*.weibo.*', mode: 'Grayscale' },
-        { pattern: '*.com', mode: 'BlueYellow', intensity: 60 },
+        // ADR-075:两条规则用**强度**区分(100 vs 60)。
+        { pattern: '*.weibo.*', mode: 'Grayscale', intensity: 100 },
+        { pattern: '*.com', mode: 'Grayscale', intensity: 60 },
       ]),
     );
     const repository = new SettingsRepository({ area });
@@ -514,12 +521,13 @@ describe('🔴 S13 · 一键修复改变顺序 → 优先级确实改变', () =>
     const stored = await persisted(area);
     const resolved = resolveActiveRule(stored, 'https://news.weibo.com/');
     expect(resolved?.rule.pattern).toBe('*.com');
-    expect(resolved?.rule.mode).toBe('BlueYellow');
+    expect(resolved?.rule.intensity).toBe(60);
 
     // 并且**当前页面渲染也立即变成该规则的滤镜** —— 这是本按钮的全部意义。
     expect(preview.filters().at(-1)).toEqual({
       type: PREVIEW_FILTER,
-      mode: 'BlueYellow',
+      mode: 'Grayscale',
+      // 🔴 判别器:必须是本条的 60,不是另一条的 100。
       intensity: 60,
     });
   });
@@ -549,8 +557,9 @@ describe('🔴🔴 回归 · 一键修复后 editingIndex 跟随规则的新位�
   async function movedToTop() {
     const area = new MemoryStorageArea(
       seeded([
-        { pattern: '*.weibo.*', mode: 'Grayscale' },
-        { pattern: '*.com', mode: 'BlueYellow', intensity: 60 },
+        // ADR-075:两条规则用**强度**区分(100 vs 60)。
+        { pattern: '*.weibo.*', mode: 'Grayscale', intensity: 100 },
+        { pattern: '*.com', mode: 'Grayscale', intensity: 60 },
       ]),
     );
     const repository = new SettingsRepository({ area });

@@ -61,11 +61,11 @@ describe('ADR-049 · 发送端的端口生命周期', () => {
   it('sendFilter 用传入的 tabId 连接,消息形状与契约一致', () => {
     const f = fakePort();
     const channel = createPreviewChannel(() => f.port);
-    channel.sendFilter(42, 'BlueYellow', 60);
+    channel.sendFilter(42, 'Grayscale', 60);
     expect(channel.isOpen()).toBe(true);
     expect(channel.connectedTabId()).toBe(42);
     expect(f.sent).toEqual([
-      { type: PREVIEW_FILTER, mode: 'BlueYellow', intensity: 60 },
+      { type: PREVIEW_FILTER, mode: 'Grayscale', intensity: 60 },
     ]);
   });
 
@@ -86,7 +86,8 @@ describe('ADR-049 · 发送端的端口生命周期', () => {
     const channel = createPreviewChannel(() => ports[i++] ?? null);
 
     channel.sendFilter(1, 'Grayscale', 100);
-    channel.sendFilter(2, 'RedGreen', 50);
+    // ADR-075:换 tab 时用**不同强度**区分两次发送(只剩一个模式)。
+    channel.sendFilter(2, 'Grayscale', 50);
 
     // 旧 tab 不得残留预览(「绝不能把 B 站滤镜套到 A 站」的同一条保证)。
     expect(first.sent).toEqual([
@@ -95,7 +96,7 @@ describe('ADR-049 · 发送端的端口生命周期', () => {
     ]);
     expect(first.disconnects).toBe(1);
     expect(second.sent).toEqual([
-      { type: PREVIEW_FILTER, mode: 'RedGreen', intensity: 50 },
+      { type: PREVIEW_FILTER, mode: 'Grayscale', intensity: 50 },
     ]);
     expect(channel.connectedTabId()).toBe(2);
   });
@@ -234,9 +235,9 @@ describe('🔴 发送端 ⇄ 接收端(T4b)的端到端契约', () => {
 
   it('PREVIEW_FILTER 被接收端识别,覆盖值 = filterCssValue(mode, intensity)', () => {
     const { channel, arbiter } = wired();
-    channel.sendFilter(1, 'BlueYellow', 60);
+    channel.sendFilter(1, 'Grayscale', 60);
     expect(arbiter.hasOverride()).toBe(true);
-    expect(arbiter.current()).toBe(filterCssValue('BlueYellow', 60));
+    expect(arbiter.current()).toBe(filterCssValue('Grayscale', 60));
   });
 
   it('PREVIEW_CLEAR 被接收端识别,覆盖撤除', () => {
@@ -256,8 +257,10 @@ describe('🔴 发送端 ⇄ 接收端(T4b)的端到端契约', () => {
         /* no-op */
       },
     }));
-    channel.sendFilter(1, 'GreenRed', 0);
-    channel.sendFilter(1, 'RedGreen', 100);
+    // 两端边界强度 —— ADR-003 要求 0 与 100 均可达,
+    // 且 0 是最容易被「falsy 判断」误丢的那个值。
+    channel.sendFilter(1, 'Grayscale', 0);
+    channel.sendFilter(1, 'Grayscale', 100);
     channel.sendClear();
 
     expect(captured).toHaveLength(3);

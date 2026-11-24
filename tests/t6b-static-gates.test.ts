@@ -7,7 +7,7 @@
  *
  * 覆盖 §6 T6b gate 的负向约束与 ADR-049 / ADR-001 / ADR-028 的反模式。
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -148,11 +148,17 @@ describe('🔴 ADR-028 · 无 Color Tint 选项,无 Hue 滑块', () => {
     }
   });
 
-  it('滤镜选项由领域层的 FILTER_MODES 驱动,不是手写的第五项', () => {
+  // 🔴 ADR-075:编辑视图不再有模式选项(只剩一个模式)。本条原本防的是
+  //    「有人手写第五项把 Color Tint 加回来」—— 该风险转移到**领域层**:
+  //    现在只要 FILTER_MODES 本身不含 Tint,UI 就无从渲染它。
+  it('领域层的 FILTER_MODES 只含 Grayscale —— 不存在被手写加回的第五项', () => {
     const source = stripComments(
-      readFileSync(resolve(ROOT, 'src/ui/RuleEditView.tsx'), 'utf8'),
+      readFileSync(resolve(ROOT, 'src/domain/filter-mode.ts'), 'utf8'),
     );
-    expect(source).toContain('FILTER_MODES.map');
+    for (const banned of ['ColorTint', 'Tint', 'Hue', 'RedGreen', 'GreenRed', 'BlueYellow']) {
+      expect(source, `领域层出现了已删除的模式 ${banned}`).not.toContain(banned);
+    }
+    expect(source).toContain('Grayscale');
   });
 
   it('编辑视图只有一个 range 输入(强度),源码里不存在第二个', () => {
@@ -236,20 +242,35 @@ describe('§6.1 / §5.2 · 共享基础的复用', () => {
     }
   });
 
-  it('🔴 ADR-030:滤镜选项的渐变取自 swatchGradient,不内联色值', () => {
+  // 🔴 ADR-075:模式单选组(`FilterModeOption`)已随三个色觉滤镜一并删除 ——
+  //    只剩一个模式时单选组是无意义的控件。ADR-030 的两条约束**不随之作废**,
+  //    它们转由列表视图的 `FilterSwatch` 承载(账本 §5.2 的注记要求将来加回
+  //    色觉滤镜时必须同时恢复)。故下面两条门禁改为盯住 `FilterSwatch`,
+  //    **而不是删掉** —— 删掉等于让「色块不得无名出现」这条约束静默失守。
+  it('🔴 ADR-030:色块渐变取自 swatchGradient,不内联色值', () => {
     const source = stripComments(
-      readFileSync(resolve(ROOT, 'src/ui/components/FilterModeOption.tsx'), 'utf8'),
+      readFileSync(resolve(ROOT, 'src/ui/components/FilterSwatch.tsx'), 'utf8'),
     );
     expect(source).toContain('swatchGradient(mode)');
     // 内联 hex 色值会绕开 §5.2 的单一来源。
     expect(source).not.toMatch(/#[0-9A-Fa-f]{6}/);
   });
 
-  it('🔴 ADR-030:滤镜选项必须同时渲染名称 —— 色块绝不单独出现', () => {
+  it('🔴 ADR-030:色块必须与名称同时渲染 —— 色块绝不单独出现', () => {
     const source = stripComments(
-      readFileSync(resolve(ROOT, 'src/ui/components/FilterModeOption.tsx'), 'utf8'),
+      readFileSync(resolve(ROOT, 'src/ui/components/FilterSwatch.tsx'), 'utf8'),
     );
     expect(source).toContain('identity.name');
+  });
+
+  it('🔴 ADR-075:模式单选组已删除,编辑视图不得再出现模式选择控件', () => {
+    expect(
+      existsSync(resolve(ROOT, 'src/ui/components/FilterModeOption.tsx')),
+    ).toBe(false);
+    const text = editText();
+    // 单选控件的痕迹:radio role / name 分组 / 模式数组遍历。
+    expect(text).not.toContain('role="radio"');
+    expect(text).not.toContain('FilterModeOption');
   });
 
   it('ADR-033:网址模式的等宽字体取自 --font-mono token,不内联字体栈', () => {

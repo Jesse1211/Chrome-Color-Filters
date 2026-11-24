@@ -81,7 +81,7 @@ function settingsWith(
 
 const TWO_RULES = settingsWith([
   { pattern: 'weibo.com', mode: 'Grayscale', intensity: 100 },
-  { pattern: 'zhihu.com', mode: 'RedGreen', intensity: 60 },
+  { pattern: 'zhihu.com', mode: 'Grayscale', intensity: 60 },
 ]);
 
 let port: SlowScriptingPort;
@@ -107,7 +107,7 @@ describe('🔴 并发串行化 —— 幂等不足以替代它', () => {
 
     expect([...port.registered.keys()].sort()).toEqual([
       'ccf-gray-100',
-      'ccf-redgreen-60',
+      'ccf-gray-60',
     ]);
   });
 
@@ -146,7 +146,7 @@ describe('🔴 并发串行化 —— 幂等不足以替代它', () => {
     expect(port.mutations.length).toBeLessThanOrEqual(2);
     expect([...port.registered.keys()].sort()).toEqual([
       'ccf-gray-100',
-      'ccf-redgreen-60',
+      'ccf-gray-60',
     ]);
   });
 
@@ -198,7 +198,7 @@ describe('🔴 ADR-065 · installed 触发走强制重建', () => {
     expect(port.mutations.some((m) => m.startsWith('register:'))).toBe(true);
     expect([...port.registered.keys()].sort()).toEqual([
       'ccf-gray-100',
-      'ccf-redgreen-60',
+      'ccf-gray-60',
     ]);
   });
 
@@ -244,7 +244,7 @@ describe('🔴 ADR-065 · installed 触发走强制重建', () => {
     ).toBe(true);
     expect([...port.registered.keys()].sort()).toEqual([
       'ccf-gray-100',
-      'ccf-redgreen-60',
+      'ccf-gray-60',
     ]);
   });
 });
