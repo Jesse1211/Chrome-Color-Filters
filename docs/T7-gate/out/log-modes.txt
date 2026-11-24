@@ -1,0 +1,31 @@
+OFF {"attr":false,"v":"","computed":"none","maxSpread":255,"px":[[255,0,0],[0,255,0],[0,0,255]]}
+0 {"attr":true,"v":"grayscale(0)","computed":"grayscale(0)","maxSpread":255,"px":[[255,0,0],[0,255,0],[0,0,255]]}
+25 {"attr":true,"v":"grayscale(0.25)","computed":"grayscale(0.25)","maxSpread":191,"px":[[205,14,14],[46,237,46],[5,5,196]]}
+50 {"attr":true,"v":"grayscale(0.5)","computed":"grayscale(0.5)","maxSpread":128,"px":[[155,27,27],[91,219,91],[9,9,137]]}
+75 {"attr":true,"v":"grayscale(0.75)","computed":"grayscale(0.75)","maxSpread":64,"px":[[104,41,41],[137,201,137],[14,14,78]]}
+100 {"attr":true,"v":"grayscale(1)","computed":"grayscale(1)","maxSpread":0,"px":[[54,54,54],[182,182,182],[18,18,18]]}
+PASS OFF 基线:无门控属性且画面有彩色 attr=false maxSpread=255
+PASS @0 门控属性在位
+PASS @0 值形态为 CSS 内置 grayscale()、不含 url( —— 实际="grayscale(0)"
+PASS @0 三个色块像素均落在 BT.709 插值理论值上(±3)
+PASS @25 门控属性在位
+PASS @25 值形态为 CSS 内置 grayscale()、不含 url( —— 实际="grayscale(0.25)"
+PASS @25 三个色块像素均落在 BT.709 插值理论值上(±3)
+PASS @50 门控属性在位
+PASS @50 值形态为 CSS 内置 grayscale()、不含 url( —— 实际="grayscale(0.5)"
+PASS @50 三个色块像素均落在 BT.709 插值理论值上(±3)
+PASS @75 门控属性在位
+PASS @75 值形态为 CSS 内置 grayscale()、不含 url( —— 实际="grayscale(0.75)"
+PASS @75 三个色块像素均落在 BT.709 插值理论值上(±3)
+PASS @100 门控属性在位
+PASS @100 值形态为 CSS 内置 grayscale()、不含 url( —— 实际="grayscale(1)"
+PASS @100 三个色块像素均落在 BT.709 插值理论值上(±3)
+PASS 彩度随强度单调不增 [255,191,128,64,0]
+PASS 强度两端严格不同 @0=255 > @100=0
+PASS @100 完全无彩 maxSpread=0
+hn-csp {"off":{"maxSpread":255,"px":[[255,0,0],[0,255,0],[0,0,255]]},"on":{"maxSpread":0,"px":[[54,54,54],[182,182,182],[18,18,18]]},"attr":true,"v":"grayscale(1)","computed":"grayscale(1)","violations":[]}
+PASS CSP 站点 OFF 基线有彩色 maxSpread=255
+PASS 🔴 CSP 站点(不放行 data:)上灰阶像素真的生效 maxSpread=0(OFF 时=255)
+PASS CSP 站点 computed filter=grayscale(1)(不为 none)
+PASS 🔴 零 CSP 违规,实测 0 条
+MODES: PASS

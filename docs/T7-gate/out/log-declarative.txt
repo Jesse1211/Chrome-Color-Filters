@@ -1,0 +1,19 @@
+PASS 初始无注册
+PASS 按 (mode,intensity) 分组:["ccf-gray-100","ccf-gray-60"]
+PASS 分组合并 matches=["*://weibo.com/*","*://zhihu.com/*"]
+PASS persistAcrossSessions:true
+PASS runAt:'document_start'
+PASS allFrames:false
+PASS css 指向预生成文件 ["filters/gray-100.css"]
+PASS 幂等:注册集合完全不变
+PASS 改强度 → 新注册 ["ccf-gray-100","ccf-gray-25"]
+PASS css 更新到 filters/gray-25.css
+PASS 删规则 → 注册被移除 ["ccf-gray-100"]
+PASS 主开关 OFF → 注册清空(0 条)
+PASS 主开关开回 → 注册装回
+PASS 浏览器重启后注册仍在 ["ccf-gray-100"]
+PASS ADR-065 前置:模拟更新清除了注册
+PASS 🔴 ADR-065 扩展更新后注册被完整重建 ["ccf-gray-100"]
+PASS 🔴 表达不出来的 glob 未注册成全网(全网注册 0 条,实际注册 [])
+PASS 对照:原意即全网的 * 仍注册为全网 [["*://*/*"]]
+DECLARATIVE: PASS

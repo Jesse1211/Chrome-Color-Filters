@@ -1,0 +1,14 @@
+PASS  wikipedia 初始即滤镜态  {"filter":"grayscale(1)","attrOn":true,"attrOff":false,"varValue":"grayscale(1)"}
+PASS  站点摘掉 data-ccf-on → 自动恢复(INV-5)  {"broken":"grayscale(1)","restored":"grayscale(1)"}
+PASS  站点摘掉 --ccf-filter 变量 → 自动恢复(INV-5)  {"broken":"grayscale(1)","restored":"grayscale(1)"}
+PASS  站点塞上 data-ccf-off(压制属性) → 自动恢复(INV-5)  {"broken":"grayscale(1)","restored":"grayscale(1)"}
+PASS  站点整体摘掉 style 属性 → 自动恢复(INV-5)  {"broken":"grayscale(1)","restored":"grayscale(1)"}
+PASS  连续 20 次破坏全部恢复  {"restoredCount":20}
+PASS  react.dev 初始即滤镜态  {"filter":"grayscale(1)","attrOn":true,"attrOff":false,"varValue":"grayscale(1)"}
+PASS  react.dev 站内跳转确实发生(探针有效)  {"urlBefore":"https://react.dev/","urlAfter":"https://react.dev/learn"}
+PASS  react.dev 站内跳转后滤镜仍生效(INV-5)  {"urlAfter":"https://react.dev/learn","filter":"grayscale(1)"}
+PASS  vuejs.org 初始即滤镜态  {"filter":"grayscale(1)","attrOn":true,"attrOff":false,"varValue":"grayscale(1)"}
+PASS  vuejs.org 站内跳转确实发生(探针有效)  {"urlBefore":"https://vuejs.org/","urlAfter":"https://vuejs.org/guide/quick-start.html"}
+PASS  vuejs.org 站内跳转后滤镜仍生效(INV-5)  {"urlAfter":"https://vuejs.org/guide/quick-start.html","filter":"grayscale(1)"}
+
+PASS — liveness

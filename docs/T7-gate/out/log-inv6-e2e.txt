@@ -1,0 +1,10 @@
+PASS  N2 负向对照:无规则时 x.com 未滤镜(证明后面的 grayscale(1) 不是页面自带)  {"baselineX":"none"}
+PASS  规则确实由 UI 创建并落盘,且顺序为 [x.com@100, *@30]  {"persisted":["x.com@Grayscale@100","*@Grayscale@30"],"count":"2/20","listed":["x.com","*"]}
+PASS  🔴 真实打开 x.com → grayscale(1)(100 档,首个命中胜)  {"xFilter":"grayscale(1)","expected":"grayscale(1)"}
+PASS  🔴 真实打开 example(https://example.com/) → grayscale(0.3)(30 档)  {"got":"grayscale(0.3)","expected":"grayscale(0.3)"}
+PASS  🔴 真实打开 hn(https://news.ycombinator.com/) → grayscale(0.3)(30 档)  {"got":"grayscale(0.3)","expected":"grayscale(0.3)"}
+PASS  N3 两个强度档可区分且逐位等于 grayscale(intensity/100)  {"x":"grayscale(1)","other":"grayscale(0.3)"}
+PASS  N1 前置条件:顺序已颠倒为 [*@30, x.com@100]  {"reordered":["*@Grayscale@30","x.com@Grayscale@100"]}
+PASS  🔴 N1 负向对照:顺序颠倒后 x.com 改判为 grayscale(0.3) —— 判据确实取决于首个命中  {"xReordered":"grayscale(0.3)","expected":"grayscale(0.3)"}
+
+PASS — T7 INV-6 端到端

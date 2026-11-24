@@ -1,0 +1,43 @@
+PASS  阶段 0:主开关已由 UI 关闭,且存在 1 条规则,未锁定  {"lockUntil":null,"masterEnabled":false,"rules":["example.com@100"],"now":1795538306636,"remainingMs":null,"keys":["lockUntil","masterEnabled","rules","version"]}
+PASS  N1 负向对照:未锁定时 addRule 成功(证明探针能写)  {"ok":true,"value":{"version":1,"masterEnabled":false,"rules":[{"pattern":"example.com","mode":"Grayscale","intensity":100},{"pattern":"n1.test","mode":"Grayscale","intensity":50}],"lockUntil":null}}
+PASS  N1 负向对照:未锁定时 setMasterEnabled 成功  {"ok":true,"value":{"version":1,"masterEnabled":true,"rules":[{"pattern":"example.com","mode":"Grayscale","intensity":100},{"pattern":"n1.test","mode":"Grayscale","intensity":50}],"lockUntil":null}}
+PASS  N1 负向对照:未锁定时 setLockUntil(未来)成功  {"ok":true,"value":{"version":1,"masterEnabled":true,"rules":[{"pattern":"example.com","mode":"Grayscale","intensity":100},{"pattern":"n1.test","mode":"Grayscale","intensity":50}],"lockUntil":1795541906701}}
+PASS  复位:主开关 OFF、1 条规则、未锁定  {"lockUntil":null,"masterEnabled":false,"rules":["example.com@100"],"now":1795538306719,"remainingMs":null,"keys":["lockUntil","masterEnabled","rules","version"]}
+PASS  🔴 ADR-057:主开关 OFF 时确认框告知「启动锁定会一并开启滤镜」  {"present":true}
+PASS  🔴 阶段 1:UI 启动锁定后磁盘上 lockUntil 为未来时间戳(ADR-053 绝对时间)  {"lockUntil":1795538366884,"masterEnabled":true,"rules":["example.com@100"],"now":1795538306985,"remainingMs":59899,"keys":["lockUntil","masterEnabled","rules","version"]}
+PASS  🔴🔴 ADR-057:主开关 OFF 状态下启动锁定 → 主开关**自动变 ON**  {"masterEnabled":true}
+PASS  🔴 INV-12(UI 第二道防线):锁定中 DOM 无启动/解除入口,只有「延长」  {"ids":["popup","brand-dot","master-switch","lock-banner","lock-countdown","lock-extend-duration","lock-extend-amount","lock-extend-unit","lock-extend","priority-hint","rule-list","rule-row-0","rule-grip-0","rule-open-0","rule-pattern-0","rule-live-0","swatch-pair","swatch","swatch-name","rule-delete-0","add-rule","rule-count"],"hasLockEntry":false,"hasLockStart":false,"hasExtend":true,"masterDisabled":true,"addRuleDisabled":true,"releaseWords":[]}
+PASS  INV-11(UI 第二道防线):锁定中主开关与「新增规则」均置灰  {"ids":["popup","brand-dot","master-switch","lock-banner","lock-countdown","lock-extend-duration","lock-extend-amount","lock-extend-unit","lock-extend","priority-hint","rule-list","rule-row-0","rule-grip-0","rule-open-0","rule-pattern-0","rule-live-0","swatch-pair","swatch","swatch-name","rule-delete-0","add-rule","rule-count"],"hasLockEntry":false,"hasLockStart":false,"hasExtend":true,"masterDisabled":true,"addRuleDisabled":true,"releaseWords":[]}
+PASS  INV-12:锁定中文案里不出现「解除/取消锁定/提前结束/缩短/结束锁定」  []
+PASS  ADR-051:锁定中点击规则行不进入编辑视图  {"stillList":true,"inEditor":false}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 addRule(kind=locked/locked-rules)  {"ok":false,"error":{"kind":"locked","reason":"locked-rules","message":"锁定中,规则不可变更。锁定不可提前结束或缩短(ADR-051/ADR-052)。"}}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 removeRule(kind=locked/locked-rules)  {"ok":false,"error":{"kind":"locked","reason":"locked-rules","message":"锁定中,规则不可变更。锁定不可提前结束或缩短(ADR-051/ADR-052)。"}}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 updateRule(kind=locked/locked-rules)  {"ok":false,"error":{"kind":"locked","reason":"locked-rules","message":"锁定中,规则不可变更。锁定不可提前结束或缩短(ADR-051/ADR-052)。"}}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 replaceRules(kind=locked/locked-rules)  {"ok":false,"error":{"kind":"locked","reason":"locked-rules","message":"锁定中,规则不可变更。锁定不可提前结束或缩短(ADR-051/ADR-052)。"}}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 reorderRule(kind=locked/locked-rules)  {"ok":false,"error":{"kind":"locked","reason":"locked-rules","message":"锁定中,规则不可变更。锁定不可提前结束或缩短(ADR-051/ADR-052)。"}}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 masterOff(kind=locked/locked-master-enabled)  {"ok":false,"error":{"kind":"locked","reason":"locked-master-enabled","message":"锁定中,主开关不可变更。锁定不可提前结束或缩短(ADR-051/ADR-052)。"}}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 shorten(kind=locked/lock-write-rejected)  {"ok":false,"error":{"kind":"locked","reason":"lock-write-rejected","message":"锁定只能延长,不能缩短。加码可以,反悔不行(ADR-052/INV-12)。"}}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 clear(kind=locked/lock-write-rejected)  {"ok":false,"error":{"kind":"locked","reason":"lock-write-rejected","message":"锁定期间不可清除锁定。锁定一旦生效没有任何途径提前结束(ADR-052/INV-12)。"}}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 same(kind=locked/lock-write-rejected)  {"ok":false,"error":{"kind":"locked","reason":"lock-write-rejected","message":"锁定时间未发生变化,未写入。"}}
+PASS  🔴 INV-14 绕过 UI:仓储层拒绝 past(kind=locked/lock-write-rejected)  {"ok":false,"error":{"kind":"locked","reason":"lock-write-rejected","message":"锁定到期时间必须晚于当前时间。"}}
+PASS  🔴 INV-11:十次被拒写入后,masterEnabled/rules/lockUntil **全字段**未变  {"before":{"m":true,"r":["example.com@100"],"l":1795538366884},"after":{"m":true,"r":["example.com@100"],"l":1795538366884}}
+PASS  🔴 N2 / INV-12:锁定中**延长**成功(UI 路径),lockUntil 严格变大  {"beforeExtend":1795538366884,"afterLockUntil":1795538426884,"deltaMs":60000}
+PASS  INV-12:延长之后再试缩短仍被拒  {"ok":false,"error":{"kind":"locked","reason":"lock-write-rejected","message":"锁定只能延长,不能缩短。加码可以,反悔不行(ADR-052/INV-12)。"}}
+PASS  🔴 INV-13:完全退出并重启浏览器后,锁定仍然有效(lockUntil 原值不变)  {"preLockUntil":1795538426884,"postLockUntil":1795538426884,"postRemainingMs":115894}
+PASS  🔴 N4 / ADR-053:重启后剩余时间**小于**重启前(存的是绝对时间,不是时长)  {"pre":119140,"post":115894,"elapsedMs":3246}
+PASS  INV-13:重启后 UI 仍显示倒计时条、仍无启动入口、主开关仍置灰  {"postCountdown":"🔒 锁定中 00:01:56","hasEntry":false,"masterDisabled":true}
+PASS  🔴 INV-13:重启后 UI 显示的剩余时间与磁盘 lockUntil 一致(±2s)  {"postCountdown":"🔒 锁定中 00:01:56","shownMs":116000,"diskRemainingMs":115894}
+
+⏳ 等待锁定自然到期:119 秒(不伪造时钟)…
+PASS  到期前最后一次抽查:写入仍被拒(锁在整个等待期间持续有效)  {"ok":false,"error":{"kind":"locked","reason":"locked-master-enabled","message":"锁定中,主开关不可变更。锁定不可提前结束或缩短(ADR-051/ADR-052)。"}}
+PASS  锁定已自然到期(remainingMs <= 0)  {"lockUntil":1795538426884,"masterEnabled":true,"rules":["example.com@100"],"now":1795538430970,"remainingMs":-4086,"keys":["lockUntil","masterEnabled","rules","version"]}
+PASS  🔴 N3:到期后 addRule **重新成功**(证明此前的拒绝确实来自锁)  {"ok":true,"value":{"version":1,"masterEnabled":true,"rules":[{"pattern":"example.com","mode":"Grayscale","intensity":100},{"pattern":"after.test","mode":"Grayscale","intensity":40}],"lockUntil":1795538426884}}
+PASS  🔴 N3:到期后 masterOff **重新成功**(证明此前的拒绝确实来自锁)  {"ok":true,"value":{"version":1,"masterEnabled":false,"rules":[{"pattern":"example.com","mode":"Grayscale","intensity":100},{"pattern":"after.test","mode":"Grayscale","intensity":40}],"lockUntil":1795538426884}}
+PASS  🔴 N3:到期后 removeRule **重新成功**(证明此前的拒绝确实来自锁)  {"ok":true,"value":{"version":1,"masterEnabled":false,"rules":[{"pattern":"after.test","mode":"Grayscale","intensity":40}],"lockUntil":1795538426884}}
+PASS  到期后主开关可以重新打开(复位,同时再证一次写入已解禁)  {"ok":true,"value":{"version":1,"masterEnabled":true,"rules":[{"pattern":"after.test","mode":"Grayscale","intensity":40}],"lockUntil":1795538426884}}
+PASS  🔴 到期后 UI 自动解锁:倒计时条消失、计时器入口回来、data-locked=false、控件可编辑  {"hasBanner":false,"hasEntry":true,"locked":"false","masterDisabled":false,"addRuleDisabled":false,"lockStartPresent":true}
+PASS  N5 前置:重新启动一次锁定以检验上条断言的判别力  {"ok":true,"value":{"version":1,"masterEnabled":true,"rules":[{"pattern":"after.test","mode":"Grayscale","intensity":40}],"lockUntil":1795538491193}}
+PASS  🔴 N5 负向对照:重新锁上后同一组读数**全部翻转** —— 「到期后可编辑」不是恒真  {"expired":{"hasBanner":false,"hasEntry":true,"locked":"false","masterDisabled":false,"addRuleDisabled":false,"lockStartPresent":true},"relocked":{"hasBanner":true,"hasEntry":false,"locked":"true","masterDisabled":true,"addRuleDisabled":true,"lockStartPresent":false}}
+PASS  ADR-071:持久化 JSON 的键集恒为 [lockUntil, masterEnabled, rules, version],无 maxSeenTime  {"keys":["lockUntil","masterEnabled","rules","version"]}
+
+PASS — T7 锁定端到端

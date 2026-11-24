@@ -1,0 +1,213 @@
+{
+  "clause": "T7【回归】INV-9 (c) 真实 Network 录制(ADR-026)",
+  "assertions": [
+    {
+      "name": "前置 hn:滤镜确实生效(录制的是一个真的在工作的扩展)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "🔴 (c) hn:录制到的请求中**零条**由扩展发起指向外部网络(ADR-026)",
+      "ok": true,
+      "detail": {
+        "total": 7,
+        "extensionInitiated": 0,
+        "outbound": []
+      }
+    },
+    {
+      "name": "(c) hn:无请求 URL 携带页面内容(信标形态)",
+      "ok": true,
+      "detail": {
+        "sample": []
+      }
+    },
+    {
+      "name": "前置 wikipedia:滤镜确实生效(录制的是一个真的在工作的扩展)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "🔴 (c) wikipedia:录制到的请求中**零条**由扩展发起指向外部网络(ADR-026)",
+      "ok": true,
+      "detail": {
+        "total": 5,
+        "extensionInitiated": 0,
+        "outbound": []
+      }
+    },
+    {
+      "name": "(c) wikipedia:无请求 URL 携带页面内容(信标形态)",
+      "ok": true,
+      "detail": {
+        "sample": []
+      }
+    },
+    {
+      "name": "前置 github:滤镜确实生效(录制的是一个真的在工作的扩展)",
+      "ok": true,
+      "detail": {
+        "filter": "grayscale(1)"
+      }
+    },
+    {
+      "name": "🔴 (c) github:录制到的请求中**零条**由扩展发起指向外部网络(ADR-026)",
+      "ok": true,
+      "detail": {
+        "total": 101,
+        "extensionInitiated": 0,
+        "outbound": []
+      }
+    },
+    {
+      "name": "(c) github:无请求 URL 携带页面内容(信标形态)",
+      "ok": true,
+      "detail": {
+        "sample": []
+      }
+    },
+    {
+      "name": "🔴 N1 负向对照:录制器**抓到了**人为注入的那条外传请求(证明录制通道真的在工作)",
+      "ok": true,
+      "detail": {
+        "recorded": 1,
+        "serverHits": 1
+      }
+    },
+    {
+      "name": "N2 前置:在扩展的 isolated world 里执行注入脚本成功(无 evalError)",
+      "ok": true,
+      "detail": {
+        "chosenContextId": 8
+      }
+    },
+    {
+      "name": "🔴 N2 负向对照:从**扩展的 isolated world** 发出的 fetch 被归因为 fromExtension —— 归因逻辑不是恒假",
+      "ok": true,
+      "detail": {
+        "recorded": [
+          {
+            "url": "http://127.0.0.1:61336/beacon?world=isolated",
+            "fromExtension": true,
+            "attribution": {
+              "byContext": true,
+              "byUrl": false
+            },
+            "scriptIds": [
+              "11"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "data": {
+    "extensionId": "dmeelcfdheeanolpmihkkfbnlfhgodnl",
+    "sites": {
+      "hn": {
+        "filter": "grayscale(1)",
+        "total": 7,
+        "extensionInitiated": 0,
+        "extensionOutbound": [],
+        "extensionUrlRequests": []
+      },
+      "wikipedia": {
+        "filter": "grayscale(1)",
+        "total": 5,
+        "extensionInitiated": 0,
+        "extensionOutbound": [],
+        "extensionUrlRequests": []
+      },
+      "github": {
+        "filter": "grayscale(1)",
+        "total": 101,
+        "extensionInitiated": 0,
+        "extensionOutbound": [],
+        "extensionUrlRequests": []
+      }
+    },
+    "n1": {
+      "caught": 1,
+      "sentinelHits": 1,
+      "events": [
+        {
+          "url": "http://127.0.0.1:61336/beacon",
+          "type": "Fetch",
+          "initiatorType": "script",
+          "initiatorUrl": null,
+          "frameUrls": [
+            "pptr:evaluate;%2Fprivate%2Ftmp%2Fff-t7%2Fdocs%2FT7-gate%2Finv9-network.cjs%3A203%3A16"
+          ],
+          "frameScriptIds": [
+            "7"
+          ],
+          "fromExtension": false,
+          "attribution": {
+            "byContext": false,
+            "byUrl": false
+          }
+        }
+      ]
+    },
+    "n2": {
+      "foundIsolatedWorld": true,
+      "chosenContextId": 8,
+      "contexts": [
+        {
+          "id": 3,
+          "origin": "https://example.com",
+          "live": false
+        },
+        {
+          "id": 4,
+          "origin": "https://example.com",
+          "live": false
+        },
+        {
+          "id": 5,
+          "origin": "chrome-extension://dmeelcfdheeanolpmihkkfbnlfhgodnl",
+          "live": false
+        },
+        {
+          "id": 6,
+          "origin": "https://example.com",
+          "live": true
+        },
+        {
+          "id": 7,
+          "origin": "https://example.com",
+          "live": true
+        },
+        {
+          "id": 8,
+          "origin": "chrome-extension://dmeelcfdheeanolpmihkkfbnlfhgodnl",
+          "live": true
+        }
+      ],
+      "recorded": [
+        {
+          "url": "http://127.0.0.1:61336/beacon?world=isolated",
+          "type": "Fetch",
+          "initiatorType": "script",
+          "initiatorUrl": null,
+          "frameUrls": [
+            ""
+          ],
+          "frameScriptIds": [
+            "11"
+          ],
+          "fromExtension": true,
+          "attribution": {
+            "byContext": true,
+            "byUrl": false
+          }
+        }
+      ]
+    }
+  },
+  "pass": true
+}

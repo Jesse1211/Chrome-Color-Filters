@@ -1,0 +1,542 @@
+{
+  "clause": "T7【新增】持久化(ADR-010)+ 并发安全(ADR-071)",
+  "assertions": [
+    {
+      "name": "UI 建了 3 条规则,顺序为 [first, second, *]",
+      "ok": true,
+      "detail": {
+        "rules": [
+          {
+            "intensity": 100,
+            "mode": "Grayscale",
+            "pattern": "first.example.com"
+          },
+          {
+            "intensity": 70,
+            "mode": "Grayscale",
+            "pattern": "second.example.com"
+          },
+          {
+            "intensity": 30,
+            "mode": "Grayscale",
+            "pattern": "*"
+          }
+        ]
+      }
+    },
+    {
+      "name": "🔴 ADR-010:完全退出并重启 Chrome 后,规则**与顺序**完好",
+      "ok": true,
+      "detail": {
+        "before": [
+          "first.example.com@100",
+          "second.example.com@70",
+          "*@30"
+        ],
+        "after": [
+          "first.example.com@100",
+          "second.example.com@70",
+          "*@30"
+        ]
+      }
+    },
+    {
+      "name": "ADR-010:强度与模式逐字段完好",
+      "ok": true,
+      "detail": {
+        "after": [
+          {
+            "intensity": 100,
+            "mode": "Grayscale",
+            "pattern": "first.example.com"
+          },
+          {
+            "intensity": 70,
+            "mode": "Grayscale",
+            "pattern": "second.example.com"
+          },
+          {
+            "intensity": 30,
+            "mode": "Grayscale",
+            "pattern": "*"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ADR-010:重启后 popup 列表显示的顺序与重启前一致",
+      "ok": true,
+      "detail": {
+        "listedBefore": [
+          "first.example.com",
+          "second.example.com",
+          "*"
+        ],
+        "listedAfter": [
+          "first.example.com",
+          "second.example.com",
+          "*"
+        ]
+      }
+    },
+    {
+      "name": "🔴 ADR-071:后台读取与用户写入并发 8/8 轮(顺序交错 + 真并发两种相位),磁盘终态**都是用户的写入**",
+      "ok": true,
+      "detail": {
+        "rounds": 8,
+        "keptSeq": 8,
+        "keptPar": 8,
+        "sample": [
+          {
+            "i": 0,
+            "writeOk": true,
+            "readSawRules": [
+              "base.example.com"
+            ],
+            "diskRules": [
+              "base.example.com",
+              "user-0.example.com",
+              "par-0.example.com"
+            ],
+            "userRulePresent": true,
+            "parRulePresent": true,
+            "keys": [
+              "lockUntil",
+              "masterEnabled",
+              "rules",
+              "version"
+            ]
+          },
+          {
+            "i": 1,
+            "writeOk": true,
+            "readSawRules": [
+              "base.example.com"
+            ],
+            "diskRules": [
+              "base.example.com",
+              "user-1.example.com",
+              "par-1.example.com"
+            ],
+            "userRulePresent": true,
+            "parRulePresent": true,
+            "keys": [
+              "lockUntil",
+              "masterEnabled",
+              "rules",
+              "version"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "🔴 N1 判别器:「旧实现形状」的整体回写**确实**会吃掉用户写入(8/8 轮) —— 证明本门禁确实在测一件可能失败的事",
+      "ok": true,
+      "detail": {
+        "eatenCount": 8,
+        "of": 8,
+        "sample": [
+          {
+            "i": 0,
+            "writeOk": true,
+            "diskRules": [
+              "base.example.com"
+            ],
+            "userRuleEaten": true,
+            "hasMaxSeenTime": true
+          },
+          {
+            "i": 1,
+            "writeOk": true,
+            "diskRules": [
+              "base.example.com"
+            ],
+            "userRuleEaten": true,
+            "hasMaxSeenTime": true
+          },
+          {
+            "i": 2,
+            "writeOk": true,
+            "diskRules": [
+              "base.example.com"
+            ],
+            "userRuleEaten": true,
+            "hasMaxSeenTime": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "N1 判别器:旧实现形状还会把 maxSeenTime 写进磁盘(这正是 ADR-071 废止的那个字段)",
+      "ok": true,
+      "detail": {
+        "sample": [
+          {
+            "i": 0,
+            "writeOk": true,
+            "diskRules": [
+              "base.example.com"
+            ],
+            "userRuleEaten": true,
+            "hasMaxSeenTime": true
+          },
+          {
+            "i": 1,
+            "writeOk": true,
+            "diskRules": [
+              "base.example.com"
+            ],
+            "userRuleEaten": true,
+            "hasMaxSeenTime": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "N2 探针有效:人为塞入的 maxSeenTime 确实被键集断言看见",
+      "ok": true,
+      "detail": {
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "maxSeenTime",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴 ADR-071:经仓储层写入后,持久化 JSON 中**不存在** maxSeenTime 字段",
+      "ok": true,
+      "detail": {
+        "finalKeys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ],
+        "writeOk": true
+      }
+    },
+    {
+      "name": "ADR-025:持久化的单条规则只含 [intensity, mode, pattern],无 matrix 等派生字段",
+      "ok": true,
+      "detail": {
+        "ruleKeys": [
+          "intensity",
+          "mode",
+          "pattern"
+        ]
+      }
+    }
+  ],
+  "data": {
+    "before": {
+      "lockUntil": null,
+      "masterEnabled": true,
+      "rules": [
+        {
+          "intensity": 100,
+          "mode": "Grayscale",
+          "pattern": "first.example.com"
+        },
+        {
+          "intensity": 70,
+          "mode": "Grayscale",
+          "pattern": "second.example.com"
+        },
+        {
+          "intensity": 30,
+          "mode": "Grayscale",
+          "pattern": "*"
+        }
+      ],
+      "version": 1
+    },
+    "after": {
+      "lockUntil": null,
+      "masterEnabled": true,
+      "rules": [
+        {
+          "intensity": 100,
+          "mode": "Grayscale",
+          "pattern": "first.example.com"
+        },
+        {
+          "intensity": 70,
+          "mode": "Grayscale",
+          "pattern": "second.example.com"
+        },
+        {
+          "intensity": 30,
+          "mode": "Grayscale",
+          "pattern": "*"
+        }
+      ],
+      "version": 1
+    },
+    "listed": {
+      "listedBefore": [
+        "first.example.com",
+        "second.example.com",
+        "*"
+      ],
+      "listedAfter": [
+        "first.example.com",
+        "second.example.com",
+        "*"
+      ]
+    },
+    "concurrent": [
+      {
+        "i": 0,
+        "writeOk": true,
+        "readSawRules": [
+          "base.example.com"
+        ],
+        "diskRules": [
+          "base.example.com",
+          "user-0.example.com",
+          "par-0.example.com"
+        ],
+        "userRulePresent": true,
+        "parRulePresent": true,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      {
+        "i": 1,
+        "writeOk": true,
+        "readSawRules": [
+          "base.example.com"
+        ],
+        "diskRules": [
+          "base.example.com",
+          "user-1.example.com",
+          "par-1.example.com"
+        ],
+        "userRulePresent": true,
+        "parRulePresent": true,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      {
+        "i": 2,
+        "writeOk": true,
+        "readSawRules": [
+          "base.example.com"
+        ],
+        "diskRules": [
+          "base.example.com",
+          "user-2.example.com",
+          "par-2.example.com"
+        ],
+        "userRulePresent": true,
+        "parRulePresent": true,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      {
+        "i": 3,
+        "writeOk": true,
+        "readSawRules": [
+          "base.example.com"
+        ],
+        "diskRules": [
+          "base.example.com",
+          "user-3.example.com",
+          "par-3.example.com"
+        ],
+        "userRulePresent": true,
+        "parRulePresent": true,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      {
+        "i": 4,
+        "writeOk": true,
+        "readSawRules": [
+          "base.example.com"
+        ],
+        "diskRules": [
+          "base.example.com",
+          "user-4.example.com",
+          "par-4.example.com"
+        ],
+        "userRulePresent": true,
+        "parRulePresent": true,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      {
+        "i": 5,
+        "writeOk": true,
+        "readSawRules": [
+          "base.example.com"
+        ],
+        "diskRules": [
+          "base.example.com",
+          "user-5.example.com",
+          "par-5.example.com"
+        ],
+        "userRulePresent": true,
+        "parRulePresent": true,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      {
+        "i": 6,
+        "writeOk": true,
+        "readSawRules": [
+          "base.example.com"
+        ],
+        "diskRules": [
+          "base.example.com",
+          "user-6.example.com",
+          "par-6.example.com"
+        ],
+        "userRulePresent": true,
+        "parRulePresent": true,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      {
+        "i": 7,
+        "writeOk": true,
+        "readSawRules": [
+          "base.example.com"
+        ],
+        "diskRules": [
+          "base.example.com",
+          "user-7.example.com",
+          "par-7.example.com"
+        ],
+        "userRulePresent": true,
+        "parRulePresent": true,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    ],
+    "discriminator": [
+      {
+        "i": 0,
+        "writeOk": true,
+        "diskRules": [
+          "base.example.com"
+        ],
+        "userRuleEaten": true,
+        "hasMaxSeenTime": true
+      },
+      {
+        "i": 1,
+        "writeOk": true,
+        "diskRules": [
+          "base.example.com"
+        ],
+        "userRuleEaten": true,
+        "hasMaxSeenTime": true
+      },
+      {
+        "i": 2,
+        "writeOk": true,
+        "diskRules": [
+          "base.example.com"
+        ],
+        "userRuleEaten": true,
+        "hasMaxSeenTime": true
+      },
+      {
+        "i": 3,
+        "writeOk": true,
+        "diskRules": [
+          "base.example.com"
+        ],
+        "userRuleEaten": true,
+        "hasMaxSeenTime": true
+      },
+      {
+        "i": 4,
+        "writeOk": true,
+        "diskRules": [
+          "base.example.com"
+        ],
+        "userRuleEaten": true,
+        "hasMaxSeenTime": true
+      },
+      {
+        "i": 5,
+        "writeOk": true,
+        "diskRules": [
+          "base.example.com"
+        ],
+        "userRuleEaten": true,
+        "hasMaxSeenTime": true
+      },
+      {
+        "i": 6,
+        "writeOk": true,
+        "diskRules": [
+          "base.example.com"
+        ],
+        "userRuleEaten": true,
+        "hasMaxSeenTime": true
+      },
+      {
+        "i": 7,
+        "writeOk": true,
+        "diskRules": [
+          "base.example.com"
+        ],
+        "userRuleEaten": true,
+        "hasMaxSeenTime": true
+      }
+    ],
+    "n2Injected": [
+      "lockUntil",
+      "masterEnabled",
+      "maxSeenTime",
+      "rules",
+      "version"
+    ],
+    "finalKeys": [
+      "lockUntil",
+      "masterEnabled",
+      "rules",
+      "version"
+    ]
+  },
+  "pass": true
+}

@@ -2,7 +2,7 @@
   {
     "url": "chrome://settings/",
     "state": {
-      "tabId": 286578217,
+      "tabId": 1567676327,
       "injectable": false,
       "reason": "internal-page",
       "host": null,
@@ -13,7 +13,7 @@
   {
     "url": "https://chromewebstore.google.com/",
     "state": {
-      "tabId": 286578219,
+      "tabId": 1567676329,
       "injectable": false,
       "reason": "web-store",
       "host": null,
@@ -24,7 +24,7 @@
   {
     "url": "chrome://newtab/",
     "state": {
-      "tabId": 286578221,
+      "tabId": 1567676331,
       "injectable": false,
       "reason": "new-tab",
       "host": null,
@@ -35,7 +35,7 @@
   {
     "url": "https://zh.wikipedia.org/wiki/Color",
     "state": {
-      "tabId": 286578223,
+      "tabId": 1567676333,
       "injectable": true,
       "host": "zh.wikipedia.org",
       "activeRuleIndex": 0,

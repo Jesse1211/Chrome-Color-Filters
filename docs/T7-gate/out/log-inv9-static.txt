@@ -1,0 +1,28 @@
+
+ RUN  v4.1.12 /private/tmp/ff-t7
+
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (a) · content script 产物不含任何外传通道(ADR-026) > 不含网络外传 API 1ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (a) · content script 产物不含任何外传通道(ADR-026) > 🔴 不含图片信标(`new Image()` / `.src` 赋值) 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (a) · content script 产物不含任何外传通道(ADR-026) > 🔴 不含动态 import() 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (a) · content script 产物不含任何外传通道(ADR-026) > 🔴 不向外部扩展 ID 发送 sendMessage / connect 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (a) · content script 产物不含任何外传通道(ADR-026) > 🔴 产物里的 chrome API 面是一份**白名单**,全部被动/自有存储 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (b) · content script 产物不读取页面内容(ADR-026) > 不读 innerText / innerHTML / textContent / outerHTML 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (b) · content script 产物不读取页面内容(ADR-026) > 🔴 不读 document.body 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (b) · content script 产物不读取页面内容(ADR-026) > 不遍历/不查询页面元素 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (b) · content script 产物不读取页面内容(ADR-026) > 🔴 不读取表单值、cookie、选区、计算样式 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (b) · content script 产物不读取页面内容(ADR-026) > 🔴 不读元素的 `.value`(表单输入) 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b gate (b) · content script 产物不读取页面内容(ADR-026) > 🔴 MutationObserver 的 observe 选项里 characterData 为 false 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b · 注入层源码层面的非侵入约束(不依赖产物是否已构建) > 注入层产品源码不含任何外传通道与页面内容读取 5ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b · 注入层源码层面的非侵入约束(不依赖产物是否已构建) > 🔴 ADR-026 不被 ADR-060 的窄口例外撑宽:快路径是**写**,不是**读页面** 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b · 生产入口必须真的启用存活性与预览(反「flag 掉 ADR 保证」) > 🔴 content script 入口启用存活性(INV-5 / ADR-017) 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b · 生产入口必须真的启用存活性与预览(反「flag 掉 ADR 保证」) > 🔴 content script 入口启用预览接收端(ADR-049) 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b · 生产入口必须真的启用存活性与预览(反「flag 掉 ADR 保证」) > 🔴 预览路由是直连 content script,不经 service worker 中转(ADR-049) 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b · 生产入口必须真的启用存活性与预览(反「flag 掉 ADR 保证」) > 🔴 预览接收端模块不接触任何存储 —— 预览值物理上无处落盘(ADR-049) 0ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b · 生产入口必须真的启用存活性与预览(反「flag 掉 ADR 保证」) > 🔴 端口的撤除一律带归属令牌 —— 陈旧端口不得擦掉别人的活预览(ADR-049) 1ms
+ ✓ tests/t4b-static-gates.test.ts > 🔴 T4b · 生产入口必须真的启用存活性与预览(反「flag 掉 ADR 保证」) > 🔴 ADR-049 的消息字面量只在契约文件里定义一次 1ms
+
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+   Start at  00:16:40
+   Duration  121ms (transform 15ms, setup 0ms, import 24ms, tests 12ms, environment 0ms)
+

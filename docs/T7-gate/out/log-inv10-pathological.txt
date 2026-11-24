@@ -1,0 +1,26 @@
+PASS  N1 前置 hn:100 个 `*` 的 pattern 确实落盘(长度=100)  {"storedLen":100,"pattern":"************…"}
+PASS  判据 B hn:病态模式下滤镜确实生效(不是空转)  {"filter":"grayscale(1)"}
+PASS  判据 B hn:对照组滤镜也生效  {"filter":"grayscale(1)"}
+PASS  N2 探针有效 hn:测到非零 firstPaint(控制=328ms / 病态=664ms)  {"control":328,"pathological":664}
+  INFO hn: 挂钟首帧 control 中位=328ms(样本 [320,328,316,340,652]) / pathological 中位=664ms(样本 [344,664,568,1152,1104]),Δ=336ms —— 网络抖动主导,仅作参考,**不作判据**
+PASS  🔴 判据 A-1 hn:病态模式下首帧仍在 10s 以内(灾难性回溯的量级是秒到分钟)  {"pathologicalMedian":664,"runs":[344,664,568,1152,1104]}
+PASS  N4 探针有效 hn:匹配确实在扩展的真实执行上下文里被执行、结果正确(100 个 `*` 匹配该 host)  {"host":"news.ycombinator.com","iterations":200000,"matched":true,"perCallUs":0.2545000004768372,"controlPerCallUs":0.0475,"backtrackingRegexOnceMs":12721.89999961853}
+PASS  🔴 判据 A-2 hn:病态 pattern 单次匹配 0.255µs < 1ms(线性时间,INV-10); 对照(单个 `*`)0.048µs  {"host":"news.ycombinator.com","iterations":200000,"matched":true,"perCallUs":0.2545000004768372,"controlPerCallUs":0.0475,"backtrackingRegexOnceMs":12721.89999961853}
+PASS  🔴 判据 A-3 hn:病态 pattern 的匹配耗时不超过对照的 50 倍 + 50µs(无回溯爆炸)  {"host":"news.ycombinator.com","iterations":200000,"matched":true,"perCallUs":0.2545000004768372,"controlPerCallUs":0.0475,"backtrackingRegexOnceMs":12721.89999961853}
+PASS  🔴 N5 负向对照 hn:会回溯的正则 /^(a*)*b$/ 对 30 个 a **单次** 12721.9ms, 比病态 glob 单次 0.255µs 大 100 倍以上 —— 本计时确实能区分回溯与线性  {"backtrackingRegexOnceMs":12721.89999961853,"globPerCallUs":0.2545000004768372}
+PASS  判据 A' hn:DOMContentLoaded 挂钟时间未爆炸(control=369ms → 378ms)  {"control":369,"pathological":378}
+PASS  🔴 N3 负向对照 hn:同一轮内配对 3 次,注入 700ms 阻塞使 firstPaint 中位增加 712ms(> 300ms) —— 挂钟计时确实对拖慢敏感  {"pairs":[{"clean":312,"blocked":1024,"delta":712},{"clean":340,"blocked":1004,"delta":664},{"clean":368,"blocked":1724,"delta":1356}],"medianDelta":712}
+PASS  N1 前置 wikipedia:100 个 `*` 的 pattern 确实落盘(长度=100)  {"storedLen":100,"pattern":"************…"}
+PASS  判据 B wikipedia:病态模式下滤镜确实生效(不是空转)  {"filter":"grayscale(1)"}
+PASS  判据 B wikipedia:对照组滤镜也生效  {"filter":"grayscale(1)"}
+PASS  N2 探针有效 wikipedia:测到非零 firstPaint(控制=348ms / 病态=380ms)  {"control":348,"pathological":380}
+  INFO wikipedia: 挂钟首帧 control 中位=348ms(样本 [628,568,348,336,320]) / pathological 中位=380ms(样本 [348,380,1036,304,588]),Δ=32ms —— 网络抖动主导,仅作参考,**不作判据**
+PASS  🔴 判据 A-1 wikipedia:病态模式下首帧仍在 10s 以内(灾难性回溯的量级是秒到分钟)  {"pathologicalMedian":380,"runs":[348,380,1036,304,588]}
+PASS  N4 探针有效 wikipedia:匹配确实在扩展的真实执行上下文里被执行、结果正确(100 个 `*` 匹配该 host)  {"host":"en.wikipedia.org","iterations":200000,"matched":true,"perCallUs":0.24100000143051148,"controlPerCallUs":0.0425,"backtrackingRegexOnceMs":12747.299999713898}
+PASS  🔴 判据 A-2 wikipedia:病态 pattern 单次匹配 0.241µs < 1ms(线性时间,INV-10); 对照(单个 `*`)0.043µs  {"host":"en.wikipedia.org","iterations":200000,"matched":true,"perCallUs":0.24100000143051148,"controlPerCallUs":0.0425,"backtrackingRegexOnceMs":12747.299999713898}
+PASS  🔴 判据 A-3 wikipedia:病态 pattern 的匹配耗时不超过对照的 50 倍 + 50µs(无回溯爆炸)  {"host":"en.wikipedia.org","iterations":200000,"matched":true,"perCallUs":0.24100000143051148,"controlPerCallUs":0.0425,"backtrackingRegexOnceMs":12747.299999713898}
+PASS  🔴 N5 负向对照 wikipedia:会回溯的正则 /^(a*)*b$/ 对 30 个 a **单次** 12747.3ms, 比病态 glob 单次 0.241µs 大 100 倍以上 —— 本计时确实能区分回溯与线性  {"backtrackingRegexOnceMs":12747.299999713898,"globPerCallUs":0.24100000143051148}
+PASS  判据 A' wikipedia:DOMContentLoaded 挂钟时间未爆炸(control=677ms → 396ms)  {"control":677,"pathological":396}
+PASS  🔴 N3 负向对照 wikipedia:同一轮内配对 3 次,注入 700ms 阻塞使 firstPaint 中位增加 648ms(> 300ms) —— 挂钟计时确实对拖慢敏感  {"pairs":[{"clean":592,"blocked":1052,"delta":460},{"clean":344,"blocked":992,"delta":648},{"clean":372,"blocked":1048,"delta":676}],"medianDelta":648}
+
+PASS — T7 INV-10 病态模式

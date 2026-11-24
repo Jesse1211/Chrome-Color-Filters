@@ -1,0 +1,7 @@
+github {"onState":true,"count":2311,"filterBefore":"grayscale(1)","filterAfter":"none","attributable":0,"residue":{"attrs":["data-ccf-on"],"styleHasVar":true,"injectedNodes":0}}
+  INFO github: 移除后 attrs=["data-ccf-on"] styleHasVar=true —— 由 INV-5 存活性写回,属于正确行为;残留判据只看 injectedNodes=0
+wikipedia {"onState":true,"count":6511,"filterBefore":"grayscale(1)","filterAfter":"none","attributable":0,"residue":{"attrs":["data-ccf-on"],"styleHasVar":true,"injectedNodes":0}}
+  INFO wikipedia: 移除后 attrs=["data-ccf-on"] styleHasVar=true —— 由 INV-5 存活性写回,属于正确行为;残留判据只看 injectedNodes=0
+hn {"onState":true,"count":817,"filterBefore":"grayscale(1)","filterAfter":"none","attributable":0,"residue":{"attrs":["data-ccf-on"],"styleHasVar":true,"injectedNodes":0}}
+  INFO hn: 移除后 attrs=["data-ccf-on"] styleHasVar=true —— 由 INV-5 存活性写回,属于正确行为;残留判据只看 injectedNodes=0
+STYLES: PASS

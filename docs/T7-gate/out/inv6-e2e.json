@@ -1,0 +1,103 @@
+{
+  "clause": "T7【新增】INV-6 端到端(UI 建规则 → 实际渲染)",
+  "assertions": [
+    {
+      "name": "N2 负向对照:无规则时 x.com 未滤镜(证明后面的 grayscale(1) 不是页面自带)",
+      "ok": true,
+      "detail": {
+        "baselineX": "none"
+      }
+    },
+    {
+      "name": "规则确实由 UI 创建并落盘,且顺序为 [x.com@100, *@30]",
+      "ok": true,
+      "detail": {
+        "persisted": [
+          "x.com@Grayscale@100",
+          "*@Grayscale@30"
+        ],
+        "count": "2/20",
+        "listed": [
+          "x.com",
+          "*"
+        ]
+      }
+    },
+    {
+      "name": "🔴 真实打开 x.com → grayscale(1)(100 档,首个命中胜)",
+      "ok": true,
+      "detail": {
+        "xFilter": "grayscale(1)",
+        "expected": "grayscale(1)"
+      }
+    },
+    {
+      "name": "🔴 真实打开 example(https://example.com/) → grayscale(0.3)(30 档)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(0.3)",
+        "expected": "grayscale(0.3)"
+      }
+    },
+    {
+      "name": "🔴 真实打开 hn(https://news.ycombinator.com/) → grayscale(0.3)(30 档)",
+      "ok": true,
+      "detail": {
+        "got": "grayscale(0.3)",
+        "expected": "grayscale(0.3)"
+      }
+    },
+    {
+      "name": "N3 两个强度档可区分且逐位等于 grayscale(intensity/100)",
+      "ok": true,
+      "detail": {
+        "x": "grayscale(1)",
+        "other": "grayscale(0.3)"
+      }
+    },
+    {
+      "name": "N1 前置条件:顺序已颠倒为 [*@30, x.com@100]",
+      "ok": true,
+      "detail": {
+        "reordered": [
+          "*@Grayscale@30",
+          "x.com@Grayscale@100"
+        ]
+      }
+    },
+    {
+      "name": "🔴 N1 负向对照:顺序颠倒后 x.com 改判为 grayscale(0.3) —— 判据确实取决于首个命中",
+      "ok": true,
+      "detail": {
+        "xReordered": "grayscale(0.3)",
+        "expected": "grayscale(0.3)"
+      }
+    }
+  ],
+  "data": {
+    "extensionId": "dmeelcfdheeanolpmihkkfbnlfhgodnl",
+    "sliderShown": {
+      "rule1": "100%",
+      "rule2": "30%"
+    },
+    "persistedRules": [
+      "x.com@Grayscale@100",
+      "*@Grayscale@30"
+    ],
+    "forward": {
+      "xFilter": "grayscale(1)",
+      "others": {
+        "example": "grayscale(0.3)",
+        "hn": "grayscale(0.3)"
+      }
+    },
+    "reorderedRules": [
+      "*@Grayscale@30",
+      "x.com@Grayscale@100"
+    ],
+    "reverse": {
+      "xReordered": "grayscale(0.3)"
+    }
+  },
+  "pass": true
+}

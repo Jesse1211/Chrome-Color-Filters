@@ -1,0 +1,12 @@
+PASS  UI 建了 3 条规则,顺序为 [first, second, *]  {"rules":[{"intensity":100,"mode":"Grayscale","pattern":"first.example.com"},{"intensity":70,"mode":"Grayscale","pattern":"second.example.com"},{"intensity":30,"mode":"Grayscale","pattern":"*"}]}
+PASS  🔴 ADR-010:完全退出并重启 Chrome 后,规则**与顺序**完好  {"before":["first.example.com@100","second.example.com@70","*@30"],"after":["first.example.com@100","second.example.com@70","*@30"]}
+PASS  ADR-010:强度与模式逐字段完好  {"after":[{"intensity":100,"mode":"Grayscale","pattern":"first.example.com"},{"intensity":70,"mode":"Grayscale","pattern":"second.example.com"},{"intensity":30,"mode":"Grayscale","pattern":"*"}]}
+PASS  ADR-010:重启后 popup 列表显示的顺序与重启前一致  {"listedBefore":["first.example.com","second.example.com","*"],"listedAfter":["first.example.com","second.example.com","*"]}
+PASS  🔴 ADR-071:后台读取与用户写入并发 8/8 轮(顺序交错 + 真并发两种相位),磁盘终态**都是用户的写入**  {"rounds":8,"keptSeq":8,"keptPar":8,"sample":[{"i":0,"writeOk":true,"readSawRules":["base.example.com"],"diskRules":["base.example.com","user-0.example.com","par-0.example.com"],"userRulePresent":true,"parRulePresent":true,"keys":["lockUntil","masterEnabled","rules","version"]},{"i":1,"writeOk":true,"readSawRules":["base.example.com"],"diskRules":["base.example.com","user-1.example.com","par-1.example.com"],"userRulePresent":true,"parRulePresent":true,"keys":["lockUntil","masterEnabled","rules","version"]}]}
+PASS  🔴 N1 判别器:「旧实现形状」的整体回写**确实**会吃掉用户写入(8/8 轮) —— 证明本门禁确实在测一件可能失败的事  {"eatenCount":8,"of":8,"sample":[{"i":0,"writeOk":true,"diskRules":["base.example.com"],"userRuleEaten":true,"hasMaxSeenTime":true},{"i":1,"writeOk":true,"diskRules":["base.example.com"],"userRuleEaten":true,"hasMaxSeenTime":true},{"i":2,"writeOk":true,"diskRules":["base.example.com"],"userRuleEaten":true,"hasMaxSeenTime":true}]}
+PASS  N1 判别器:旧实现形状还会把 maxSeenTime 写进磁盘(这正是 ADR-071 废止的那个字段)  {"sample":[{"i":0,"writeOk":true,"diskRules":["base.example.com"],"userRuleEaten":true,"hasMaxSeenTime":true},{"i":1,"writeOk":true,"diskRules":["base.example.com"],"userRuleEaten":true,"hasMaxSeenTime":true}]}
+PASS  N2 探针有效:人为塞入的 maxSeenTime 确实被键集断言看见  {"keys":["lockUntil","masterEnabled","maxSeenTime","rules","version"]}
+PASS  🔴 ADR-071:经仓储层写入后,持久化 JSON 中**不存在** maxSeenTime 字段  {"finalKeys":["lockUntil","masterEnabled","rules","version"],"writeOk":true}
+PASS  ADR-025:持久化的单条规则只含 [intensity, mode, pattern],无 matrix 等派生字段  {"ruleKeys":["intensity","mode","pattern"]}
+
+PASS — T7 持久化 + 并发安全

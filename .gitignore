@@ -36,3 +36,8 @@ docs/T0-spike/spike-code/package-lock.json
 # REAL_STACK_GATE 的运行期输出（每次跑都会重建）。
 # 入库的是 docs/T4a-gate/evidence/ 里经过挑选的证据，不是这里的原始产物。
 docs/T4a-gate/out/
+
+# T7 门禁跑出来的 Chrome 用户数据目录(每次运行重建,几十 MB,不入库)。
+# 真正的证据是同目录下的 *.json / *.png / log-*.txt,那些要入库。
+docs/T7-gate/out/udd-*/
+docs/T7-gate/out/profile-*/

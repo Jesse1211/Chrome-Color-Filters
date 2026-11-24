@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-23T10:22:40.195Z",
+  "ranAt": "2026-11-24T16:14:28.342Z",
   "total": 30,
   "passed": 30,
   "failed": 0,
@@ -25,7 +25,7 @@
       "name": "匹配站点的图标为 active(ADR-019 亮 = 这页被改色了)",
       "pass": true,
       "detail": {
-        "tabId": 286578214,
+        "tabId": 1567676324,
         "icon": "active"
       }
     },
@@ -34,7 +34,7 @@
       "name": "不匹配站点的图标为 inactive",
       "pass": true,
       "detail": {
-        "tabId": 286578215,
+        "tabId": 1567676325,
         "icon": "inactive"
       }
     },
@@ -179,10 +179,10 @@
       "pass": true,
       "detail": {
         "ids3": [
-          286578214,
-          286578226,
-          286578227,
-          286578228
+          1567676324,
+          1567676336,
+          1567676337,
+          1567676338
         ],
         "icons3": [
           "active",
@@ -198,9 +198,9 @@
       "pass": true,
       "detail": {
         "after": [
-          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
-          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
-          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+          "grayscale(0.6)",
+          "grayscale(0.6)",
+          "grayscale(0.6)"
         ]
       }
     },
@@ -249,9 +249,9 @@
       "pass": true,
       "detail": {
         "onFilters": [
-          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
-          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")",
-          "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter%20id='f'%20color-interpolation-filters='sRGB'%3E%3CfeColorMatrix%20type='matrix'%20values='1%200%200%200%200%200.287338%200.686147%200.026515%200%200%200.358369%20-0.413215%201.054846%200%200%200%200%200%201%200'/%3E%3C/filter%3E%3C/svg%3E#f\")"
+          "grayscale(0.6)",
+          "grayscale(0.6)",
+          "grayscale(0.6)"
         ]
       }
     },
@@ -278,7 +278,7 @@
       "pass": true,
       "detail": {
         "revivedState": {
-          "tabId": 286578236,
+          "tabId": 1567676346,
           "injectable": true,
           "host": "en.wikipedia.org",
           "activeRuleIndex": 0,
