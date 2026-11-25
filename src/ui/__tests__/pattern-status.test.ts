@@ -9,6 +9,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  PREVIEW_UNAVAILABLE_HINT,
+  previewBlockHint,
+} from '../edit-strings.js';
+import {
   type FilterRule,
   type FilterSettings,
   defaultSettings,
@@ -367,5 +371,33 @@ describe('🔴 §5.7 / ADR-049 · computePreviewEligibility 的四种不发送�
     // 这条断言的价值在于**类型**:上面的字面量数组若写了联合外的值,
     // `tsc --noEmit`(ADR-066)会报错。运行时只需确认没有重复。
     expect(new Set(all).size).toBe(all.length);
+  });
+
+  /* ───────────── 编译期穷举网的运行期守卫 ───────────── */
+
+  it('🔴 每个 reason 都有**各自**的文案 —— 没有一个落回泛化兜底', () => {
+    const all: PreviewBlockReason[] = [
+      'master-off',
+      'not-injectable',
+      'pattern-mismatch',
+      'locked',
+      'skeleton',
+    ];
+    const hints = all.map((r) => previewBlockHint(r));
+
+    // 全部非空。
+    for (const h of hints) expect(h.length).toBeGreaterThan(0);
+
+    // 🔴 两两互不相同 —— 若有人图省事把新原因接到现成文案上,
+    //    编译期的 Record 是拦不住的(类型只要求是 string),
+    //    这条运行期断言补上那一格。
+    expect(new Set(hints).size).toBe(all.length);
+
+    // 🔴 没有一个等于泛化兜底 —— 兜底只许给 `reason === null`。
+    for (const h of hints) expect(h).not.toBe(PREVIEW_UNAVAILABLE_HINT);
+  });
+
+  it('reason 为 null 时回退到泛化文案(运行期缺省,与编译期穷举是两回事)', () => {
+    expect(previewBlockHint(null)).toBe(PREVIEW_UNAVAILABLE_HINT);
   });
 });

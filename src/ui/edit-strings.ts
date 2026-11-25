@@ -6,6 +6,8 @@
  *
  * 🔴 文案的权威是 **§5.5 / §5.6 与 ADR**(ADR-042),不是设计稿。
  */
+import { type PreviewBlockReason } from './pattern-status.js';
+
 
 /** §5.5 顶栏。 */
 export const BACK_LABEL = '‹ 返回';
@@ -103,6 +105,51 @@ export const PREVIEW_LIVE_HINT = '拖动时当前页面实时预览';
  * **滑块仍可改值**,但不发送 `PREVIEW_FILTER`(ADR-049)。
  */
 export const PREVIEW_UNAVAILABLE_HINT = '当前页面无法预览';
+
+/**
+ * §5.7 / ADR-049:**按阻塞原因分别给文案**,并由此获得编译期穷举检查。
+ *
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔴 **本表的真正职责是「编译期安全网」,不只是文案。**
+ *
+ * 在此之前,`PreviewBlockReason` 的五个取值**没有任何地方 switch 过** ——
+ * 唯一的用法是 `data-reason={reason}`(原样塞进 HTML 属性)。而当时的注释
+ * 却声称「`previewBlockHint` 的穷举 switch 会让漏掉的那一种在编译期暴露」,
+ * 那个符号**全仓库只存在于注释里**。于是「加了第六种原因却忘了写文案」
+ * 会**静默通过编译与测试**,只在界面上露出一行泛化文案。
+ *
+ * 现在这张 `Record<PreviewBlockReason, string>` 是**全集映射**:
+ * 联合类型多一个成员而本表没跟上 → `tsc --noEmit` 当场报 TS2741。
+ * 已用一个临时成员实测验证过该报错确实会触发(见 PR 说明)。
+ *
+ * 📌 §5.7 原文写的是「改文案(**如**「当前页面无法预览」)」——
+ *    「如」字表明那是**示例而非唯一文案**,故分原因细化不与规格冲突。
+ *    `PREVIEW_UNAVAILABLE_HINT` 保留为兜底(见 `previewBlockHint`)。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+const PREVIEW_BLOCK_HINTS: Readonly<Record<PreviewBlockReason, string>> = {
+  /** INV-8 / ADR-027:滤镜整体没在生效,预览无从谈起。 */
+  'master-off': '滤镜已全局关闭,无法预览',
+  /** ADR-013:chrome:// / 应用商店 / PDF / 新标签页。 */
+  'not-injectable': '此页面不支持滤镜,无法预览',
+  /** 正在编辑的 pattern 不匹配当前页 —— 最常见的一种。 */
+  'pattern-mismatch': '当前页面不匹配此规则,无法预览',
+  /** ADR-051:锁定期间不得发 PREVIEW_FILTER。 */
+  locked: '锁定期间无法预览',
+  /** 设置尚未读出来的骨架态 —— 短暂,但仍需有文案。 */
+  skeleton: '正在载入设置…',
+};
+
+/**
+ * 取某个阻塞原因对应的提示文案。
+ *
+ * `reason` 为 `null`(调用方还没判定出原因)时回退到泛化文案 ——
+ * 这是**运行期**的缺省,与上表的**编译期**穷举是两回事:
+ * 表缺一项编译不过,而 `null` 是一个合法的输入值。
+ */
+export function previewBlockHint(reason: PreviewBlockReason | null): string {
+  return reason === null ? PREVIEW_UNAVAILABLE_HINT : PREVIEW_BLOCK_HINTS[reason];
+}
 
 /** 强度百分比的无障碍名(滑块本身只有一个数字,需要可读的名字)。 */
 export const INTENSITY_SLIDER_LABEL = '滤镜强度百分比';

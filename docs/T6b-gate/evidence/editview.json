@@ -11,8 +11,8 @@
       "name": "取到目标页 tab(id + windowId)",
       "ok": true,
       "detail": {
-        "id": 1117546727,
-        "windowId": 1117546725
+        "id": 1339178399,
+        "windowId": 1339178397
       }
     },
     {
@@ -30,7 +30,7 @@
       "name": "🔴 GET_TAB_STATE 解析到目标页(wikipedia)而非 popup 自己",
       "ok": true,
       "detail": {
-        "tabId": 1117546727,
+        "tabId": 1339178399,
         "injectable": true,
         "host": "en.wikipedia.org",
         "activeRuleIndex": null,

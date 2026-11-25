@@ -54,6 +54,7 @@ import {
   PATTERN_LABEL,
   PREVIEW_LIVE_HINT,
   PREVIEW_UNAVAILABLE_HINT,
+  previewBlockHint,
   SAVE_LABEL,
   STATUS_EMPTY_TEXT,
   STATUS_ICON_ERROR,
@@ -761,7 +762,13 @@ describe('🔴 四种不发送 PREVIEW_FILTER 的情况', () => {
     const hint = screen.getByTestId('preview-hint');
     expect(hint.dataset.available).toBe('false');
     expect(hint.dataset.reason).toBe('master-off');
+    // 🔴 文案现在**按原因细化**(previewBlockHint 的全集映射),
+    //    不再是一句泛化的 PREVIEW_UNAVAILABLE_HINT。
     expect(screen.getByTestId('preview-hint-text').textContent).toBe(
+      previewBlockHint('master-off'),
+    );
+    // 且确实不是泛化文案 —— 否则这条断言会退化成恒真。
+    expect(screen.getByTestId('preview-hint-text').textContent).not.toBe(
       PREVIEW_UNAVAILABLE_HINT,
     );
   });

@@ -86,7 +86,7 @@ import {
   MOVE_TO_TOP_LABEL,
   PATTERN_LABEL,
   PREVIEW_LIVE_HINT,
-  PREVIEW_UNAVAILABLE_HINT,
+  previewBlockHint,
   SAVE_LABEL,
   SHADOW_BOX_MIDDLE,
   SHADOW_BOX_PREFIX,
@@ -710,8 +710,14 @@ function PreviewHint({
         data-testid="preview-dot"
         aria-hidden="true"
       />
+      {/*
+        🔴 不可用时的文案走 `previewBlockHint(reason)` —— 它背后是一张
+        `Record<PreviewBlockReason, string>` 全集映射,联合类型多一个成员
+        而表没跟上会**编译期报错**。此前这里是一句泛化文案,漏掉新原因
+        不会有任何信号(旧注释声称的那张穷举网并不存在)。
+      */}
       <span data-testid="preview-hint-text">
-        {available ? PREVIEW_LIVE_HINT : PREVIEW_UNAVAILABLE_HINT}
+        {available ? PREVIEW_LIVE_HINT : previewBlockHint(reason)}
       </span>
     </div>
   );
