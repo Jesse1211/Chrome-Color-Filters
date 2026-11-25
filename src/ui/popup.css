@@ -637,8 +637,18 @@ body {
   flex: 1 1 auto;
 }
 
+/*
+ * ⚠️ 本规则**不写 `flex`** —— 布局归 `.lock-view__foot-action`
+ *    (`flex: 1 1 auto`,见下文),这里只管外观(描边样式)。
+ *
+ * 原先这里有一条 `flex: 0 0 auto`,是「延长」还内联在列表页倒计时条里时
+ * 的残留:那时它是一行里的小按钮,不该被拉伸。搬进子页面底栏之后,
+ * `.lock-view__foot-action` 在本规则**之后**定义、且同为单类选择器,
+ * 故 `flex: 1 1 auto` 一直胜出 —— 那条声明早已不起作用。
+ * (实测 Chrome 158:该按钮 computed `flex` = `1 1 auto`,宽 330px。)
+ * 删掉它是去掉一条死声明,不是改布局。
+ */
 .lock-extend__button {
-  flex: 0 0 auto;
   padding: 5px 13px;
   border: 1px solid var(--accent);
   border-radius: var(--radius-control-sm);
