@@ -67,7 +67,16 @@ export interface UseLockStateOptions {
 }
 
 export interface LockState {
-  /** 当前是否锁定(ADR-051)。按**夹过单调下界**的时刻判定。 */
+  /**
+   * 当前是否锁定(ADR-051)。按**注入时钟的原始时刻**判定。
+   *
+   * ⚠️ 原注释写的是「按**夹过单调下界**的时刻判定」——
+   *    那个机制已由 **ADR-071 整条废止**,现在哪一层都不再夹:
+   *    `useLockClock` 直接返回 `clock()` 的原值(见其文件头),
+   *    仓储层的 `#readContext()` 同样「直接用 `clock()`,不再包单调下界」。
+   *    两边同口径是刻意的 —— 口径不一致会出现
+   *    「UI 说已解锁、写入仍被拒」的裂缝。系统时钟由用户自行负责。
+   */
   readonly locked: boolean;
   /** 当前时刻,锁定中每秒推进一次。 */
   readonly now: number;

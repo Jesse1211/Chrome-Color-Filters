@@ -229,7 +229,13 @@ export function RuleListView({
   const lockEntryDisabled = isSkeleton || masterOff;
 
   /**
-   * 禁用的**原因说明**(无障碍:`title` + `aria-disabled` 的文案来源)。
+   * 禁用的**原因说明**(无障碍:`title` 的文案来源)。
+   *
+   * ⚠️ 原文写的是「`title` + `aria-disabled` 的文案来源」——
+   *    仓里**没有任何控件设置 `aria-disabled`**,这些入口用的都是原生
+   *    `disabled`。`LockEntryRow` 还专门记了为什么不加它(原生 `disabled`
+   *    已播报「不可用」,两者并存会让某些屏幕阅读器播报两遍)。
+   *    故此处只剩 `title` 一个读者。
    *
    * 🔴 与 `rulesDisabled` 的布尔或不同,解释必须**挑一条**说。
    * 优先级 = 「哪条更根本」:
@@ -247,16 +253,17 @@ export function RuleListView({
    *   不走这个优先级 —— 所以「主开关 OFF + 不可注入页」同时成立时,
    *   横幅照常解释不可注入,而控件的 `title` 说的是更根本的主开关。
    *   两条信息都在页面上,一条都没丢。
+   *
+   * 实现是一条**自上而下的 if 链**(原先是四层嵌套三元)——
+   * 上面那个编号列表与代码行一一对应,读代码即读到优先级顺序。
    */
-  const disabledReason = isSkeleton
-    ? undefined
-    : locked
-      ? LOCKED_DISABLED_REASON
-      : masterOff
-        ? MASTER_OFF_DISABLED_REASON
-        : notInjectable
-          ? NOT_INJECTABLE_MESSAGE
-          : undefined;
+  const disabledReason = ((): string | undefined => {
+    if (isSkeleton) return undefined;
+    if (locked) return LOCKED_DISABLED_REASON;
+    if (masterOff) return MASTER_OFF_DISABLED_REASON;
+    if (notInjectable) return NOT_INJECTABLE_MESSAGE;
+    return undefined;
+  })();
 
   /**
    * 主开关是否禁用。

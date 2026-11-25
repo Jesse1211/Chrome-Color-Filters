@@ -89,7 +89,14 @@ import {
   LOCK_UNIT_LABEL,
 } from './lock-strings.js';
 
-/** 入口的默认选中时长 —— 与 `LOCK_PRESETS` 的中间档一致。 */
+/**
+ * 入口的默认选中时长 —— `LOCK_PRESETS` 里的「1 小时」(第 2 档)。
+ *
+ * ⚠️ 原注释写的是「与 `LOCK_PRESETS` 的中间档一致」,那是**错的**:
+ *    预设共 5 档(30 分 / 1 时 / 4 时 / 8 时 / 1 天),中间档是「4 小时」,
+ *    而本默认值是「1 小时」。改成按档位名陈述,不再依赖「中间」这种
+ *    会随档位增删而失真的说法。
+ */
 export const DEFAULT_LOCK_DURATION: LockDuration = { amount: 1, unit: 'hour' };
 
 export interface LockTimerEntryProps {

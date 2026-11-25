@@ -8,6 +8,8 @@
  * ## A. 四种**不发送** `PREVIEW_FILTER` 的情况(F9/F11/I2)
  *
  * 主开关 OFF · 当前页不可注入 · 编辑的 pattern 不匹配当前页 · **锁定中**。
+ * (这是 gate 逐字的四条;`PreviewBlockReason` 另有一个骨架态 `'skeleton'`,
+ *  共**五**个成员 —— 见该类型的文档注释。)
  * 判定在 `computePreviewEligibility`(纯函数,封闭联合);
  * 本 hook 只负责「不可用就一条都不发」。
  *
@@ -125,12 +127,17 @@ export function usePreview({
    * `available` 每次翻转都会跑一遍清理,语义就不再是「卸载」了。
    */
   useEffect(() => {
-    return () => {
-      if (!activeRef.current) return;
-      activeRef.current = false;
-      channelRef.current.sendClear();
-    };
-  }, []);
+    /*
+     * 直接把 `clear` 当清理函数,不再把它那三行重抄一遍。
+     *
+     * `clear` 是 `useCallback(…, [])` —— 引用恒定,所以放进依赖数组
+     * **不会**让本 effect 重跑,上面那条「依赖数组必须为空」的要求
+     * 一字未破(清理仍然只在卸载时跑一次)。
+     * 原先的内联副本与 `clear` 逐行相同,改一处忘改另一处就会让
+     * 「卸载时发 CLEAR」和「变不可用时发 CLEAR」两条路径语义漂移。
+     */
+    return clear;
+  }, [clear]);
 
   return useMemo(
     () => ({ available, push, clear }),

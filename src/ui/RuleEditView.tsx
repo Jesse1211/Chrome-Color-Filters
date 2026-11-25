@@ -220,7 +220,7 @@ export function RuleEditView({
     [pattern, editingIndex, settings, tabState],
   );
 
-  // ── §5.7 / ADR-049 预览资格(四种不发送情形) ──
+  // ── §5.7 / ADR-049 预览资格(gate 的四种不发送情形 + 骨架态,共五种原因) ──
   const eligibility = computePreviewEligibility({
     settings,
     tabState,
