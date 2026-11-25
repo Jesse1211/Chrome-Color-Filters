@@ -288,7 +288,7 @@
       "name": "🔴🔴 C4f 从子页面启动锁定端到端成功:磁盘上 lockUntil 为未来时间戳(ADR-053)",
       "ok": true,
       "detail": {
-        "lockUntil": 1795579074066,
+        "lockUntil": 1795579939692,
         "masterEnabled": true,
         "rules": 1
       }
@@ -402,8 +402,8 @@
       "name": "🔴🔴 C5d 点倒计时条进子页面 → **延长成功**,lockUntil 严格变大(加了 3 分钟)",
       "ok": true,
       "detail": {
-        "beforeExtend": 1795579074066,
-        "afterExtend": 1795579254066,
+        "beforeExtend": 1795579939692,
+        "afterExtend": 1795580119692,
         "deltaMs": 180000
       }
     },
@@ -411,8 +411,8 @@
       "name": "C5e 列表页倒计时条与子页面回显同源(同一个 lockUntil)",
       "ok": true,
       "detail": {
-        "listAttr": 1795579254066,
-        "afterExtend": 1795579254066
+        "listAttr": 1795580119692,
+        "afterExtend": 1795580119692
       }
     },
     {
@@ -446,7 +446,7 @@
       "ok": true,
       "detail": {
         "afterBackLocked": {
-          "lockUntil": 1795579254066,
+          "lockUntil": 1795580119692,
           "masterEnabled": true,
           "rules": 1
         },
@@ -601,7 +601,7 @@
       "view": "lock"
     },
     "c4_started": {
-      "lockUntil": 1795579074066,
+      "lockUntil": 1795579939692,
       "masterEnabled": true,
       "rules": 1
     },
@@ -682,8 +682,8 @@
       "countdown": "🔒 锁定中 00:02:00"
     },
     "c5_extend": {
-      "beforeExtend": 1795579074066,
-      "afterExtend": 1795579254066,
+      "beforeExtend": 1795579939692,
+      "afterExtend": 1795580119692,
       "deltaMs": 180000
     },
     "c6_sub_locked": {
@@ -718,7 +718,7 @@
     },
     "c6_back_not_release": {
       "afterBackLocked": {
-        "lockUntil": 1795579254066,
+        "lockUntil": 1795580119692,
         "masterEnabled": true,
         "rules": 1
       },

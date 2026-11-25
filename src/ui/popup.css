@@ -600,10 +600,29 @@ body {
   gap: 5px;
 }
 
+/*
+ * 🔴 纵向堆叠:字段标签独占一行,控件(数字 + 单位 + 延长)在下一行。
+ *
+ * 曾经是横向一行,结果 360px 宽放不下「延长时长数值」这个标签,
+ * 于是把标签设成了 visually-hidden —— 那是**用隐藏信息迁就布局**。
+ * 产品负责人要求标签可见,故改布局而非改信息。
+ */
 .lock-extend__row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+/* 控件仍然横排 —— 只有标签被挪到了上一行。 */
+.lock-extend__row .lock-duration {
   display: flex;
   align-items: center;
   gap: 7px;
+}
+
+.lock-extend__row .lock-duration__custom {
+  flex: 1 1 auto;
 }
 
 .lock-extend__button {

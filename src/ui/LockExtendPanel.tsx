@@ -126,11 +126,11 @@ export function LockExtendPanel({
             showPresets={false}
             amountLabel={LOCK_EXTEND_AMOUNT_LABEL}
             /*
-              可见标签由上面的「延长锁定」承担 —— 数字框的标签走
-              visually-hidden(屏幕阅读器仍读得到「延长时长数值」),
-              否则 360px 的一行会被两个标签挤散。
+              🔴 标签**可见**(产品负责人拍板)。它曾被设为 visually-hidden,
+              理由是 360px 下标签与控件挤在同一行会换行 —— 但那是用隐藏信息
+              去迁就布局。正确的解法是改布局:`.lock-extend__row` 现在是
+              纵向堆叠(标签独占一行,控件在下一行),两者都放得下。
             */
-            hideAmountLabel
             unitLabel={LOCK_EXTEND_UNIT_LABEL}
           />
           <button

@@ -39,17 +39,7 @@ export interface LockDurationPickerProps {
   /** `data-testid` 前缀 —— 启动区与延长区同时在场时需要区分。 */
   readonly idPrefix: string;
   readonly amountLabel: string;
-  /**
-   * 数字框的可见 `<label>` 是否改走 `visually-hidden`。
-   *
-   * 延长区用 true:那里的 `role="group"` 已经由「延长锁定」命名,
-   * 再并排一个「延长时长数值」会让 360px 宽的一行挤成两截,
-   * 读起来像两个不同的东西。**无障碍名一个字没少** ——
-   * `<label>` 仍在 DOM 里、仍 `htmlFor` 指向输入框,只是不占视觉空间
-   * (与单位下拉早就在用的那套做法完全一致)。
-   */
-  readonly hideAmountLabel?: boolean;
-  readonly unitLabel: string;
+    readonly unitLabel: string;
   readonly presetLabel?: string;
 }
 
@@ -60,7 +50,6 @@ export function LockDurationPicker({
   disabled = false,
   idPrefix,
   amountLabel,
-  hideAmountLabel = false,
   unitLabel,
   presetLabel,
 }: LockDurationPickerProps) {
@@ -111,9 +100,7 @@ export function LockDurationPicker({
       */}
       <div className="lock-duration__custom">
         <label
-          className={
-            hideAmountLabel ? 'visually-hidden' : 'lock-duration__label'
-          }
+          className="lock-duration__label"
           htmlFor={amountId}
         >
           {amountLabel}

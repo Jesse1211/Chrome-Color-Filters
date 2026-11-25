@@ -1444,10 +1444,13 @@ describe('ADR-043 · 新增可聚焦元素的 focus 态', () => {
     const amount = screen.getByTestId('lock-extend-amount');
     const label = document.querySelector(`label[for="${amount.id}"]`);
 
-    // `<label>` 仍在 DOM 里、仍指向输入框 —— 只是不占视觉空间。
+    // 🔴 标签**可见**(产品负责人拍板)。它一度是 visually-hidden ——
+    //    用隐藏信息去迁就 360px 的布局。现在标签独占一行、控件在下一行,
+    //    两者都放得下。本断言盯住它别再被「优化」成隐藏。
     expect(label, '延长区的数字框没有关联 <label>').toBeTruthy();
     expect(label?.textContent).toBe('延长时长数值');
-    expect(label?.className).toBe('visually-hidden');
+    expect(label?.className).toBe('lock-duration__label');
+    expect(label?.className).not.toContain('visually-hidden');
     // 用无障碍名就能拿到它 —— 屏幕阅读器读得到。
     expect(screen.getByLabelText('延长时长数值')).toBe(amount);
     expect(screen.getByLabelText('延长时长单位')).toBe(
