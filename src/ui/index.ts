@@ -31,3 +31,7 @@ export * from './components/LockDurationPicker.js';
 export * from './components/LockConfirmDialog.js';
 export * from './LockTimerEntry.js';
 export * from './LockCountdownBanner.js';
+/* ── 折叠入口 + 锁定子页面(列表视图的空间回收)── */
+export * from './LockEntryRow.js';
+export * from './LockExtendPanel.js';
+export * from './LockView.js';

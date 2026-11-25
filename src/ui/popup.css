@@ -509,18 +509,48 @@ body {
 
 .lock-banner {
   flex: 0 0 auto;
-  padding: 10px 15px 12px;
   background: var(--accent-soft);
   border-bottom: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+}
+
+/*
+ * 整条倒计时条是一个 `<button>`(通往子页面)——
+ * 重置浏览器默认按钮外观,但**不碰 outline**:
+ * focus 态必须留给 `tokens.css` 的全局 `:focus-visible`(ADR-043)。
+ */
+.lock-banner__open {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 15px 12px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lock-banner__open:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .lock-banner__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+}
+
+/* 「有下一页」的记号。与倒计时同色同重,读起来是一体的。 */
+.lock-banner__chevron {
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--accent);
+  flex: 0 0 auto;
 }
 
 /*
@@ -541,19 +571,42 @@ body {
   color: var(--ink-2);
 }
 
-.lock-banner__extend {
+/* ── 锁定子页面(LockView):延长区(ADR-052 唯一可用的操作)── */
+
+.lock-extend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 15px;
+}
+
+/* 只读回显的剩余时间。§5.1:tabular-nums,否则每秒抖宽。 */
+.lock-extend__countdown {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.lock-extend__hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.lock-extend__group {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
-.lock-banner__extend-row {
+.lock-extend__row {
   display: flex;
   align-items: center;
   gap: 7px;
 }
 
-.lock-banner__extend-button {
+.lock-extend__button {
   flex: 0 0 auto;
   padding: 5px 13px;
   border: 1px solid var(--accent);
@@ -566,11 +619,11 @@ body {
   cursor: pointer;
 }
 
-.lock-banner__extend-button:hover:not(:disabled) {
+.lock-extend__button:hover:not(:disabled) {
   background: var(--accent-soft);
 }
 
-.lock-banner__extend-button:disabled {
+.lock-extend__button:disabled {
   border-color: var(--line);
   color: var(--muted);
   cursor: not-allowed;
@@ -592,29 +645,48 @@ body {
   opacity: .62;
 }
 
-/* ── 未锁定:计时器入口(ADR-058) ── */
+/* ── 列表页:折叠成一行的锁定入口 ── */
+
+/*
+ * 与底部「+ 添加规则」同一语气 —— 按钮本体复用 `.add-button`
+ * (同一底色、字号、圆角、禁用态),这里只补「一行、两端对齐」的排版。
+ */
+.lock-entry-row {
+  flex: 0 0 auto;
+  padding: 0 15px 10px;
+  display: flex;
+}
+
+.lock-entry-row__button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+
+.lock-entry-row__chevron {
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+/* ── 锁定子页面(LockView)── */
+
+.lock-view__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+/* ── 子页面:计时器入口(ADR-058) ── */
 
 .lock-entry {
   flex: 0 0 auto;
-  padding: 9px 15px 11px;
-  border-top: 1px solid var(--line-2);
-  background: var(--surface-2);
+  padding: 12px 15px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-}
-
-.lock-entry__head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.lock-entry__title {
-  margin: 0;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink);
+  gap: 9px;
 }
 
 .lock-entry__hint {

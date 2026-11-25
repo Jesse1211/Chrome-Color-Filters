@@ -1,10 +1,25 @@
 /**
- * Popup 根组件 —— **ADR-022 的双视图状态机**。
+ * Popup 根组件 —— **ADR-022 的视图状态机**(列表 / 编辑 / 锁定,三者互斥)。
  *
  * 列表视图(T6a)+ 锁定 UI(T6c)+ **编辑视图(T6b)**。
  *
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * ## ADR-022:两视图**互斥**
+ * ## 📍 锁定 UI 的折叠改造(产品负责人决定)
+ *
+ * 原先列表视图内联承载**整块**锁定区:标题 + 说明 + 预设行 + 自定义行 +
+ * 启动按钮,在 360×452 的 popup 里占掉近三分之一高度 —— 而启动锁定是
+ * **低频**动作。现在:
+ *
+ * - 列表页**未锁定** → 一行 `LockEntryRow`(「🔒 时间锁定 ›」),点它进子页面
+ * - 列表页**锁定中** → `LockCountdownBanner`(倒计时**留在列表页**,
+ *   剩余时间一眼可见),点它进子页面
+ * - 子页面 `LockView` → 时长选择 + 启动(未锁定)/ **延长**(锁定中)+ 确认框
+ *
+ * 🔴 **只改控件住在哪一页,不改任何一条语义**:ADR-056 的二次确认、
+ *    ADR-057 的原子开启主开关、ADR-052 的只增不减、ADR-058 的数字+单位、
+ *    ADR-051 的锁定期全禁用,全部随控件原样搬家。
+ *
+ * ## ADR-022:三视图**互斥**
  *
  * `view` 是一个判别联合,**结构上不可能同时渲染两个视图** ——
  * 这不是一条「我们记得只渲染一个」的约定,而是类型。
@@ -15,18 +30,27 @@
  * > 且离开编辑视图必发 `PREVIEW_CLEAR`。故「锁定启动时预览仍活动」不可达。
  * > **此性质须保持** —— 不得在编辑视图添加锁定快捷入口。
  *
- * 落实在下面两处:
- * - `lockBanner` / `lockEntry` **只**传给 `RuleListView`;
+ * 新增 `{kind:'lock'}` 之后,I2 由下面**四条**结构事实共同保持:
+ * - `lockBanner` / `lockEntry` 插槽**只**传给 `RuleListView` ——
+ *   进锁定页的两个入口依旧**只在列表视图**上;
  * - `RuleEditView` 的 props 里根本没有锁定插槽(只有一个 `locked: boolean`
- *   用于禁用控件),于是「在编辑视图加个锁定入口」需要先改它的接口。
+ *   用于禁用控件),于是「在编辑视图加个锁定入口」需要先改它的接口;
+ * - **`LockView` 的 props 里根本没有 `previewChannel`、也没有任何规则
+ *   编辑回调** —— 于是「在锁定页顺手改个强度并预览」同样需要先改接口。
+ *   这是与上一条完全对称的做法(详见 `LockView` 文件头);
+ * - `previewChannel` 在本文件里**只**出现在 `RuleEditView` 的那一处。
+ *
+ * 于是「预览还活着就启动了锁定」依旧不可达:从编辑视图到锁定页**必须**
+ * 先返回列表,而离开编辑视图必发 `PREVIEW_CLEAR`(B1)。
  *
  * ## 🔴 锁定中与未锁定互斥地挂两个插槽(ADR-051 / ADR-052 / INV-12)
  *
- * - 锁定中 → `lockBanner`(倒计时 + **仅**延长),**不挂** `lockEntry`
- * - 未锁定 → `lockEntry`(计时器入口),**不挂** `lockBanner`
+ * - 锁定中 → `lockBanner`(倒计时,点进子页面**仅**能延长),**不挂** `lockEntry`
+ * - 未锁定 → `lockEntry`(折叠入口行),**不挂** `lockBanner`
  *
  * 于是锁定中的 DOM 里结构上不可能出现「启动/解除/取消/结束/缩短」任何入口 ——
  * 那是 §6 T6c gate 里「INV-12 最重要的一条门禁」。
+ * 子页面同样互斥(见 `LockView`):锁定中只渲染延长区,未锁定只渲染启动区。
  *
  * ## 🔒 锁定中编辑视图不可达(ADR-051)
  *
@@ -43,7 +67,8 @@ import { type FilterRule } from '../../src/domain/index.js';
 import { createSettingsRepository } from '../../src/storage/settings-repository.js';
 import { chromeLocalStorageArea } from '../../src/storage/storage-area.js';
 import { LockCountdownBanner } from '../../src/ui/LockCountdownBanner.js';
-import { LockTimerEntry } from '../../src/ui/LockTimerEntry.js';
+import { LockEntryRow } from '../../src/ui/LockEntryRow.js';
+import { LockView } from '../../src/ui/LockView.js';
 import { RuleEditView } from '../../src/ui/RuleEditView.js';
 import { RuleListView, type ActionResult } from '../../src/ui/RuleListView.js';
 import {
@@ -77,11 +102,24 @@ const tabStatePort = chromeTabStatePort();
  */
 const previewChannel = createPreviewChannel(chromePreviewConnect());
 
-/** ADR-022 的视图判别联合 —— 两视图在类型上互斥。 */
+/**
+ * ADR-022 的视图判别联合 —— 三视图在类型上互斥。
+ *
+ * 新增 `'lock'` 用的是**同一个** `view` 状态机,而不是另起一个
+ * `showLockPage` 布尔值:后者允许「编辑中 + 锁定页」这种状态存在,
+ * 那恰好是 I2 要排除的东西(见文件头)。判别联合让它不可表达。
+ */
 type View =
   | { readonly kind: 'list' }
   /** `index === null` → 新建(ADR-020:默认 Grayscale @ 100%,输入框为空)。 */
-  | { readonly kind: 'edit'; readonly index: number | null };
+  | { readonly kind: 'edit'; readonly index: number | null }
+  /**
+   * 锁定子页面 —— 时长设置 / 启动(未锁定)或延长(锁定中)。
+   *
+   * **没有任何负载**:本页不需要知道任何规则的身份,它只读
+   * `settings.masterEnabled`(ADR-057 的告知)与 `lockUntil`。
+   */
+  | { readonly kind: 'lock' };
 
 function App() {
   const {
@@ -133,6 +171,22 @@ function App() {
   }, []);
 
   /**
+   * ADR-022:列表 → 锁定子页面。
+   *
+   * 🔴 **ADR-061:这条路径上一个字节都不写。**
+   * 导航只改组件状态,既不防抖、也不「在卸载时补一次保存」——
+   * popup 一失焦即销毁,任何挂在导航上的延迟写入都会静默丢失。
+   * 锁定的写入只发生在子页面里确认之后,且走
+   * `repository.setLockUntilImmediate`(点击那一轮就发出 `storage.set`)。
+   *
+   * 🔒 锁定中**同样允许**进入 —— 子页面在锁定中渲染的是延长区(ADR-052),
+   * 那是锁定期间唯一合法的操作,拦住它反而是错的。
+   */
+  const openLockView = useCallback(() => {
+    setView({ kind: 'lock' });
+  }, []);
+
+  /**
    * 🔴 正在编辑的规则换了位置 → 视图状态跟过去(§1「身份 = 位置 + pattern」)。
    *
    * 目前唯一的来源是 §5.6 的一键修复(把本条移到最上面)。
@@ -160,6 +214,31 @@ function App() {
     (rule: FilterRule): Promise<ActionResult> => saveRule(editingIndex, rule),
     [saveRule, editingIndex],
   );
+
+  if (view.kind === 'lock') {
+    return (
+      <LockView
+        settings={settings}
+        locked={locked}
+        lockUntil={lockUntil}
+        now={now}
+        /* ADR-056:启动只在二次确认之后发生,确认框在 LockTimerEntry 里。 */
+        onStartLock={startLock}
+        /* ADR-052:锁定中唯一的写入。 */
+        onExtendLock={extendLock}
+        onBack={backToList}
+        /* ADR-044:设置未读出前按骨架态禁用启动。 */
+        disabled={!loaded}
+        /*
+          📌 这里**没有** previewChannel,也没有任何规则编辑回调
+             (onSave / onDelete / onMoveToTop / onReindex 一个都没传,
+             因为 LockView 的 props 里根本没有它们)——
+             I2 的「预览与锁定永不共存」靠这个缺位保持,
+             与编辑视图没有锁定插槽完全对称。见 LockView 文件头。
+        */
+      />
+    );
+  }
 
   if (view.kind === 'edit') {
     return (
@@ -199,25 +278,26 @@ function App() {
       onOpenRule={openEditor}
       /* ADR-051:锁定中全部设置控件禁用(含主开关,优先于 ADR-050)。 */
       locked={locked}
-      /* 锁定中:倒计时 + 仅延长(ADR-051 / ADR-052)。 */
+      /*
+        锁定中:倒计时**留在列表页**(剩余时间一眼可见,产品负责人决定),
+        点它进子页面延长(ADR-051 / ADR-052)。本条自身无任何写入控件。
+      */
       lockBanner={
         locked && lockUntil !== null ? (
           <LockCountdownBanner
             lockUntil={lockUntil}
             now={now}
-            onExtend={extendLock}
+            onOpen={openLockView}
           />
         ) : undefined
       }
-      /* 未锁定:计时器入口(ADR-058)+ 二次确认(ADR-056)。 */
+      /*
+        未锁定:**折叠成一行**的入口(与「+ 添加规则」同一语气),
+        时长选择 + 启动 + 二次确认全在子页面(ADR-056 / ADR-058)。
+      */
       lockEntry={
         !locked ? (
-          <LockTimerEntry
-            /* ADR-057:关闭状态下启动锁定会原子地一并开启主开关。 */
-            masterEnabled={settings.masterEnabled}
-            onStartLock={startLock}
-            disabled={!loaded}
-          />
+          <LockEntryRow onOpen={openLockView} disabled={!loaded} />
         ) : undefined
       }
     />

@@ -40,6 +40,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import { useCallback, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { coerceSettings, isLocked } from '../../domain/filter-settings.js';
@@ -48,7 +49,8 @@ import {
   SettingsRepository,
 } from '../../storage/settings-repository.js';
 import { LockCountdownBanner } from '../LockCountdownBanner.js';
-import { LockTimerEntry } from '../LockTimerEntry.js';
+import { LockEntryRow } from '../LockEntryRow.js';
+import { LockView } from '../LockView.js';
 import { RuleListView } from '../RuleListView.js';
 import { stubTabStatePort } from '../tab-state.js';
 import { useLockState } from '../useLockState.js';
@@ -111,7 +113,16 @@ function manualInterval() {
   };
 }
 
-/** 与 `entrypoints/popup/App.tsx` 同构的完整接线。 */
+/**
+ * 与 `entrypoints/popup/App.tsx` 同构的完整接线。
+ *
+ * 🔴 **含 `view` 状态机** —— 锁定 UI 折叠改造后,启动与延长控件都住在
+ * 子页面 `LockView` 里。替身必须跟着走那条导航,否则本文件验的就不是产品
+ * 真实的写入时序(见 `lock-ui.test.tsx` 同名替身的长注释)。
+ *
+ * ⚠️ 导航本身**不得**引入任何 await/防抖(ADR-061)—— 本替身因此逐字照搬
+ * App 的 `setView`:一次同步的 `useState`,不碰存储。
+ */
 function PopupUnderTest({
   repository,
   clock,
@@ -149,6 +160,29 @@ function PopupUnderTest({
     onSettings: syncSettings,
   });
 
+  const [onLockView, setOnLockView] = useState(false);
+  const openLockView = useCallback(() => {
+    setOnLockView(true);
+  }, []);
+  const backToList = useCallback(() => {
+    setOnLockView(false);
+  }, []);
+
+  if (onLockView) {
+    return (
+      <LockView
+        settings={settings}
+        locked={locked}
+        lockUntil={lockUntil}
+        now={now}
+        onStartLock={startLock}
+        onExtendLock={extendLock}
+        onBack={backToList}
+        disabled={!loaded}
+      />
+    );
+  }
+
   return (
     <RuleListView
       settings={settings}
@@ -161,20 +195,30 @@ function PopupUnderTest({
       locked={locked}
       lockBanner={
         locked && lockUntil !== null ? (
-          <LockCountdownBanner lockUntil={lockUntil} now={now} onExtend={extendLock} />
+          <LockCountdownBanner lockUntil={lockUntil} now={now} onOpen={openLockView} />
         ) : undefined
       }
       lockEntry={
-        !locked ? (
-          <LockTimerEntry
-            masterEnabled={settings.masterEnabled}
-            onStartLock={startLock}
-            disabled={!loaded}
-          />
-        ) : undefined
+        !locked ? <LockEntryRow onOpen={openLockView} disabled={!loaded} /> : undefined
       }
     />
   );
+}
+
+/**
+ * 走进锁定子页面 —— 点列表页上那个唯一的锁定入口。
+ *
+ * 未锁定时它是折叠入口行,锁定中它是倒计时条;两者共用
+ * `data-testid="lock-open"` 且**互斥**在场,故一个 helper 覆盖两条路径。
+ *
+ * ⚠️ 这一步刻意**不** `drain()` —— 它是纯 `useState`,不该需要宏任务。
+ *    若将来有人在导航路径上塞了一次 await,本文件的断言会当场变红。
+ */
+async function gotoLockView() {
+  fireEvent.click(screen.getByTestId('lock-open'));
+  await waitFor(() => {
+    expect(screen.getByTestId('popup').dataset.view).toBe('lock');
+  });
 }
 
 /** 等到骨架态结束。 */
@@ -199,7 +243,8 @@ describe('🔴 启动锁定后立即销毁 popup,lockUntil 必须已落盘(ADR-0
     render(<PopupUnderTest repository={repository} clock={clock.now} />);
     await settled();
 
-    // 选 30 分钟预设 → 点启动 → 二次确认(ADR-056)。
+    // 进子页面 → 选 30 分钟预设 → 点启动 → 二次确认(ADR-056)。
+    await gotoLockView();
     fireEvent.click(screen.getByTestId('lock-start-preset-30-minute'));
     fireEvent.click(screen.getByTestId('lock-start'));
     expect(screen.getByTestId('lock-confirm')).toBeTruthy();
@@ -234,6 +279,7 @@ describe('🔴 启动锁定后立即销毁 popup,lockUntil 必须已落盘(ADR-0
     render(<PopupUnderTest repository={repository} clock={clock.now} />);
     await settled();
 
+    await gotoLockView();
     fireEvent.change(screen.getByTestId('lock-start-amount'), {
       target: { value: '3' },
     });
@@ -274,7 +320,10 @@ describe('🔴 延长锁定后立即销毁 popup,新的 lockUntil 必须已落�
       expect(screen.getByTestId('lock-countdown')).toBeTruthy();
     });
 
-    // 延长 1 小时(延长区只有自定义输入,无预设 —— 见 LockCountdownBanner)。
+    // 延长控件住在子页面 —— 点倒计时条进去(用户的那条路)。
+    await gotoLockView();
+
+    // 延长 1 小时(延长区只有自定义输入,无预设 —— 见 LockExtendPanel)。
     fireEvent.change(screen.getByTestId('lock-extend-amount'), {
       target: { value: '1' },
     });
@@ -469,6 +518,7 @@ describe('锁定写入活过拆除后,既有保障不得退化', () => {
     );
     await settled();
 
+    await gotoLockView();
     fireEvent.click(screen.getByTestId('lock-start-preset-1-hour'));
     fireEvent.click(screen.getByTestId('lock-start'));
 
@@ -479,14 +529,29 @@ describe('锁定写入活过拆除后,既有保障不得退化', () => {
       await drain();
     });
 
-    // 文档存活 → 正常路径不变:倒计时出现、入口消失、确认框关闭。
+    /*
+      文档存活 → 正常路径不变:启动成功后子页面当场换成延长区(倒计时回显),
+      启动区与确认框一并消失。
+      ⚠️ 此刻仍在子页面,故这里读的是子页面的回显 `lock-view-countdown`;
+         列表页的 `lock-countdown` 要返回后才在场,下面补一步返回并断言。
+    */
+    await waitFor(() => {
+      expect(screen.getByTestId('lock-view-countdown').textContent).toBe(
+        '🔒 锁定中 01:00:00',
+      );
+    });
+    expect(screen.queryByTestId('lock-start-section')).toBeNull();
+    expect(screen.queryByTestId('lock-start')).toBeNull();
+    expect(screen.queryByTestId('lock-confirm')).toBeNull();
+
+    // 返回列表页:倒计时条在场、折叠入口行消失(ADR-051 / INV-12 的互斥)。
+    fireEvent.click(screen.getByTestId('lock-back'));
     await waitFor(() => {
       expect(screen.getByTestId('lock-countdown').textContent).toBe(
         '🔒 锁定中 01:00:00',
       );
     });
     expect(screen.queryByTestId('lock-entry')).toBeNull();
-    expect(screen.queryByTestId('lock-confirm')).toBeNull();
     expect(persisted(area).lockUntil).toBe(T0 + HOUR);
     expect(persisted(area).masterEnabled).toBe(true);
   });

@@ -26,6 +26,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { useCallback, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MemoryStorageArea } from '../../storage/memory-storage-area.js';
@@ -34,7 +35,8 @@ import {
   SettingsRepository,
 } from '../../storage/settings-repository.js';
 import { LockCountdownBanner } from '../LockCountdownBanner.js';
-import { LockTimerEntry } from '../LockTimerEntry.js';
+import { LockEntryRow } from '../LockEntryRow.js';
+import { LockView } from '../LockView.js';
 import { RuleListView } from '../RuleListView.js';
 import {
   LOCK_CONSEQUENCE_NO_DISABLE,
@@ -121,6 +123,16 @@ const seeded = (over: {
  * 把 popup 的完整接线跑起来 —— 与 `entrypoints/popup/App.tsx` 同构。
  *
  * 时钟与定时器注入,以便在测试里精确推进时间并断言 interval 的拆装。
+ *
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔴 **本替身必须含 `view` 状态机,不能只渲染 `RuleListView`。**
+ *
+ * 锁定 UI 折叠改造后,时长选择 / 启动 / 延长全部住在**子页面** `LockView` 里,
+ * 列表页只剩一行入口。若替身仍只挂 `RuleListView`,那些控件在替身里
+ * **根本不存在** —— 整组门禁会从「验证产品行为」退化成「验证一个产品里
+ * 不存在的布局」。故此处补上 App 的三态判别联合,**逐字照搬导航逻辑**,
+ * 测试再通过点入口行/倒计时条进入子页面 —— 与真实用户路径一致。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
 function PopupUnderTest({
   repository,
@@ -161,6 +173,31 @@ function PopupUnderTest({
     onSettings: syncSettings,
   });
 
+  // 与 App 的 `View` 判别联合同构(这里只需要 list / lock 两态 ——
+  // 本文件不测编辑视图,而 I2 恰恰要求锁定页与编辑视图互不相邻)。
+  const [onLockView, setOnLockView] = useState(false);
+  const openLockView = useCallback(() => {
+    setOnLockView(true);
+  }, []);
+  const backToList = useCallback(() => {
+    setOnLockView(false);
+  }, []);
+
+  if (onLockView) {
+    return (
+      <LockView
+        settings={settings}
+        locked={locked}
+        lockUntil={lockUntil}
+        now={now}
+        onStartLock={startLock}
+        onExtendLock={extendLock}
+        onBack={backToList}
+        disabled={!loaded}
+      />
+    );
+  }
+
   return (
     <RuleListView
       settings={settings}
@@ -173,20 +210,28 @@ function PopupUnderTest({
       locked={locked}
       lockBanner={
         locked && lockUntil !== null ? (
-          <LockCountdownBanner lockUntil={lockUntil} now={now} onExtend={extendLock} />
+          <LockCountdownBanner lockUntil={lockUntil} now={now} onOpen={openLockView} />
         ) : undefined
       }
       lockEntry={
-        !locked ? (
-          <LockTimerEntry
-            masterEnabled={settings.masterEnabled}
-            onStartLock={startLock}
-            disabled={!loaded}
-          />
-        ) : undefined
+        !locked ? <LockEntryRow onOpen={openLockView} disabled={!loaded} /> : undefined
       }
     />
   );
+}
+
+/**
+ * 进入锁定子页面 —— 点列表页上那个唯一的锁定入口。
+ *
+ * 未锁定时它是折叠入口行「🔒 时间锁定 ›」,锁定中它是倒计时条;
+ * 两者共用 `data-testid="lock-open"`(**互斥**地只有一个在场,
+ * 这正是 INV-12 的结构前提),故一个 helper 覆盖两条路径。
+ */
+async function gotoLockView() {
+  fireEvent.click(screen.getByTestId('lock-open'));
+  await waitFor(() => {
+    expect(screen.getByTestId('popup').dataset.view).toBe('lock');
+  });
 }
 
 /** 等到骨架态结束(设置与 TabState 都已到位)。 */
@@ -216,6 +261,8 @@ describe('🔴 未锁定时的计时器入口(ADR-058)', () => {
 
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
+    // 时长控件住在子页面 —— 先走用户的那条路进去。
+    await gotoLockView();
 
     // 预设按钮(ADR-058:「预设按钮」)。
     expect(screen.getByTestId('lock-start-preset-30-minute')).toBeTruthy();
@@ -245,8 +292,15 @@ describe('🔴 未锁定时的计时器入口(ADR-058)', () => {
 
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
+    await gotoLockView();
 
-    const entry = screen.getByTestId('lock-entry');
+    /*
+      断言范围从列表页的入口区改成**子页面的启动区** ——
+      控件搬了家,门禁要盯的是控件现在所在的那个容器。
+      范围没有放宽:启动区就是时长控件的全部所在,
+      下面再追加一条「整个子页面里也只有这一个数字输入」。
+    */
+    const entry = screen.getByTestId('lock-start-section');
 
     // 入口区里**只有一个**数字输入,且它必定配着一个单位下拉。
     const numberInputs = entry.querySelectorAll('input[type="number"]');
@@ -264,6 +318,19 @@ describe('🔴 未锁定时的计时器入口(ADR-058)', () => {
 
     // 唯一的数字输入带 min=1 —— 它表达的是「几个单位」,不是 epoch 毫秒。
     expect((numberInputs[0] as HTMLInputElement).min).toBe('1');
+
+    // 🔴 把范围扩到**整个子页面**:全页也只有这一个数字输入 + 一个下拉,
+    //    且没有任何 datetime/date/time/text 输入。搬家没有在页面别处
+    //    留下第二个「可以填时间戳」的口子。
+    const page = screen.getByTestId('popup');
+    expect(page.querySelectorAll('input[type="number"]').length).toBe(1);
+    expect(page.querySelectorAll('select').length).toBe(1);
+    for (const t of ['datetime-local', 'date', 'time', 'text']) {
+      expect(
+        page.querySelectorAll(`input[type="${t}"]`).length,
+        `子页面出现了 input[type=${t}]`,
+      ).toBe(0);
+    }
   });
 
   it('时长非法(0)时启动按钮禁用并提示,不静默拒绝', async () => {
@@ -273,6 +340,7 @@ describe('🔴 未锁定时的计时器入口(ADR-058)', () => {
 
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
+    await gotoLockView();
 
     fireEvent.change(screen.getByTestId('lock-start-amount'), {
       target: { value: '0' },
@@ -280,6 +348,175 @@ describe('🔴 未锁定时的计时器入口(ADR-058)', () => {
 
     expect((screen.getByTestId('lock-start') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId('lock-invalid-duration')).toBeTruthy();
+  });
+});
+
+// ════ 1b. 折叠入口 + 子页面导航(列表页的空间回收) ════
+//
+// 产品形态的改动:列表页只留一行入口,时长控件全在子页面。
+// 这一组守的是**布局本身**(旧的内联布局不得回归)
+// 与**导航路径上零写入**(ADR-061)。
+
+describe('🔴 列表页折叠成一行,时长控件全在子页面', () => {
+  it('列表页**没有**内联的时长选择器、启动按钮或预设按钮', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({}));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+
+    const page = screen.getByTestId('popup');
+    expect(page.dataset.view).toBe('list');
+
+    // 🔴 旧的内联布局一个都不许留在列表页。
+    for (const id of [
+      'lock-start-section',
+      'lock-start',
+      'lock-start-duration',
+      'lock-start-amount',
+      'lock-start-unit',
+      'lock-start-preset-1-hour',
+      'lock-confirm',
+    ]) {
+      expect(screen.queryByTestId(id), `列表页仍内联着 ${id}`).toBeNull();
+    }
+    // 列表页上没有任何数字输入或下拉(它们都是时长控件)。
+    expect(page.querySelectorAll('input[type="number"]').length).toBe(0);
+    expect(page.querySelectorAll('select').length).toBe(0);
+  });
+
+  it('入口是一行**真正的 `<button>`**,与「添加规则」同一基类', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({}));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+
+    const row = screen.getByTestId('lock-open');
+    expect(row.tagName).toBe('BUTTON');
+    // 视觉语言复用:与底部「+ 添加规则」共享 `.add-button`。
+    expect(row.className).toContain('add-button');
+    expect(screen.getByTestId('add-rule').className).toContain('add-button');
+    // 可见文案 + 无障碍名都在场。
+    expect(row.textContent).toContain('时间锁定');
+    expect(row.getAttribute('aria-label')).toBeTruthy();
+  });
+
+  it('点入口行进入子页面;子页面有返回控件,返回后回到列表', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({}));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await gotoLockView();
+
+    // 子页面:标题 + 返回 + 时长控件 + 启动按钮。
+    expect(screen.getByTestId('lock-view-title').textContent).toBe('专注锁定');
+    expect(screen.getByTestId('lock-start-section')).toBeTruthy();
+    expect(screen.getByTestId('lock-start')).toBeTruthy();
+
+    const back = screen.getByTestId('lock-back');
+    expect(back.tagName).toBe('BUTTON');
+    fireEvent.click(back);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('popup').dataset.view).toBe('list');
+    });
+    expect(screen.getByTestId('lock-entry')).toBeTruthy();
+  });
+
+  it('🔴 子页面里**没有**预览通道,也没有任何规则编辑控件(I2)', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({}));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await gotoLockView();
+
+    /*
+     * 「预览与锁定永不共存」(§6 T6b gate 的 I2)在 DOM 层的体现:
+     * 锁定子页面里没有强度滑块、没有 pattern 输入、没有规则列表、
+     * 没有保存/删除 —— 一个预览通道能被触发的控件都不存在。
+     */
+    for (const id of [
+      'intensity-slider',
+      'pattern-input',
+      'rule-list',
+      'save-button',
+      'delete-button',
+      'master-switch',
+      'add-rule',
+    ]) {
+      expect(screen.queryByTestId(id), `锁定子页面出现了 ${id}`).toBeNull();
+    }
+    expect(screen.getByTestId('popup').querySelectorAll('input[type="range"]').length).toBe(0);
+  });
+
+  it('🔴 ADR-061:进入/离开子页面的导航路径上**一个字节都不写**', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({}));
+    const setSpy = vi.spyOn(area, 'set');
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+
+    const before = setSpy.mock.calls.length;
+
+    // 进 → 出 → 进 → 出,来回若干次。
+    for (let i = 0; i < 3; i++) {
+      await gotoLockView();
+      fireEvent.click(screen.getByTestId('lock-back'));
+      await waitFor(() => {
+        expect(screen.getByTestId('popup').dataset.view).toBe('list');
+      });
+    }
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    /*
+     * 🔴 导航既不写入、也不防抖排队(ADR-061:popup 一失焦即销毁,
+     *    任何挂在导航上的延迟写入都会静默丢失)。
+     *    写入只发生在二次确认之后那一处。
+     */
+    expect(
+      setSpy.mock.calls.length,
+      '导航路径上发生了写入 —— ADR-061:锁定写入只能发生在确认之后',
+    ).toBe(before);
+    const persisted = (await area.get(SETTINGS_KEY))[SETTINGS_KEY] as {
+      lockUntil: number | null;
+    };
+    expect(persisted.lockUntil).toBeNull();
+  });
+
+  it('锁定中:列表页保留倒计时,点它直达延长控件', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({ lockUntil: T0 + 2 * HOUR }));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await waitFor(() => {
+      expect(screen.getByTestId('popup').dataset.locked).toBe('true');
+    });
+
+    // 🔴 剩余时间在**列表页**一眼可见(产品负责人的决定)。
+    expect(screen.getByTestId('lock-countdown').textContent).toBe(
+      '🔒 锁定中 02:00:00',
+    );
+    // 但延长控件不在列表页。
+    expect(screen.queryByTestId('lock-extend')).toBeNull();
+
+    await gotoLockView();
+
+    // 子页面:标题说的是「延长锁定」,延长控件在场且可用。
+    expect(screen.getByTestId('lock-view-title').textContent).toBe('延长锁定');
+    expect((screen.getByTestId('lock-extend') as HTMLButtonElement).disabled).toBe(false);
   });
 });
 
@@ -294,8 +531,12 @@ describe('🔴 二次确认(ADR-056)', () => {
 
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
+    await gotoLockView();
 
     // 基线:ADR-071 后读路径零写入,仍记下当前调用数再比对以隔离本段。
+    // 🔴 导航本身也必须零写入(ADR-061:popup 失焦即销毁,
+    //    任何挂在导航上的延迟写入都会静默丢失)——
+    //    基线在**进入子页面之后**取,下面另有一条专门断言导航零写入。
     const before = setSpy.mock.calls.length;
 
     // 点「启动锁定」之前没有确认框。
@@ -321,6 +562,7 @@ describe('🔴 二次确认(ADR-056)', () => {
 
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
+    await gotoLockView();
     fireEvent.click(screen.getByTestId('lock-start'));
 
     const dialog = screen.getByTestId('lock-confirm');
@@ -353,6 +595,7 @@ describe('🔴 二次确认(ADR-056)', () => {
 
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
+    await gotoLockView();
 
     fireEvent.click(screen.getByTestId('lock-start'));
     const before = setSpy.mock.calls.length;
@@ -370,8 +613,10 @@ describe('🔴 二次确认(ADR-056)', () => {
       lockUntil: number | null;
     };
     expect(persisted.lockUntil).toBeNull();
-    // 仍然是可编辑的未锁定态。
+    // 仍然是可编辑的未锁定态(子页面与列表页的 data-locked 同口径)。
     expect(screen.getByTestId('popup').dataset.locked).toBe('false');
+    // 取消只关框,**不**退出子页面 —— 用户可以改个时长再试。
+    expect(screen.getByTestId('popup').dataset.view).toBe('lock');
   });
 });
 
@@ -387,11 +632,12 @@ describe('🔴 启动时原子开启主开关(ADR-057)', () => {
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
 
-    // 前置:主开关确实是关的。
+    // 前置:主开关确实是关的(在**列表页**上读,子页面没有主开关)。
     expect(
       screen.getByTestId('master-switch').getAttribute('aria-checked'),
     ).toBe('false');
 
+    await gotoLockView();
     fireEvent.click(screen.getByTestId('lock-start'));
 
     // ADR-057 的告知必须在**不可逆操作之前**出现。
@@ -403,6 +649,12 @@ describe('🔴 启动时原子开启主开关(ADR-057)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('popup').dataset.locked).toBe('true');
     });
+
+    // 启动成功后仍在子页面,且它**当场**换成延长区(ADR-052:
+    // 锁定中唯一可用的操作),启动区同时消失。
+    expect(screen.getByTestId('popup').dataset.view).toBe('lock');
+    expect(screen.getByTestId('lock-extend-panel')).toBeTruthy();
+    expect(screen.queryByTestId('lock-start')).toBeNull();
 
     // 🔴 **一次写入** —— 不是「先开主开关、再写 lockUntil」两次。
     const writes = setSpy.mock.calls.slice(before);
@@ -433,6 +685,7 @@ describe('🔴 启动时原子开启主开关(ADR-057)', () => {
 
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
+    await gotoLockView();
     fireEvent.click(screen.getByTestId('lock-start'));
     fireEvent.click(screen.getByTestId('lock-confirm-ok'));
 
@@ -463,6 +716,7 @@ describe('🔴 启动时原子开启主开关(ADR-057)', () => {
 
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
+    await gotoLockView();
     fireEvent.click(screen.getByTestId('lock-start'));
 
     expect(screen.queryByTestId('lock-will-enable-master')).toBeNull();
@@ -838,19 +1092,95 @@ describe('🔴🔴 锁定中 DOM 里不得存在解除/取消/结束/缩短锁�
     const popup = await lockedDom();
     expect(screen.queryByTestId('lock-confirm')).toBeNull();
     expect(screen.queryByTestId('lock-confirm-cancel')).toBeNull();
-    // 「启动锁定」入口同样不该在锁定中出现。
+    // 「时间锁定」折叠入口与「启动锁定」按钮同样不该在锁定中出现。
     expect(screen.queryByTestId('lock-entry')).toBeNull();
     expect(screen.queryByTestId('lock-start')).toBeNull();
     expect(popup.textContent).not.toContain('启动锁定');
   });
 
-  it('🔴 锁定条里**唯一**会写入的控件就是「延长」', async () => {
+  /*
+   * 🔴 控件搬进子页面后,**这一组负向断言必须跟进子页面** ——
+   * 否则「列表页干净」会变成一句空话:真正的解除后门若存在,
+   * 它只会出现在控件所在的那一页。故下面三条逐条在**子页面**上重跑。
+   */
+  async function lockedSubPage() {
+    await lockedDom();
+    fireEvent.click(screen.getByTestId('lock-open'));
+    await waitFor(() => {
+      expect(screen.getByTestId('popup').dataset.view).toBe('lock');
+    });
+    return screen.getByTestId('popup');
+  }
+
+  it('🔴 列表页的倒计时条**一个写入控件都没有**(唯一的按钮是导航)', async () => {
     await lockedDom();
     const banner = screen.getByTestId('lock-banner');
     const buttons = Array.from(banner.querySelectorAll('button'));
     expect(buttons.length, '锁定条里出现了不止一个按钮').toBe(1);
-    expect(buttons[0]?.dataset.testid).toBe('lock-extend');
-    expect(buttons[0]?.textContent).toBe('延长');
+    // 它是通往子页面的导航,不是写入 —— 延长在子页面里。
+    expect(buttons[0]?.dataset.testid).toBe('lock-open');
+    // 列表页上没有任何会改 lockUntil 的控件。
+    expect(screen.queryByTestId('lock-extend')).toBeNull();
+    expect(banner.querySelectorAll('input, select').length).toBe(0);
+  });
+
+  it('🔴🔴 锁定子页面的 DOM 文本里同样不含任何解除类词汇', async () => {
+    const page = await lockedSubPage();
+    const text = page.textContent ?? '';
+    for (const word of FORBIDDEN) {
+      expect(text, `锁定子页面出现了「${word}」`).not.toContain(word);
+    }
+  });
+
+  it('🔴🔴 锁定子页面可交互元素的无障碍名里也不含解除类词汇', async () => {
+    const page = await lockedSubPage();
+    const interactive = Array.from(
+      page.querySelectorAll('button, a, input, select, [role="button"]'),
+    );
+    // 至少有延长按钮 + 数字 + 单位 + 返回 —— 不是空集合扫了个空。
+    expect(interactive.length).toBeGreaterThanOrEqual(4);
+    for (const el of interactive) {
+      const name = [
+        el.textContent ?? '',
+        el.getAttribute('aria-label') ?? '',
+        el.getAttribute('title') ?? '',
+        el.getAttribute('data-testid') ?? '',
+      ].join(' ');
+      for (const word of FORBIDDEN) {
+        expect(name, `控件 ${el.className} 的可及名含「${word}」`).not.toContain(word);
+      }
+    }
+  });
+
+  it('🔴🔴 锁定子页面里**唯一**会写入的控件就是「延长」', async () => {
+    const page = await lockedSubPage();
+    const buttons = Array.from(page.querySelectorAll('button'));
+    // 恰好两个:返回(只切视图)+ 延长(唯一写入)。
+    expect(
+      buttons.map((b) => b.dataset.testid),
+      '锁定子页面出现了预期之外的按钮',
+    ).toEqual(['lock-back', 'lock-extend']);
+    expect(
+      buttons.find((b) => b.dataset.testid === 'lock-extend')?.textContent,
+    ).toBe('延长');
+    // 启动区在锁定中根本不渲染(互斥的两个分支)。
+    expect(screen.queryByTestId('lock-start-section')).toBeNull();
+    expect(screen.queryByTestId('lock-start')).toBeNull();
+  });
+
+  it('🔴 「返回」不是「解除」—— 返回列表后锁仍在、控件仍禁用', async () => {
+    await lockedSubPage();
+    fireEvent.click(screen.getByTestId('lock-back'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('popup').dataset.view).toBe('list');
+    });
+    // 🔴 锁一点没松:data-locked 仍为 true、倒计时条仍在、控件仍禁用。
+    expect(screen.getByTestId('popup').dataset.locked).toBe('true');
+    expect(screen.getByTestId('lock-banner')).toBeTruthy();
+    expect((screen.getByTestId('master-switch') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('add-rule') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId('lock-entry')).toBeNull();
   });
 });
 
@@ -869,6 +1199,11 @@ describe('🔴 延长可用(ADR-052)', () => {
         '🔒 锁定中 01:00:00',
       );
     });
+    // 延长控件住在子页面 —— 点倒计时条进去(用户的那条路)。
+    await gotoLockView();
+    expect(screen.getByTestId('lock-view-countdown').textContent).toBe(
+      '🔒 锁定中 01:00:00',
+    );
 
     const extend = screen.getByTestId('lock-extend') as HTMLButtonElement;
     expect(extend.disabled).toBe(false);
@@ -876,6 +1211,15 @@ describe('🔴 延长可用(ADR-052)', () => {
     // 默认延长 1 小时。
     fireEvent.click(extend);
 
+    // 子页面上的回显当场变长。
+    await waitFor(() => {
+      expect(screen.getByTestId('lock-view-countdown').textContent).toBe(
+        '🔒 锁定中 02:00:00',
+      );
+    });
+
+    // 返回列表页,倒计时条也是变长后的值(两处同一个 lockUntil)。
+    fireEvent.click(screen.getByTestId('lock-back'));
     await waitFor(() => {
       expect(screen.getByTestId('lock-countdown').textContent).toBe(
         '🔒 锁定中 02:00:00',
@@ -899,6 +1243,7 @@ describe('🔴 延长可用(ADR-052)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lock-banner')).toBeTruthy();
     });
+    await gotoLockView();
 
     clock.advance(HOUR);
     fireEvent.click(screen.getByTestId('lock-extend'));
@@ -924,6 +1269,7 @@ describe('🔴 延长可用(ADR-052)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lock-banner')).toBeTruthy();
     });
+    await gotoLockView();
 
     const amount = screen.getByTestId('lock-extend-amount') as HTMLInputElement;
     const unit = screen.getByTestId('lock-extend-unit') as HTMLSelectElement;
@@ -1017,8 +1363,9 @@ describe('🔴 锁定到期 → UI 自动恢复可编辑', () => {
     expect(screen.queryByTestId('lock-countdown')).toBeNull();
     expect((screen.getByTestId('master-switch') as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByTestId('add-rule') as HTMLButtonElement).disabled).toBe(false);
-    // 计时器入口回来了(可以再锁一次)。
+    // 折叠入口行回来了(点它可以再锁一次)。
     expect(screen.getByTestId('lock-entry')).toBeTruthy();
+    expect(screen.getByTestId('lock-open')).toBeTruthy();
   });
 
   it('到期边界取开区间:now === lockUntil 即已解锁(与领域层 isLocked 同口径)', async () => {
@@ -1057,8 +1404,17 @@ describe('ADR-043 · 新增可聚焦元素的 focus 态', () => {
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
 
-    // 新增的可聚焦元素:预设按钮、数字输入、单位下拉、启动按钮。
+    // 列表页的折叠入口行:它是**真正的 `<button>`**,不是可点击的 div ——
+    // 可 Tab 聚焦、可回车触发、全局 :focus-visible 命中它。
+    const row = screen.getByTestId('lock-open');
+    expect(row.tagName).toBe('BUTTON');
+    expect(getComputedStyle(row).outlineStyle).not.toBe('none');
+
+    await gotoLockView();
+
+    // 新增的可聚焦元素:返回、预设按钮、数字输入、单位下拉、启动按钮。
     const focusable = [
+      screen.getByTestId('lock-back'),
       screen.getByTestId('lock-start-preset-1-hour'),
       screen.getByTestId('lock-start-amount'),
       screen.getByTestId('lock-start-unit'),
@@ -1073,6 +1429,38 @@ describe('ADR-043 · 新增可聚焦元素的 focus 态', () => {
     }
   });
 
+  it('🔴 延长区的数字框标签只是**视觉**隐藏 —— 无障碍名一个字没少', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({ lockUntil: T0 + HOUR }));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await waitFor(() => {
+      expect(screen.getByTestId('lock-banner')).toBeTruthy();
+    });
+    await gotoLockView();
+
+    const amount = screen.getByTestId('lock-extend-amount');
+    const label = document.querySelector(`label[for="${amount.id}"]`);
+
+    // `<label>` 仍在 DOM 里、仍指向输入框 —— 只是不占视觉空间。
+    expect(label, '延长区的数字框没有关联 <label>').toBeTruthy();
+    expect(label?.textContent).toBe('延长时长数值');
+    expect(label?.className).toBe('visually-hidden');
+    // 用无障碍名就能拿到它 —— 屏幕阅读器读得到。
+    expect(screen.getByLabelText('延长时长数值')).toBe(amount);
+    expect(screen.getByLabelText('延长时长单位')).toBe(
+      screen.getByTestId('lock-extend-unit'),
+    );
+
+    // 对照:启动区的同一个标签是**可见**的(没有被这次改动波及)。
+    fireEvent.click(screen.getByTestId('lock-back'));
+    await waitFor(() => {
+      expect(screen.getByTestId('popup').dataset.view).toBe('list');
+    });
+  });
+
   it('锁定态的延长控件同样可聚焦', async () => {
     const clock = makeClock();
     const area = new MemoryStorageArea(seeded({ lockUntil: T0 + HOUR }));
@@ -1083,8 +1471,11 @@ describe('ADR-043 · 新增可聚焦元素的 focus 态', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lock-banner')).toBeTruthy();
     });
+    // 锁定中的倒计时条本身也是一个真正的 `<button>`(通往子页面)。
+    expect(screen.getByTestId('lock-open').tagName).toBe('BUTTON');
+    await gotoLockView();
 
-    for (const id of ['lock-extend-amount', 'lock-extend-unit', 'lock-extend']) {
+    for (const id of ['lock-back', 'lock-extend-amount', 'lock-extend-unit', 'lock-extend']) {
       const el = screen.getByTestId(id);
       expect(['BUTTON', 'INPUT', 'SELECT']).toContain(el.tagName);
     }
@@ -1097,6 +1488,7 @@ describe('ADR-043 · 新增可聚焦元素的 focus 态', () => {
 
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
+    await gotoLockView();
     fireEvent.click(screen.getByTestId('lock-start'));
 
     await waitFor(() => {

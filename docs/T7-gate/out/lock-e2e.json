@@ -10,7 +10,7 @@
         "rules": [
           "example.com@100"
         ],
-        "now": 1795538306636,
+        "now": 1795578957385,
         "remainingMs": null,
         "keys": [
           "lockUntil",
@@ -88,7 +88,7 @@
               "intensity": 50
             }
           ],
-          "lockUntil": 1795541906701
+          "lockUntil": 1795582557432
         }
       }
     },
@@ -101,7 +101,7 @@
         "rules": [
           "example.com@100"
         ],
-        "now": 1795538306719,
+        "now": 1795578957460,
         "remainingMs": null,
         "keys": [
           "lockUntil",
@@ -109,6 +109,59 @@
           "rules",
           "version"
         ]
+      }
+    },
+    {
+      "name": "📍 折叠:列表页只有一行入口(真 <button>),**无**内联时长选择器/启动按钮",
+      "ok": true,
+      "detail": {
+        "hasEntryRow": true,
+        "entryIsButton": "BUTTON",
+        "inlineStart": false,
+        "inlineAmount": false,
+        "inlinePreset": false,
+        "numberInputs": 0,
+        "selects": 0
+      }
+    },
+    {
+      "name": "🔴 ADR-061:导航进子页面**零写入**(lockUntil 仍为 null)",
+      "ok": true,
+      "detail": {
+        "beforeNavLock": null,
+        "afterNavLock": null
+      }
+    },
+    {
+      "name": "📍 子页面:返回键 + 时长选择器 + 预设 + 启动按钮俱在",
+      "ok": true,
+      "detail": {
+        "view": "lock",
+        "title": "专注锁定",
+        "hasBack": true,
+        "hasStart": true,
+        "hasAmount": true,
+        "hasPresets": true,
+        "hasSlider": false,
+        "hasPattern": false,
+        "hasRuleList": false,
+        "ranges": 0
+      }
+    },
+    {
+      "name": "🔴 I2:锁定子页面里**没有**预览通道或规则编辑控件(与编辑视图无锁定入口对称)",
+      "ok": true,
+      "detail": {
+        "view": "lock",
+        "title": "专注锁定",
+        "hasBack": true,
+        "hasStart": true,
+        "hasAmount": true,
+        "hasPresets": true,
+        "hasSlider": false,
+        "hasPattern": false,
+        "hasRuleList": false,
+        "ranges": 0
       }
     },
     {
@@ -122,13 +175,13 @@
       "name": "🔴 阶段 1:UI 启动锁定后磁盘上 lockUntil 为未来时间戳(ADR-053 绝对时间)",
       "ok": true,
       "detail": {
-        "lockUntil": 1795538366884,
+        "lockUntil": 1795579017987,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795538306985,
-        "remainingMs": 59899,
+        "now": 1795578958049,
+        "remainingMs": 59938,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -145,7 +198,47 @@
       }
     },
     {
-      "name": "🔴 INV-12(UI 第二道防线):锁定中 DOM 无启动/解除入口,只有「延长」",
+      "name": "🔴🔴 INV-12(子页面):锁定中子页面只有「返回 + 延长」两个按钮,无启动/解除入口",
+      "ok": true,
+      "detail": {
+        "ids": [
+          "popup",
+          "lock-back",
+          "lock-view-title",
+          "lock-extend-panel",
+          "lock-view-countdown",
+          "lock-extend-duration",
+          "lock-extend-amount",
+          "lock-extend-unit",
+          "lock-extend"
+        ],
+        "view": "lock",
+        "title": "延长锁定",
+        "hasStart": false,
+        "hasStartSection": false,
+        "hasExtend": true,
+        "buttons": [
+          "lock-back",
+          "lock-extend"
+        ],
+        "releaseWords": []
+      }
+    },
+    {
+      "name": "🔴🔴 INV-12(子页面):锁定中子页面文案里不出现任何解除类词汇",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "📍 列表页倒计时条与子页面回显同源(同一个 lockUntil)",
+      "ok": true,
+      "detail": {
+        "listLockUntilAttr": "1795579017987",
+        "subPageLockUntilAttr": "1795579017987"
+      }
+    },
+    {
+      "name": "🔴 INV-12(UI 第二道防线):锁定中列表页无启动/解除入口,且倒计时条里零写入控件",
       "ok": true,
       "detail": {
         "ids": [
@@ -153,11 +246,8 @@
           "brand-dot",
           "master-switch",
           "lock-banner",
+          "lock-open",
           "lock-countdown",
-          "lock-extend-duration",
-          "lock-extend-amount",
-          "lock-extend-unit",
-          "lock-extend",
           "priority-hint",
           "rule-list",
           "rule-row-0",
@@ -174,7 +264,13 @@
         ],
         "hasLockEntry": false,
         "hasLockStart": false,
-        "hasExtend": true,
+        "hasExtend": false,
+        "hasCountdown": true,
+        "hasLockOpen": true,
+        "bannerButtons": [
+          "lock-open"
+        ],
+        "bannerInputs": 0,
         "masterDisabled": true,
         "addRuleDisabled": true,
         "releaseWords": []
@@ -189,11 +285,8 @@
           "brand-dot",
           "master-switch",
           "lock-banner",
+          "lock-open",
           "lock-countdown",
-          "lock-extend-duration",
-          "lock-extend-amount",
-          "lock-extend-unit",
-          "lock-extend",
           "priority-hint",
           "rule-list",
           "rule-row-0",
@@ -210,7 +303,13 @@
         ],
         "hasLockEntry": false,
         "hasLockStart": false,
-        "hasExtend": true,
+        "hasExtend": false,
+        "hasCountdown": true,
+        "hasLockOpen": true,
+        "bannerButtons": [
+          "lock-open"
+        ],
+        "bannerInputs": 0,
         "masterDisabled": true,
         "addRuleDisabled": true,
         "releaseWords": []
@@ -358,23 +457,30 @@
           "r": [
             "example.com@100"
           ],
-          "l": 1795538366884
+          "l": 1795579017987
         },
         "after": {
           "m": true,
           "r": [
             "example.com@100"
           ],
-          "l": 1795538366884
+          "l": 1795579017987
         }
+      }
+    },
+    {
+      "name": "📍 锁定中点倒计时条 → 直达子页面的延长控件(标题为「延长锁定」)",
+      "ok": true,
+      "detail": {
+        "extendTitle": "延长锁定"
       }
     },
     {
       "name": "🔴 N2 / INV-12:锁定中**延长**成功(UI 路径),lockUntil 严格变大",
       "ok": true,
       "detail": {
-        "beforeExtend": 1795538366884,
-        "afterLockUntil": 1795538426884,
+        "beforeExtend": 1795579017987,
+        "afterLockUntil": 1795579077987,
         "deltaMs": 60000
       }
     },
@@ -394,25 +500,25 @@
       "name": "🔴 INV-13:完全退出并重启浏览器后,锁定仍然有效(lockUntil 原值不变)",
       "ok": true,
       "detail": {
-        "preLockUntil": 1795538426884,
-        "postLockUntil": 1795538426884,
-        "postRemainingMs": 115894
+        "preLockUntil": 1795579077987,
+        "postLockUntil": 1795579077987,
+        "postRemainingMs": 115639
       }
     },
     {
       "name": "🔴 N4 / ADR-053:重启后剩余时间**小于**重启前(存的是绝对时间,不是时长)",
       "ok": true,
       "detail": {
-        "pre": 119140,
-        "post": 115894,
-        "elapsedMs": 3246
+        "pre": 118865,
+        "post": 115639,
+        "elapsedMs": 3226
       }
     },
     {
       "name": "INV-13:重启后 UI 仍显示倒计时条、仍无启动入口、主开关仍置灰",
       "ok": true,
       "detail": {
-        "postCountdown": "🔒 锁定中 00:01:56",
+        "postCountdown": "🔒 锁定中 00:01:55",
         "hasEntry": false,
         "masterDisabled": true
       }
@@ -421,9 +527,9 @@
       "name": "🔴 INV-13:重启后 UI 显示的剩余时间与磁盘 lockUntil 一致(±2s)",
       "ok": true,
       "detail": {
-        "postCountdown": "🔒 锁定中 00:01:56",
-        "shownMs": 116000,
-        "diskRemainingMs": 115894
+        "postCountdown": "🔒 锁定中 00:01:55",
+        "shownMs": 115000,
+        "diskRemainingMs": 115639
       }
     },
     {
@@ -442,13 +548,13 @@
       "name": "锁定已自然到期(remainingMs <= 0)",
       "ok": true,
       "detail": {
-        "lockUntil": 1795538426884,
+        "lockUntil": 1795579077987,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795538430970,
-        "remainingMs": -4086,
+        "now": 1795579082035,
+        "remainingMs": -4048,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -477,7 +583,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795538426884
+          "lockUntil": 1795579077987
         }
       }
     },
@@ -501,7 +607,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795538426884
+          "lockUntil": 1795579077987
         }
       }
     },
@@ -520,7 +626,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795538426884
+          "lockUntil": 1795579077987
         }
       }
     },
@@ -539,7 +645,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795538426884
+          "lockUntil": 1795579077987
         }
       }
     },
@@ -552,7 +658,25 @@
         "locked": "false",
         "masterDisabled": false,
         "addRuleDisabled": false,
-        "lockStartPresent": true
+        "lockStartPresent": true,
+        "startDisabled": false,
+        "hasExtend": false,
+        "title": "专注锁定"
+      }
+    },
+    {
+      "name": "📍 到期后子页面回到「启动」形态:标题为「专注锁定」、无延长控件",
+      "ok": true,
+      "detail": {
+        "hasBanner": false,
+        "hasEntry": true,
+        "locked": "false",
+        "masterDisabled": false,
+        "addRuleDisabled": false,
+        "lockStartPresent": true,
+        "startDisabled": false,
+        "hasExtend": false,
+        "title": "专注锁定"
       }
     },
     {
@@ -570,7 +694,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795538491193
+          "lockUntil": 1795579143348
         }
       }
     },
@@ -584,7 +708,10 @@
           "locked": "false",
           "masterDisabled": false,
           "addRuleDisabled": false,
-          "lockStartPresent": true
+          "lockStartPresent": true,
+          "startDisabled": false,
+          "hasExtend": false,
+          "title": "专注锁定"
         },
         "relocked": {
           "hasBanner": true,
@@ -592,7 +719,23 @@
           "locked": "true",
           "masterDisabled": true,
           "addRuleDisabled": true,
-          "lockStartPresent": false
+          "lockStartPresent": false,
+          "hasExtend": true,
+          "title": "延长锁定"
+        }
+      }
+    },
+    {
+      "name": "🔴 N5 负向对照(子页面):重新锁上后子页面也翻成延长形态",
+      "ok": true,
+      "detail": {
+        "expired": {
+          "title": "专注锁定",
+          "hasExtend": false
+        },
+        "relocked": {
+          "title": "延长锁定",
+          "hasExtend": true
         }
       }
     },
@@ -616,7 +759,7 @@
       "rules": [
         "example.com@100"
       ],
-      "now": 1795538306636,
+      "now": 1795578957385,
       "remainingMs": null,
       "keys": [
         "lockUntil",
@@ -683,7 +826,7 @@
               "intensity": 50
             }
           ],
-          "lockUntil": 1795541906701
+          "lockUntil": 1795582557432
         }
       },
       "n1d": {
@@ -695,14 +838,35 @@
         }
       }
     },
+    "listCollapsed": {
+      "hasEntryRow": true,
+      "entryIsButton": "BUTTON",
+      "inlineStart": false,
+      "inlineAmount": false,
+      "inlinePreset": false,
+      "numberInputs": 0,
+      "selects": 0
+    },
+    "subPage": {
+      "view": "lock",
+      "title": "专注锁定",
+      "hasBack": true,
+      "hasStart": true,
+      "hasAmount": true,
+      "hasPresets": true,
+      "hasSlider": false,
+      "hasPattern": false,
+      "hasRuleList": false,
+      "ranges": 0
+    },
     "phase1": {
-      "lockUntil": 1795538366884,
+      "lockUntil": 1795579017987,
       "masterEnabled": true,
       "rules": [
         "example.com@100"
       ],
-      "now": 1795538306985,
-      "remainingMs": 59899,
+      "now": 1795578958049,
+      "remainingMs": 59938,
       "keys": [
         "lockUntil",
         "masterEnabled",
@@ -711,7 +875,30 @@
       ],
       "countdown0": "🔒 锁定中 00:01:00",
       "confirmText": "将锁定 1 分钟",
-      "lockUntilAttr": "1795538366884"
+      "lockUntilAttr": "1795579017987"
+    },
+    "lockedSubUi": {
+      "ids": [
+        "popup",
+        "lock-back",
+        "lock-view-title",
+        "lock-extend-panel",
+        "lock-view-countdown",
+        "lock-extend-duration",
+        "lock-extend-amount",
+        "lock-extend-unit",
+        "lock-extend"
+      ],
+      "view": "lock",
+      "title": "延长锁定",
+      "hasStart": false,
+      "hasStartSection": false,
+      "hasExtend": true,
+      "buttons": [
+        "lock-back",
+        "lock-extend"
+      ],
+      "releaseWords": []
     },
     "lockUi": {
       "ids": [
@@ -719,11 +906,8 @@
         "brand-dot",
         "master-switch",
         "lock-banner",
+        "lock-open",
         "lock-countdown",
-        "lock-extend-duration",
-        "lock-extend-amount",
-        "lock-extend-unit",
-        "lock-extend",
         "priority-hint",
         "rule-list",
         "rule-row-0",
@@ -740,20 +924,26 @@
       ],
       "hasLockEntry": false,
       "hasLockStart": false,
-      "hasExtend": true,
+      "hasExtend": false,
+      "hasCountdown": true,
+      "hasLockOpen": true,
+      "bannerButtons": [
+        "lock-open"
+      ],
+      "bannerInputs": 0,
       "masterDisabled": true,
       "addRuleDisabled": true,
       "releaseWords": []
     },
     "phase2": {
       "before": {
-        "lockUntil": 1795538366884,
+        "lockUntil": 1795579017987,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795538307526,
-        "remainingMs": 59358,
+        "now": 1795578958663,
+        "remainingMs": 59324,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -845,13 +1035,13 @@
       }
     },
     "phase2After": {
-      "lockUntil": 1795538366884,
+      "lockUntil": 1795579017987,
       "masterEnabled": true,
       "rules": [
         "example.com@100"
       ],
-      "now": 1795538307535,
-      "remainingMs": 59349,
+      "now": 1795578958671,
+      "remainingMs": 59316,
       "keys": [
         "lockUntil",
         "masterEnabled",
@@ -860,15 +1050,15 @@
       ]
     },
     "phase3": {
-      "beforeExtend": 1795538366884,
+      "beforeExtend": 1795579017987,
       "afterExtend": {
-        "lockUntil": 1795538426884,
+        "lockUntil": 1795579077987,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795538307736,
-        "remainingMs": 119148,
+        "now": 1795578959120,
+        "remainingMs": 118867,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -879,13 +1069,13 @@
     },
     "phase4": {
       "preRestart": {
-        "lockUntil": 1795538426884,
+        "lockUntil": 1795579077987,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795538307744,
-        "remainingMs": 119140,
+        "now": 1795578959122,
+        "remainingMs": 118865,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -894,13 +1084,13 @@
         ]
       },
       "postRestart": {
-        "lockUntil": 1795538426884,
+        "lockUntil": 1795579077987,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795538310990,
-        "remainingMs": 115894,
+        "now": 1795578962348,
+        "remainingMs": 115639,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -911,13 +1101,13 @@
     },
     "phase5": {
       "expired": {
-        "lockUntil": 1795538426884,
+        "lockUntil": 1795579077987,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795538430970,
-        "remainingMs": -4086,
+        "now": 1795579082035,
+        "remainingMs": -4048,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -944,7 +1134,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795538426884
+          "lockUntil": 1795579077987
         }
       },
       "masterOff": {
@@ -964,7 +1154,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795538426884
+          "lockUntil": 1795579077987
         }
       },
       "removeRule": {
@@ -979,7 +1169,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795538426884
+          "lockUntil": 1795579077987
         }
       }
     },
@@ -989,7 +1179,10 @@
       "locked": "false",
       "masterDisabled": false,
       "addRuleDisabled": false,
-      "lockStartPresent": true
+      "lockStartPresent": true,
+      "startDisabled": false,
+      "hasExtend": false,
+      "title": "专注锁定"
     },
     "relockedUi": {
       "hasBanner": true,
@@ -997,7 +1190,9 @@
       "locked": "true",
       "masterDisabled": true,
       "addRuleDisabled": true,
-      "lockStartPresent": false
+      "lockStartPresent": false,
+      "hasExtend": true,
+      "title": "延长锁定"
     }
   },
   "pass": true

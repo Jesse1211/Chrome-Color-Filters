@@ -1,0 +1,737 @@
+{
+  "clause": "T6c【折叠改造】锁定 UI 折叠为一行入口 + 独立子页面(真实 Chrome)",
+  "assertions": [
+    {
+      "name": "阶段 0:1 条规则、主开关 OFF、未锁定",
+      "ok": true,
+      "detail": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": 1
+      }
+    },
+    {
+      "name": "🔴 C1 列表页**只有一行**锁定入口,内联时长选择器/预设/启动按钮全部不在场",
+      "ok": true,
+      "detail": {
+        "ids": [
+          "popup",
+          "brand-dot",
+          "master-switch",
+          "master-off-notice",
+          "rule-list",
+          "rule-row-0",
+          "rule-grip-0",
+          "rule-open-0",
+          "rule-pattern-0",
+          "swatch-pair",
+          "swatch",
+          "swatch-name",
+          "rule-delete-0",
+          "lock-entry",
+          "lock-open",
+          "add-rule",
+          "rule-count"
+        ],
+        "view": "list",
+        "locked": "false",
+        "skeleton": "false",
+        "entryTag": "BUTTON",
+        "entryClass": "add-button lock-entry-row__button",
+        "entryText": "🔒 时间锁定›",
+        "entryAria": "时间锁定,打开设置页",
+        "addRuleClass": "add-button",
+        "buttons": [
+          "master-switch",
+          "rule-grip-0",
+          "rule-open-0",
+          "rule-delete-0",
+          "lock-open",
+          "add-rule"
+        ],
+        "numberInputs": 0,
+        "selects": 0,
+        "ranges": 0,
+        "forbiddenInText": [],
+        "forbiddenInNames": []
+      }
+    },
+    {
+      "name": "🔴 C1b 列表页上**没有任何**数字输入或下拉(时长控件一个都没留下)",
+      "ok": true,
+      "detail": {
+        "numberInputs": 0,
+        "selects": 0
+      }
+    },
+    {
+      "name": "🔴 C2 入口行是真 `<button>`(不是可点击的 div),有可见文案 + 无障碍名",
+      "ok": true,
+      "detail": {
+        "tag": "BUTTON",
+        "text": "🔒 时间锁定›",
+        "aria": "时间锁定,打开设置页"
+      }
+    },
+    {
+      "name": "C2b 与「添加规则」共享 `.add-button` 基类(视觉语言一致,§5.1 token)",
+      "ok": true,
+      "detail": {
+        "entryClass": "add-button lock-entry-row__button",
+        "addRuleClass": "add-button"
+      }
+    },
+    {
+      "name": "🔴 C2c 入口行**键盘可聚焦且回车可触发**(无障碍:不只响应鼠标)",
+      "ok": true,
+      "detail": {
+        "focusedTestId": "lock-open"
+      }
+    },
+    {
+      "name": "🔴 C3 子页面:标题 + 返回键 + 预设行 + 数字 + 单位 + 启动按钮俱在",
+      "ok": true,
+      "detail": {
+        "ids": [
+          "popup",
+          "lock-back",
+          "lock-view-title",
+          "lock-start-section",
+          "lock-start-duration",
+          "lock-start-preset-30-minute",
+          "lock-start-preset-1-hour",
+          "lock-start-preset-4-hour",
+          "lock-start-preset-8-hour",
+          "lock-start-preset-1-day",
+          "lock-start-amount",
+          "lock-start-unit",
+          "lock-start"
+        ],
+        "view": "lock",
+        "locked": "false",
+        "skeleton": "false",
+        "entryTag": null,
+        "entryClass": null,
+        "entryText": null,
+        "entryAria": null,
+        "addRuleClass": null,
+        "buttons": [
+          "lock-back",
+          "lock-start-preset-30-minute",
+          "lock-start-preset-1-hour",
+          "lock-start-preset-4-hour",
+          "lock-start-preset-8-hour",
+          "lock-start-preset-1-day",
+          "lock-start"
+        ],
+        "numberInputs": 1,
+        "selects": 1,
+        "ranges": 0,
+        "forbiddenInText": [
+          "提前结束"
+        ],
+        "forbiddenInNames": [],
+        "title": "专注锁定"
+      }
+    },
+    {
+      "name": "🔴 C3b ADR-058:子页面里没有任何 datetime/date/time/自由文本输入(不接受裸时间戳)",
+      "ok": true,
+      "detail": {
+        "checked": [
+          "datetime-local",
+          "date",
+          "time",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "🔴 C3e ADR-052:**未锁定**子页面必须在启动前就说清「只能延长,不能提前结束」",
+      "ok": true,
+      "detail": {
+        "hintPresent": [
+          "提前结束"
+        ]
+      }
+    },
+    {
+      "name": "🔴 C3f 该告知只是**文案**,不是控件:未锁定子页面的按钮集里没有解除类入口",
+      "ok": true,
+      "detail": {
+        "buttons": [
+          "lock-back",
+          "lock-start-preset-30-minute",
+          "lock-start-preset-1-hour",
+          "lock-start-preset-4-hour",
+          "lock-start-preset-8-hour",
+          "lock-start-preset-1-day",
+          "lock-start"
+        ],
+        "forbiddenInNames": []
+      }
+    },
+    {
+      "name": "🔴 C3c I2:子页面里**没有**预览通道或规则编辑控件(强度滑块/网址输入/规则列表)",
+      "ok": true,
+      "detail": {
+        "ids": [
+          "popup",
+          "lock-back",
+          "lock-view-title",
+          "lock-start-section",
+          "lock-start-duration",
+          "lock-start-preset-30-minute",
+          "lock-start-preset-1-hour",
+          "lock-start-preset-4-hour",
+          "lock-start-preset-8-hour",
+          "lock-start-preset-1-day",
+          "lock-start-amount",
+          "lock-start-unit",
+          "lock-start"
+        ],
+        "view": "lock",
+        "locked": "false",
+        "skeleton": "false",
+        "entryTag": null,
+        "entryClass": null,
+        "entryText": null,
+        "entryAria": null,
+        "addRuleClass": null,
+        "buttons": [
+          "lock-back",
+          "lock-start-preset-30-minute",
+          "lock-start-preset-1-hour",
+          "lock-start-preset-4-hour",
+          "lock-start-preset-8-hour",
+          "lock-start-preset-1-day",
+          "lock-start"
+        ],
+        "numberInputs": 1,
+        "selects": 1,
+        "ranges": 0,
+        "forbiddenInText": [
+          "提前结束"
+        ],
+        "forbiddenInNames": []
+      }
+    },
+    {
+      "name": "🔴 C3d 返回键回到列表视图,且 ADR-061:导航路径上**零写入**",
+      "ok": true,
+      "detail": {
+        "view": "list",
+        "beforeBack": {
+          "lockUntil": null,
+          "masterEnabled": false,
+          "rules": 1
+        },
+        "afterBack": {
+          "lockUntil": null,
+          "masterEnabled": false,
+          "rules": 1
+        }
+      }
+    },
+    {
+      "name": "🔴 C4 ADR-056:确认框出现,且**未确认前零写入**",
+      "ok": true,
+      "detail": {
+        "beforeConfirm": {
+          "lockUntil": null,
+          "masterEnabled": false,
+          "rules": 1
+        },
+        "afterConfirmShown": {
+          "lockUntil": null,
+          "masterEnabled": false,
+          "rules": 1
+        }
+      }
+    },
+    {
+      "name": "🔴 C4b ADR-056:确认文案**逐条**列出三条后果",
+      "ok": true,
+      "detail": [
+        "无法修改任何设置",
+        "无法关闭滤镜",
+        "无法提前结束(只能延长)"
+      ]
+    },
+    {
+      "name": "🔴 C4c ADR-057:主开关 OFF 时确认框告知「启动锁定将同时开启滤镜」",
+      "ok": true,
+      "detail": {
+        "willEnableMaster": true
+      }
+    },
+    {
+      "name": "C4d 不可逆操作:确认框初始焦点落在「取消」而非「确认锁定」",
+      "ok": true,
+      "detail": {
+        "focusedTestId": "lock-confirm-cancel"
+      }
+    },
+    {
+      "name": "🔴 C4e ADR-056:「取消」关框、**零写入**、仍留在子页面(可改时长再试)",
+      "ok": true,
+      "detail": {
+        "afterCancel": {
+          "lockUntil": null,
+          "masterEnabled": false,
+          "rules": 1
+        },
+        "view": "lock"
+      }
+    },
+    {
+      "name": "🔴🔴 C4f 从子页面启动锁定端到端成功:磁盘上 lockUntil 为未来时间戳(ADR-053)",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795579074066,
+        "masterEnabled": true,
+        "rules": 1
+      }
+    },
+    {
+      "name": "🔴🔴 C4g ADR-057:主开关 OFF 状态下启动锁定 → 主开关**自动变 ON**",
+      "ok": true,
+      "detail": {
+        "masterEnabled": true
+      }
+    },
+    {
+      "name": "🔴 C5 启动成功后子页面当场换成延长形态:标题「延长锁定」,启动区消失",
+      "ok": true,
+      "detail": {
+        "ids": [
+          "popup",
+          "lock-back",
+          "lock-view-title",
+          "lock-extend-panel",
+          "lock-view-countdown",
+          "lock-extend-duration",
+          "lock-extend-amount",
+          "lock-extend-unit",
+          "lock-extend"
+        ],
+        "view": "lock",
+        "locked": "true",
+        "skeleton": "false",
+        "entryTag": null,
+        "entryClass": null,
+        "entryText": null,
+        "entryAria": null,
+        "addRuleClass": null,
+        "buttons": [
+          "lock-back",
+          "lock-extend"
+        ],
+        "numberInputs": 1,
+        "selects": 1,
+        "ranges": 0,
+        "forbiddenInText": [],
+        "forbiddenInNames": [],
+        "title": "延长锁定"
+      }
+    },
+    {
+      "name": "🔴 C5b 锁定中**列表页仍显示倒计时**(产品负责人:剩余时间一眼可见)",
+      "ok": true,
+      "detail": {
+        "countdown": "🔒 锁定中 00:02:00"
+      }
+    },
+    {
+      "name": "🔴 C5c 锁定中列表页**没有**延长控件、也没有折叠入口行(两者互斥)",
+      "ok": true,
+      "detail": {
+        "ids": [
+          "popup",
+          "brand-dot",
+          "master-switch",
+          "lock-banner",
+          "lock-open",
+          "lock-countdown",
+          "priority-hint",
+          "rule-list",
+          "rule-row-0",
+          "rule-grip-0",
+          "rule-open-0",
+          "rule-pattern-0",
+          "rule-live-0",
+          "swatch-pair",
+          "swatch",
+          "swatch-name",
+          "rule-delete-0",
+          "add-rule",
+          "rule-count"
+        ],
+        "view": "list",
+        "locked": "true",
+        "skeleton": "false",
+        "entryTag": "BUTTON",
+        "entryClass": "lock-banner__open",
+        "entryText": "🔒 锁定中 00:02:00›锁定期间设置不可修改",
+        "entryAria": "锁定中,打开延长页",
+        "addRuleClass": "add-button",
+        "buttons": [
+          "master-switch",
+          "lock-open",
+          "rule-grip-0",
+          "rule-open-0",
+          "rule-delete-0",
+          "add-rule"
+        ],
+        "numberInputs": 0,
+        "selects": 0,
+        "ranges": 0,
+        "forbiddenInText": [],
+        "forbiddenInNames": []
+      }
+    },
+    {
+      "name": "ADR-051 锁定中列表页全部设置控件禁用(含主开关)",
+      "ok": true,
+      "detail": {
+        "master": true,
+        "add": true
+      }
+    },
+    {
+      "name": "🔴🔴 C5d 点倒计时条进子页面 → **延长成功**,lockUntil 严格变大(加了 3 分钟)",
+      "ok": true,
+      "detail": {
+        "beforeExtend": 1795579074066,
+        "afterExtend": 1795579254066,
+        "deltaMs": 180000
+      }
+    },
+    {
+      "name": "C5e 列表页倒计时条与子页面回显同源(同一个 lockUntil)",
+      "ok": true,
+      "detail": {
+        "listAttr": 1795579254066,
+        "afterExtend": 1795579254066
+      }
+    },
+    {
+      "name": "🔴🔴 C6 锁定中**列表页**:可见文本与无障碍名里都不含任何解除/缩短类词汇",
+      "ok": true,
+      "detail": {
+        "inText": [],
+        "inNames": []
+      }
+    },
+    {
+      "name": "🔴🔴 C6b 锁定中**子页面**:可见文本与无障碍名里都不含任何解除/缩短类词汇",
+      "ok": true,
+      "detail": {
+        "inText": [],
+        "inNames": []
+      }
+    },
+    {
+      "name": "🔴🔴 C6c 锁定中子页面里**只有两个按钮**:返回(只切视图)+ 延长(唯一写入)",
+      "ok": true,
+      "detail": {
+        "buttons": [
+          "lock-back",
+          "lock-extend"
+        ]
+      }
+    },
+    {
+      "name": "🔴🔴 C6d 「返回」**不是**「解除」:返回列表后 lockUntil 不变、data-locked 仍为 true",
+      "ok": true,
+      "detail": {
+        "afterBackLocked": {
+          "lockUntil": 1795579254066,
+          "masterEnabled": true,
+          "rules": 1
+        },
+        "locked": "true"
+      }
+    },
+    {
+      "name": "🔴 C6e 探针有效性:注入一个「解除锁定」按钮后,同一组扫描**当场报出违规**",
+      "ok": true,
+      "detail": {
+        "inText": [
+          "解除"
+        ],
+        "inNames": [
+          "解除"
+        ]
+      }
+    }
+  ],
+  "data": {
+    "phase0": {
+      "lockUntil": null,
+      "masterEnabled": false,
+      "rules": 1
+    },
+    "c1_list": {
+      "ids": [
+        "popup",
+        "brand-dot",
+        "master-switch",
+        "master-off-notice",
+        "rule-list",
+        "rule-row-0",
+        "rule-grip-0",
+        "rule-open-0",
+        "rule-pattern-0",
+        "swatch-pair",
+        "swatch",
+        "swatch-name",
+        "rule-delete-0",
+        "lock-entry",
+        "lock-open",
+        "add-rule",
+        "rule-count"
+      ],
+      "view": "list",
+      "locked": "false",
+      "skeleton": "false",
+      "entryTag": "BUTTON",
+      "entryClass": "add-button lock-entry-row__button",
+      "entryText": "🔒 时间锁定›",
+      "entryAria": "时间锁定,打开设置页",
+      "addRuleClass": "add-button",
+      "buttons": [
+        "master-switch",
+        "rule-grip-0",
+        "rule-open-0",
+        "rule-delete-0",
+        "lock-open",
+        "add-rule"
+      ],
+      "numberInputs": 0,
+      "selects": 0,
+      "ranges": 0,
+      "forbiddenInText": [],
+      "forbiddenInNames": []
+    },
+    "c3_subpage": {
+      "ids": [
+        "popup",
+        "lock-back",
+        "lock-view-title",
+        "lock-start-section",
+        "lock-start-duration",
+        "lock-start-preset-30-minute",
+        "lock-start-preset-1-hour",
+        "lock-start-preset-4-hour",
+        "lock-start-preset-8-hour",
+        "lock-start-preset-1-day",
+        "lock-start-amount",
+        "lock-start-unit",
+        "lock-start"
+      ],
+      "view": "lock",
+      "locked": "false",
+      "skeleton": "false",
+      "entryTag": null,
+      "entryClass": null,
+      "entryText": null,
+      "entryAria": null,
+      "addRuleClass": null,
+      "buttons": [
+        "lock-back",
+        "lock-start-preset-30-minute",
+        "lock-start-preset-1-hour",
+        "lock-start-preset-4-hour",
+        "lock-start-preset-8-hour",
+        "lock-start-preset-1-day",
+        "lock-start"
+      ],
+      "numberInputs": 1,
+      "selects": 1,
+      "ranges": 0,
+      "forbiddenInText": [
+        "提前结束"
+      ],
+      "forbiddenInNames": [],
+      "title": "专注锁定"
+    },
+    "c3_back": {
+      "beforeBack": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": 1
+      },
+      "afterBack": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": 1
+      },
+      "view": "list"
+    },
+    "c4_dialog": {
+      "dialog": {
+        "text": "确认启动锁定?将锁定 2 分钟无法修改任何设置无法关闭滤镜无法提前结束(只能延长)滤镜当前已关闭,启动锁定将同时开启滤镜取消确认锁定",
+        "consequences": [
+          "无法修改任何设置",
+          "无法关闭滤镜",
+          "无法提前结束(只能延长)"
+        ],
+        "willEnableMaster": true,
+        "duration": "将锁定 2 分钟",
+        "focusedTestId": "lock-confirm-cancel"
+      },
+      "beforeConfirm": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": 1
+      },
+      "afterConfirmShown": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": 1
+      }
+    },
+    "c4_cancel": {
+      "afterCancel": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": 1
+      },
+      "view": "lock"
+    },
+    "c4_started": {
+      "lockUntil": 1795579074066,
+      "masterEnabled": true,
+      "rules": 1
+    },
+    "c5_subpage_locked": {
+      "ids": [
+        "popup",
+        "lock-back",
+        "lock-view-title",
+        "lock-extend-panel",
+        "lock-view-countdown",
+        "lock-extend-duration",
+        "lock-extend-amount",
+        "lock-extend-unit",
+        "lock-extend"
+      ],
+      "view": "lock",
+      "locked": "true",
+      "skeleton": "false",
+      "entryTag": null,
+      "entryClass": null,
+      "entryText": null,
+      "entryAria": null,
+      "addRuleClass": null,
+      "buttons": [
+        "lock-back",
+        "lock-extend"
+      ],
+      "numberInputs": 1,
+      "selects": 1,
+      "ranges": 0,
+      "forbiddenInText": [],
+      "forbiddenInNames": [],
+      "title": "延长锁定"
+    },
+    "c5_list_locked": {
+      "ids": [
+        "popup",
+        "brand-dot",
+        "master-switch",
+        "lock-banner",
+        "lock-open",
+        "lock-countdown",
+        "priority-hint",
+        "rule-list",
+        "rule-row-0",
+        "rule-grip-0",
+        "rule-open-0",
+        "rule-pattern-0",
+        "rule-live-0",
+        "swatch-pair",
+        "swatch",
+        "swatch-name",
+        "rule-delete-0",
+        "add-rule",
+        "rule-count"
+      ],
+      "view": "list",
+      "locked": "true",
+      "skeleton": "false",
+      "entryTag": "BUTTON",
+      "entryClass": "lock-banner__open",
+      "entryText": "🔒 锁定中 00:02:00›锁定期间设置不可修改",
+      "entryAria": "锁定中,打开延长页",
+      "addRuleClass": "add-button",
+      "buttons": [
+        "master-switch",
+        "lock-open",
+        "rule-grip-0",
+        "rule-open-0",
+        "rule-delete-0",
+        "add-rule"
+      ],
+      "numberInputs": 0,
+      "selects": 0,
+      "ranges": 0,
+      "forbiddenInText": [],
+      "forbiddenInNames": [],
+      "countdown": "🔒 锁定中 00:02:00"
+    },
+    "c5_extend": {
+      "beforeExtend": 1795579074066,
+      "afterExtend": 1795579254066,
+      "deltaMs": 180000
+    },
+    "c6_sub_locked": {
+      "ids": [
+        "popup",
+        "lock-back",
+        "lock-view-title",
+        "lock-extend-panel",
+        "lock-view-countdown",
+        "lock-extend-duration",
+        "lock-extend-amount",
+        "lock-extend-unit",
+        "lock-extend"
+      ],
+      "view": "lock",
+      "locked": "true",
+      "skeleton": "false",
+      "entryTag": null,
+      "entryClass": null,
+      "entryText": null,
+      "entryAria": null,
+      "addRuleClass": null,
+      "buttons": [
+        "lock-back",
+        "lock-extend"
+      ],
+      "numberInputs": 1,
+      "selects": 1,
+      "ranges": 0,
+      "forbiddenInText": [],
+      "forbiddenInNames": []
+    },
+    "c6_back_not_release": {
+      "afterBackLocked": {
+        "lockUntil": 1795579254066,
+        "masterEnabled": true,
+        "rules": 1
+      },
+      "locked": "true"
+    },
+    "c6_probe": {
+      "inText": [
+        "解除"
+      ],
+      "inNames": [
+        "解除"
+      ]
+    }
+  },
+  "pass": true
+}

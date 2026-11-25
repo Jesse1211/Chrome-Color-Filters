@@ -42,3 +42,6 @@ docs/T4a-gate/out/
 # 真正的证据是同目录下的 *.json / *.png / log-*.txt,那些要入库。
 docs/T7-gate/out/udd-*/
 docs/T7-gate/out/profile-*/
+
+# T6c 门禁(锁定 UI 折叠改造)同理 —— 证据是 *.json / *.png,profile 不入库。
+docs/T6c-gate/out/udd-*/
