@@ -28,7 +28,7 @@
  * ## 运行时机
  *
  * `npm run build` 的 `prebuild` 钩子。产物进 `public/`,WXT 原样拷进
- * `.output/chrome-mv3/filters/`,于是
+ * `build/chrome-mv3/filters/`,于是
  * `registerContentScripts({ css: ['filters/gray-100.css'] })` 的路径成立。
  *
  * 📌 产物**提交进仓库**(同 ADR-045 的图标做法):

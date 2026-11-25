@@ -7,7 +7,7 @@
  * 这条路径此前从未被机械验证过。T7 用本文件把它钉死。
  *
  * ⚠️ 本文件**不进产品**:它由 `docs/T7-gate/build-probe.mjs` 单独打包进
- * `.output/chrome-mv3/ccf-repo-probe.js`,仅供门禁运行时 `import()`。
+ * `build/chrome-mv3/ccf-repo-probe.js`,仅供门禁运行时 `import()`。
  * `npm run build` 不产出它(WXT 只认 `entrypoints/`)。
  *
  * 🔴 关键:它 import 的是 `src/storage/settings-repository.ts` ——

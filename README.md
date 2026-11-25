@@ -29,9 +29,9 @@ npx wxt@latest init . --template react
 | 构建 | `npm run build` |
 | 重新生成图标 | `npm run icons` |
 
-> **⚠️ 产物目录是 `.output/chrome-mv3/`,不是 `dist/`。**
+> **⚠️ 产物目录是 `build/chrome-mv3/`,不是 `dist/`。**
 >
-> 加载扩展:`chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → `.output/chrome-mv3/`
+> 加载扩展:`chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → `build/chrome-mv3/`
 
 ### 📌 零闪烁(INV-3)验收只在构建产物上做(ADR-038)
 
@@ -40,7 +40,7 @@ WXT **dev 模式的 manifest 完全不含 `content_scripts`**,改由 service wor
 **所以 dev 模式下零闪烁必然不成立,这不是 bug。**
 `wxt build` 的生产构建才输出静态 `content_scripts` 并原样传递 `run_at`。
 
-同理,**核对权限须看 `.output/chrome-mv3/manifest.json`**,不看 dev manifest
+同理,**核对权限须看 `build/chrome-mv3/manifest.json`**,不看 dev manifest
 (dev 下 WXT 会从 `matches` 推导并追加 host permissions,权限集与生产不同)。
 
 ## 目录结构

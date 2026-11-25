@@ -1,7 +1,7 @@
 # T4b REAL_STACK_GATE —— 复现方法与结果
 
 > 本目录是 T4b(存活性、预览与隐私审计)的**真实栈验收**脚本与证据。
-> 所有脚本都跑在 **`npm run build` 产物**(`.output/chrome-mv3/`)上 —— **ADR-038**。
+> 所有脚本都跑在 **`npm run build` 产物**(`build/chrome-mv3/`)上 —— **ADR-038**。
 
 ## 复现
 

@@ -6,7 +6,7 @@
 > 【回归】复用 `docs/T4a-gate/`、`docs/T4b-gate/`、`docs/T5-gate/`、
 > `docs/T6b-gate/` 已有的脚本,**不重写**。
 >
-> 全部脚本跑在 **`npm run build` 产物**(`.output/chrome-mv3/`)上 —— **ADR-038**。
+> 全部脚本跑在 **`npm run build` 产物**(`build/chrome-mv3/`)上 —— **ADR-038**。
 
 ## 0. 前置与复现
 
@@ -14,10 +14,10 @@
 # 门禁依赖(puppeteer-core / pngjs)与 Chrome for Testing 的位置
 export NODE_PATH=/private/tmp/ff-wt4/gatedeps/node_modules
 
-# 🔴 必须先清空重建 —— 陈旧 .output 曾让门禁在一个**已被删除的滤镜模式**上报 PASS
-rm -rf .output && npm run build
-ls .output/chrome-mv3/filters | wc -l            # 必须是 101(ADR-075 后)
-ls .output/chrome-mv3/filters | grep -c redgreen # 必须是 0
+# 🔴 必须先清空重建 —— 陈旧产物曾让门禁在一个**已被删除的滤镜模式**上报 PASS
+rm -rf build && npm run build
+ls build/chrome-mv3/filters | wc -l            # 必须是 101(ADR-075 后)
+ls build/chrome-mv3/filters | grep -c redgreen # 必须是 0
 
 # 【新增】条款(本目录)
 # 先打包两个门禁专用探针(见 §2):
@@ -96,7 +96,7 @@ INV-14 / ADR-055 的原文是「**绕过 UI 的写入(如从 service worker 或�
 - `probe/repo-probe.src.ts` import 的是**产品自己的**
   `src/storage/settings-repository.ts`,不是替身;
 - 由 `build-probe.mjs` 用仓库自带的 rolldown 打包进
-  `.output/chrome-mv3/ccf-repo-probe.js`(**不新增依赖**);
+  `build/chrome-mv3/ccf-repo-probe.js`(**不新增依赖**);
 - 承载页 `ccf-repo-probe.html` 走**外部**模块脚本 ——
   扩展页面的 CSP 是 `script-src 'self'`,内联 script 会被静默拦掉
   (实测踩过:页面 200、探针没装上);

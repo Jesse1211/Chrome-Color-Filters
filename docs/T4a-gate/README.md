@@ -1,7 +1,7 @@
 # T4a REAL_STACK_GATE —— 复现方法与结果
 
 > 本目录是 T4a(核心注入)的**真实栈验收**脚本与证据。
-> 所有脚本都跑在 **`npm run build` 产物**(`.output/chrome-mv3/`)上 —— **ADR-038**:
+> 所有脚本都跑在 **`npm run build` 产物**(`build/chrome-mv3/`)上 —— **ADR-038**:
 > dev 模式的 manifest 完全不含 `content_scripts`,零闪烁验收在 dev 下必然不成立。
 
 ## 复现
@@ -232,7 +232,7 @@ filter 字符串在**读取时**由 `filterCssValue` 当场算出。
 
 ### 4. 【上一轮·门禁缺陷】lib.cjs 写死了机器绝对路径
 
-`EXT` 曾是 `/tmp/ff-wt/T4a/.output/chrome-mv3`,而 README 让读者在仓库根跑 ——
+`EXT` 曾是 `/tmp/ff-wt/T4a/build/chrome-mv3`,而 README 让读者在仓库根跑 ——
 照做会撞上「缺少生产构建产物」并误判成构建坏了。现改为相对**仓库根**解析
 (可用 `CCF_EXT_DIR` 覆盖)。
 

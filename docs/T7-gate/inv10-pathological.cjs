@@ -132,7 +132,7 @@ async function measureMatchCost(browser, url, extId) {
     //       (产品的 matchGlob 在 matchGlobStrict 之外还按 ADR-006 的
     //        省略规则最多再调 3 次,手抄必然失真且会静默漂移)。
     const iifeSrc = fs.readFileSync(
-      path.join(__dirname, '..', '..', '.output', 'chrome-mv3', 'ccf-glob-probe.iife.js'), 'utf8');
+      path.join(__dirname, '..', '..', 'build', 'chrome-mv3', 'ccf-glob-probe.iife.js'), 'utf8');
 
     const expr = `(() => {
       ${iifeSrc}

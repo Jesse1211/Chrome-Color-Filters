@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const CS = resolve(ROOT, '.output/chrome-mv3/content-scripts/content.js');
+const CS = resolve(ROOT, 'build/chrome-mv3/content-scripts/content.js');
 const built = existsSync(CS);
 
 function walk(dir: string): string[] {

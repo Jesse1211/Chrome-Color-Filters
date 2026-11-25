@@ -1,7 +1,7 @@
 /**
  * 生产构建产物门禁(ADR-004 / ADR-010 / ADR-038 / ADR-040 / ADR-045,INV-3)。
  *
- * 🔴 ADR-038:**权限核对与 INV-3 相关验收须针对 `.output/chrome-mv3/manifest.json`,
+ * 🔴 ADR-038:**权限核对与 INV-3 相关验收须针对 `build/chrome-mv3/manifest.json`,
  * 不得以 dev manifest 为准。** dev 模式下 WXT 的 manifest 完全不含 `content_scripts`,
  * 且会从 `matches` 推导并追加 host permissions —— 权限集与生产不同。
  *
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT_DIR = resolve(ROOT, '.output/chrome-mv3');
+const OUT_DIR = resolve(ROOT, 'build/chrome-mv3');
 const MANIFEST = resolve(OUT_DIR, 'manifest.json');
 
 const built = existsSync(MANIFEST);
@@ -51,7 +51,7 @@ interface Manifest {
 }
 
 describe.skipIf(!built)(
-  '生产 manifest(.output/chrome-mv3/manifest.json,ADR-038)',
+  '生产 manifest(build/chrome-mv3/manifest.json,ADR-038)',
   () => {
     const manifest = built
       ? (JSON.parse(readFileSync(MANIFEST, 'utf8')) as Manifest)
@@ -136,7 +136,7 @@ describe.skipIf(!built)(
 //
 // 为什么必须在**产物**上验:注册的 `css` 字段是扩展包内的相对路径。
 // 源码里 `public/filters/gray-100.css` 存在,不等于产物里
-// `.output/chrome-mv3/filters/gray-100.css` 存在 —— 中间隔着 WXT 的
+// `build/chrome-mv3/filters/gray-100.css` 存在 —— 中间隔着 WXT 的
 // public 目录拷贝。拷贝链路一断,注册会在运行时静默失败
 // (Chrome 对不存在的 css 路径报 "Could not load file"),
 // 而源码侧的单测照样全绿。这正是 §8 第 8 条所警告的那类风险。
@@ -287,8 +287,12 @@ describe.skipIf(!built)('T4a · service worker 含声明式注册逻辑(ADR-062/
 });
 
 describe('构建产物目录约定', () => {
-  it('WXT 的产物目录是 .output/chrome-mv3/,不是 dist/', () => {
+  it('产物目录是 build/chrome-mv3/(wxt.config.ts 的 outDir),不是 dist/ 或 .output/', () => {
     expect(existsSync(resolve(ROOT, 'dist'))).toBe(false);
+    // 🔴 `.output` 是 WXT 的**默认**产物目录。若有人删掉 wxt.config.ts 的
+    //    `outDir: 'build'`,产物会静默回到 .output/,而所有按 build/ 找产物的
+    //    门禁只会报「缺少生产构建产物」—— 这条断言让根因直接可见(ADR-038)。
+    expect(existsSync(resolve(ROOT, '.output'))).toBe(false);
   });
 });
 

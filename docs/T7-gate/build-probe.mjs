@@ -1,6 +1,6 @@
 // 把门禁探针(docs/T7-gate/probe/repo-probe.src.ts)打包进构建产物。
 // 用仓库自带的 rolldown(vite 8 的打包器),不新增依赖。
-// 🔴 产出物 `.output/chrome-mv3/ccf-repo-probe.js` **仅供门禁 import()**,
+// 🔴 产出物 `build/chrome-mv3/ccf-repo-probe.js` **仅供门禁 import()**,
 //    不在 manifest 里、不被任何产品代码引用,`npm run build` 会把它冲掉
 //    (因为 WXT 清空 .output)—— 这正是我们想要的:它不可能溜进发布包。
 import { rolldown } from 'rolldown';
@@ -16,7 +16,7 @@ const bundle = await rolldown({
   resolve: { extensionAlias: { '.js': ['.ts', '.js'] } },
 });
 await bundle.write({
-  file: path.join(root, '.output', 'chrome-mv3', 'ccf-repo-probe.js'),
+  file: path.join(root, 'build', 'chrome-mv3', 'ccf-repo-probe.js'),
   format: 'esm',
   inlineDynamicImports: true,
 });
@@ -43,7 +43,7 @@ await bundle.close();
 //    内联脚本会被静默拦掉,页面看起来加载成功但探针根本没装上。
 //    故再写一个**外部**模块脚本 `ccf-repo-probe-boot.js`。
 import fsp from 'node:fs/promises';
-const outDir = path.join(root, '.output', 'chrome-mv3');
+const outDir = path.join(root, 'build', 'chrome-mv3');
 await fsp.writeFile(
   path.join(outDir, 'ccf-repo-probe-boot.js'),
   `import { probe } from './ccf-repo-probe.js';
@@ -77,4 +77,4 @@ await iife.write({
 });
 await iife.close();
 
-console.log('probe built → .output/chrome-mv3/ccf-repo-probe.{js,html} + -boot.js + ccf-glob-probe.iife.js');
+console.log('probe built → build/chrome-mv3/ccf-repo-probe.{js,html} + -boot.js + ccf-glob-probe.iife.js');

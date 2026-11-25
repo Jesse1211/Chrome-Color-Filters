@@ -9,6 +9,10 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   {
     ignores: [
+      // 构建产物(wxt.config.ts 的 outDir)。里面是压缩后的 bundle,
+      // lint 它只会产出噪音。`.output/**` 保留:它是 WXT 的默认目录,
+      // 万一 outDir 配置被移除,产物会落回那里。
+      'build/**',
       '.output/**',
       '.wxt/**',
       'node_modules/**',

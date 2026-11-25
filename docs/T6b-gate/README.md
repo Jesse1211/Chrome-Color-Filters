@@ -1,7 +1,7 @@
 # T6b REAL_STACK_GATE —— 复现方法与结果
 
 > 本目录是 T6b(Popup 编辑视图)的**真实栈验收**脚本与证据。
-> 脚本跑在 **`npm run build` 产物**(`.output/chrome-mv3/`)上 —— **ADR-038**。
+> 脚本跑在 **`npm run build` 产物**(`build/chrome-mv3/`)上 —— **ADR-038**。
 > 启动参数复用 `docs/T4a-gate/lib.cjs` 的 `launch()` —— **ADR-067**(不访问操作系统密钥链)。
 
 ## 复现

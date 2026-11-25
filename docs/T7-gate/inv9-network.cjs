@@ -6,7 +6,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 本脚本只承担 **(c) 真实 DevTools Network 录制**。(a)(b) 两条静态断言由
 // `tests/t4b-static-gates.test.ts` 的 `describe.skipIf(!built)` 两组承担,
-// 它们读的是 `.output/chrome-mv3/content-scripts/content.js`(真实产物)。
+// 它们读的是 `build/chrome-mv3/content-scripts/content.js`(真实产物)。
 //
 // ⚠️ 那两组是 `skipIf`,**跳过与通过在默认 reporter 下长得一样** ——
 //    故 T7 必须用 `--reporter=verbose` 确认它们真的跑了(见 README)。

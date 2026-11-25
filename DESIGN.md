@@ -663,7 +663,7 @@ export default defineContentScript({
 > **因此:T1/T4/T7 中所有与 INV-3 相关的验收,一律在 `npm run build` 产物上进行。**
 >
 > 另注:dev 模式下 WXT 会**从 `matches` 推导并追加 host permissions**,导致 dev manifest 的权限集
-> 与生产不同。核对权限时须看 `.output/chrome-mv3/manifest.json`,不看 dev。
+> 与生产不同。核对权限时须看 `build/chrome-mv3/manifest.json`,不看 dev。
 
 **9. 预生成滤镜 CSS 文件(ADR-063/069/070)**
 构建时生成 `public/filters/{mode}-{intensity}.css`,4 模式 × 101 档强度 = **404 个文件**,每个形如:
@@ -705,7 +705,7 @@ html.ccf-on { filter: url("#ccf-{mode}-{intensity}") !important; }
 **gate:**
 - **证明由 CLI 生成** —— 交付注明 `npx wxt@latest init` 及 WXT 版本号。手搓的直接驳回(ADR-035)
 - `TEST_CMD`(`npm test`)全绿、`LINT_CMD`(`npm run lint`)零错误、**`COMPILE_CMD`(`npm run compile`)退出码 0**(ADR-066)
-- `npm run build` 成功,产物在 `.output/chrome-mv3/`
+- `npm run build` 成功,产物在 `build/chrome-mv3/`
 - 产物可在 `chrome://extensions` 加载,无 manifest 错误
 - 生成的 manifest 中:`host_permissions` 含 `<all_urls>`、`permissions` 含 `storage`、content script `run_at` 为 `document_start`
 - **纯度检查测试存在且通过**:`src/domain` 无 React / chrome.* / wxt 依赖(ADR-036)
@@ -713,7 +713,7 @@ html.ccf-on { filter: url("#ccf-{mode}-{intensity}") !important; }
 - `wxt.config.ts` 中 `imports: false`(ADR-039)
 - `package.json` 中 WXT 版本为精确值,无 `^` 或 `~`(ADR-037)
 - **`package.json` 中不含任何 `@crxjs/*` 依赖(ADR-040)** —— 一条 grep。CRXJS 会给 content script 包异步 loader,与 INV-3 根本冲突,且故障表现为「零闪烁做不到」,是本项目最昂贵的误诊
-- **权限核对须针对 `.output/chrome-mv3/manifest.json`**,不得以 dev manifest 为准
+- **权限核对须针对 `build/chrome-mv3/manifest.json`**,不得以 dev manifest 为准
 - **图标资源存在(ADR-045)**:两态各 4 个尺寸共 8 个 PNG 已提交,manifest 已注册,且**两态的文件内容不相同**(断言 hash 不等)
 - **`manifest` 含 `scripting` 权限**(ADR-062 前提)
 - **`public/filters/` 下存在 404 个 CSS 文件**(4 模式 × 101 档),且抽查若干个的 `filter` 值
@@ -1350,9 +1350,9 @@ html.ccf-on { filter: url("#ccf-{mode}-{intensity}") !important; }
 | **`COMPILE_CMD`** | **`npm run compile`**(`tsc --noEmit`) |
 | 开发 | `npm run dev` |
 | 构建 | `npm run build` |
-| 加载扩展 | `chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → `.output/chrome-mv3/` |
+| 加载扩展 | `chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → `build/chrome-mv3/` |
 
-> **⚠️ WXT 的产物目录是 `.output/chrome-mv3/`,不是 `dist/`。**
+> **⚠️ WXT 的产物目录是 `build/chrome-mv3/`,不是 `dist/`。**
 
 ### WXT 目录约定
 

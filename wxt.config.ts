@@ -4,6 +4,17 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
 
+  // 产物目录改为 `build/`(默认是 WXT 的 `.output/`)。
+  // 理由:`.output` 是隐藏目录,用户在「加载已解压的扩展程序」的文件选择器里
+  // 默认看不到它。`build/` 可见、语义直白,且与多数前端项目的习惯一致。
+  //
+  // 🔴 改这里必须同步改以下引用(它们按路径找产物,不读本配置):
+  //    tests/build-manifest.test.ts、tests/t4b-static-gates.test.ts、
+  //    tests/content-script-privacy.test.ts、docs/T4a-gate/lib.cjs、
+  //    docs/T7-gate/build-probe.mjs、docs/T7-gate/inv10-pathological.cjs、
+  //    .gitignore。漏改的表现是「缺少生产构建产物」或门禁读到旧产物(ADR-038)。
+  outDir: 'build',
+
   // ADR-039:关闭 WXT 的 auto-imports。自动全局注入会让 ADR-036 的
   // 纯度静态检查难以实施与阅读 —— 显式 import 才使分层约束可验证。
   imports: false,

@@ -19,10 +19,10 @@ T3 的两条 REAL_STACK_GATE 都依赖「**完全退出并重启浏览器**」�
 
 ```bash
 npm ci
-npm run build          # 产物在 .output/chrome-mv3/(ADR-038:验收一律在 build 产物上)
+npm run build          # 产物在 build/chrome-mv3/(ADR-038:验收一律在 build 产物上)
 ```
 
-`chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选择 `.output/chrome-mv3/`
+`chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选择 `build/chrome-mv3/`
 
 > T3 尚未交付 popup UI(那是 T6a/T6b/T6c)。本阶段通过**扩展的 service worker 控制台**
 > 直接调用仓储层 API —— 这恰好也是 INV-14 要验证的「绕过 UI 的写入路径」。

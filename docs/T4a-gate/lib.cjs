@@ -12,7 +12,7 @@ const CHROME = path.join(__dirname, '..', 'T0-spike', 'spike-code',
 // 否则换一台机器/换一个 worktree 跑 README 的复现步骤就会报「缺少生产构建产物」,
 // 让人误判成构建坏了。可用 CCF_EXT_DIR 覆盖。
 const EXT = process.env.CCF_EXT_DIR
-  || path.join(__dirname, '..', '..', '.output', 'chrome-mv3');
+  || path.join(__dirname, '..', '..', 'build', 'chrome-mv3');
 
 async function launch(userDataDir, opts = {}) {
   if (!fs.existsSync(path.join(EXT, 'manifest.json'))) {

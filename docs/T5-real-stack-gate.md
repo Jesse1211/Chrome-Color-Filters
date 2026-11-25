@@ -39,10 +39,10 @@ DESIGN.md §8 第 8 条:
 
 ```bash
 npm ci
-npm run build          # 产物在 .output/chrome-mv3/(ADR-038:验收一律在 build 产物上)
+npm run build          # 产物在 build/chrome-mv3/(ADR-038:验收一律在 build 产物上)
 ```
 
-`chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选择 `.output/chrome-mv3/`
+`chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选择 `build/chrome-mv3/`
 
 在 service worker 控制台(扩展卡片上点 "Service Worker")写入一条规则:
 
@@ -197,7 +197,7 @@ node docs/T5-gate/tabstate.cjs     # 前置环境同 docs/T4a-gate/README.md
 
 **执行人:** Dev agent(返工第 2 轮) · **日期:** 2026-11-23
 **环境:** Google Chrome for Testing 158.0.8127.36 / Node v23.10.0 / macOS arm64
-**产物:** `npm run build` → `.output/chrome-mv3/`(permissions:`storage, scripting, tabs`)
+**产物:** `npm run build` → `build/chrome-mv3/`(permissions:`storage, scripting, tabs`)
 **原始结果:** `docs/T5-gate/evidence/summary.json`(**30/30 断言通过**)
 
 | GATE | 结果 | 方式 | 备注 |

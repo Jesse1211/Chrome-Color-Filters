@@ -30,7 +30,7 @@ import { defaultFastPathStore, runInjector } from '../src/injection/index.js';
  *
  * 📌 ADR-038:WXT **dev 模式的 manifest 完全不含 `content_scripts`**,改由
  * service worker 运行时 `registerContentScripts()` 注册,赶不上 document_start。
- * 所以 INV-3 的验收一律在 `npm run build` 产物(.output/chrome-mv3/)上做。
+ * 所以 INV-3 的验收一律在 `npm run build` 产物(build/chrome-mv3/)上做。
  */
 export default defineContentScript({
   matches: ['<all_urls>'],

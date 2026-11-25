@@ -1,7 +1,7 @@
 # T5 REAL_STACK_GATE —— 自动化脚本与证据
 
 > 本目录是 T5(后台协调与图标状态)的**真实栈验收**脚本与证据。
-> 脚本跑在 **`npm run build` 产物**(`.output/chrome-mv3/`)上 —— **ADR-038**:
+> 脚本跑在 **`npm run build` 产物**(`build/chrome-mv3/`)上 —— **ADR-038**:
 > dev 模式的 manifest 权限集与生产不同,权限相关的判定在 dev 下不作数。
 
 人工复核步骤与逐条通过判据见 [`../T5-real-stack-gate.md`](../T5-real-stack-gate.md)。
