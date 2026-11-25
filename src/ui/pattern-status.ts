@@ -126,16 +126,6 @@ export interface PatternStatusInput {
 }
 
 /**
- * 判定 §5.6 的状态行。
- *
- * 判定顺序**不可换**:
- * 1. pattern 本身无效 → 语法错误类(表格第四行),此时谈「匹配」毫无意义;
- * 2. 当前页不可注入 / host 未知 → 按「不匹配」渲染(没有 host 可比)——
- *    §5.4 另有琥珀条说明原因,状态行不重复报警;
- * 3. 不匹配 → `no-match`;
- * 4. 匹配 → 再分「生效」与「被遮蔽」。
- */
-/**
  * `GlobPatternError` → 状态行的 `kind`。
  *
  * 原先是一条三层嵌套三元,行为与本表**逐项相同**(含下面那条
@@ -161,6 +151,16 @@ const VALIDATION_ERROR_KIND: Readonly<
   'not-a-string': 'illegal-character',
 };
 
+/**
+ * 判定 §5.6 的状态行。
+ *
+ * 判定顺序**不可换**:
+ * 1. pattern 本身无效 → 语法错误类(表格第四行),此时谈「匹配」毫无意义;
+ * 2. 当前页不可注入 / host 未知 → 按「不匹配」渲染(没有 host 可比)——
+ *    §5.4 另有琥珀条说明原因,状态行不重复报警;
+ * 3. 不匹配 → `no-match`;
+ * 4. 匹配 → 再分「生效」与「被遮蔽」。
+ */
 export function computePatternStatus(input: PatternStatusInput): PatternStatus {
   const { draftPattern, editingIndex, settings, tabState } = input;
   const host = tabState?.injectable === true ? tabState.host : null;

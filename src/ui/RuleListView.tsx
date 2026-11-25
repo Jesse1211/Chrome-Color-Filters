@@ -229,7 +229,13 @@ export function RuleListView({
   const lockEntryDisabled = isSkeleton || masterOff;
 
   /**
-   * 禁用的**原因说明**(无障碍:`title` + `aria-disabled` 的文案来源)。
+   * 禁用的**原因说明**(无障碍:`title` 的文案来源)。
+   *
+   * ⚠️ 原文写的是「`title` + `aria-disabled` 的文案来源」——
+   *    仓里**没有任何控件设置 `aria-disabled`**,这些入口用的都是原生
+   *    `disabled`。`LockEntryRow` 还专门记了为什么不加它(原生 `disabled`
+   *    已播报「不可用」,两者并存会让某些屏幕阅读器播报两遍)。
+   *    故此处只剩 `title` 一个读者。
    *
    * 🔴 与 `rulesDisabled` 的布尔或不同,解释必须**挑一条**说。
    * 优先级 = 「哪条更根本」:
