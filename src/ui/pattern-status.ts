@@ -55,7 +55,12 @@
  * 纯 TypeScript + 领域层 —— 零 React、零 `chrome.*`。
  */
 
-import { type FilterSettings, matchGlob, validateGlobPattern } from '../domain/index.js';
+import {
+  type FilterSettings,
+  type GlobPatternError,
+  matchGlob,
+  validateGlobPattern,
+} from '../domain/index.js';
 import { type TabState } from './tab-state.js';
 
 /* ────────────────────────────── §5.6 状态行 ────────────────────────────── */
@@ -130,6 +135,32 @@ export interface PatternStatusInput {
  * 3. 不匹配 → `no-match`;
  * 4. 匹配 → 再分「生效」与「被遮蔽」。
  */
+/**
+ * `GlobPatternError` → 状态行的 `kind`。
+ *
+ * 原先是一条三层嵌套三元,行为与本表**逐项相同**(含下面那条
+ * `'not-a-string'` 的归并 —— 它当时落在三元最后那个 `:` 上)。
+ *
+ * 🔴 改成 `Record<GlobPatternError, …>` 的收益是**穷举性**:
+ * `GlobPatternError` 将来加一个成员,这里会**编译失败**,
+ * 而嵌套三元只会把新成员静默归进 `'illegal-character'`。
+ * 这正是本文件头提到的那种「以为 tsc 兜着、其实没兜」的反面 ——
+ * 这一处是真的兜住了。
+ */
+const VALIDATION_ERROR_KIND: Readonly<
+  Record<GlobPatternError, PatternStatusKind>
+> = {
+  empty: 'empty',
+  'too-long': 'too-long',
+  'illegal-character': 'illegal-character',
+  /*
+   * `'not-a-string'` 在 UI 层不可达:草稿 pattern 来自受控 `<input>`,
+   * 恒为 string。按「非法字符」渲染是原三元的行为,原样保留 ——
+   * 真要走到这里,给用户看「✕ 含非法字符」也比空白状态行好。
+   */
+  'not-a-string': 'illegal-character',
+};
+
 export function computePatternStatus(input: PatternStatusInput): PatternStatus {
   const { draftPattern, editingIndex, settings, tabState } = input;
   const host = tabState?.injectable === true ? tabState.host : null;
@@ -137,12 +168,11 @@ export function computePatternStatus(input: PatternStatusInput): PatternStatus {
   // ── 1. pattern 本身的合法性(§5.5:语法错误 → 描红 + 保存禁用) ──
   const validation = validateGlobPattern(draftPattern);
   if (!validation.ok) {
-    const kind: PatternStatusKind =
-      validation.error === 'empty'
-        ? 'empty'
-        : validation.error === 'too-long'
-          ? 'too-long'
-          : 'illegal-character';
+    /*
+     * `validateGlobPattern` 的三种 error 直接就是三种 kind,
+     * 一一对应 —— 用查表而不是嵌套三元,省掉「最后那个 : 落到哪」的心算。
+     */
+    const kind: PatternStatusKind = VALIDATION_ERROR_KIND[validation.error];
     return {
       kind,
       tone: 'bad',

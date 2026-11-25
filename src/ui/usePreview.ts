@@ -127,12 +127,17 @@ export function usePreview({
    * `available` 每次翻转都会跑一遍清理,语义就不再是「卸载」了。
    */
   useEffect(() => {
-    return () => {
-      if (!activeRef.current) return;
-      activeRef.current = false;
-      channelRef.current.sendClear();
-    };
-  }, []);
+    /*
+     * 直接把 `clear` 当清理函数,不再把它那三行重抄一遍。
+     *
+     * `clear` 是 `useCallback(…, [])` —— 引用恒定,所以放进依赖数组
+     * **不会**让本 effect 重跑,上面那条「依赖数组必须为空」的要求
+     * 一字未破(清理仍然只在卸载时跑一次)。
+     * 原先的内联副本与 `clear` 逐行相同,改一处忘改另一处就会让
+     * 「卸载时发 CLEAR」和「变不可用时发 CLEAR」两条路径语义漂移。
+     */
+    return clear;
+  }, [clear]);
 
   return useMemo(
     () => ({ available, push, clear }),
