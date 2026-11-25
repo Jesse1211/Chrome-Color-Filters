@@ -247,16 +247,17 @@ export function RuleListView({
    *   不走这个优先级 —— 所以「主开关 OFF + 不可注入页」同时成立时,
    *   横幅照常解释不可注入,而控件的 `title` 说的是更根本的主开关。
    *   两条信息都在页面上,一条都没丢。
+   *
+   * 实现是一条**自上而下的 if 链**(原先是四层嵌套三元)——
+   * 上面那个编号列表与代码行一一对应,读代码即读到优先级顺序。
    */
-  const disabledReason = isSkeleton
-    ? undefined
-    : locked
-      ? LOCKED_DISABLED_REASON
-      : masterOff
-        ? MASTER_OFF_DISABLED_REASON
-        : notInjectable
-          ? NOT_INJECTABLE_MESSAGE
-          : undefined;
+  const disabledReason = ((): string | undefined => {
+    if (isSkeleton) return undefined;
+    if (locked) return LOCKED_DISABLED_REASON;
+    if (masterOff) return MASTER_OFF_DISABLED_REASON;
+    if (notInjectable) return NOT_INJECTABLE_MESSAGE;
+    return undefined;
+  })();
 
   /**
    * 主开关是否禁用。
