@@ -8,6 +8,8 @@
  * ## A. 四种**不发送** `PREVIEW_FILTER` 的情况(F9/F11/I2)
  *
  * 主开关 OFF · 当前页不可注入 · 编辑的 pattern 不匹配当前页 · **锁定中**。
+ * (这是 gate 逐字的四条;`PreviewBlockReason` 另有一个骨架态 `'skeleton'`,
+ *  共**五**个成员 —— 见该类型的文档注释。)
  * 判定在 `computePreviewEligibility`(纯函数,封闭联合);
  * 本 hook 只负责「不可用就一条都不发」。
  *
