@@ -1,9 +1,29 @@
 // 🔴🔒 T7【新增】锁定端到端 —— DESIGN.md §6 T7 gate 原文:
 //
-//   > **【新增】** 🔒 锁定端到端(INV-11/12/13/14):**主开关关闭状态下**启动锁定 →
-//   > **主开关自动变 ON**(ADR-057)→ 尝试改规则、关主开关、**缩短计时器全部失败**
+//   > **【新增】** 🔒 锁定端到端(INV-11/12/13/14):~~**主开关关闭状态下**启动锁定 →
+//   > **主开关自动变 ON**(ADR-057)~~ → 尝试改规则、关主开关、**缩短计时器全部失败**
 //   > → **延长成功** → **完全退出并重启浏览器** → 锁定仍有效、剩余时间正确
 //   > → 等待到期 → 自动解锁且设置可改
+//
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ## 🔴🔴 ADR-076:开头那一段已改写(ADR-057 废止)
+//
+// 原阶段 1 的前半段是「**主开关 OFF 状态下**通过 UI 启动锁定 → 主开关自动变
+// ON」。ADR-076 之后**主开关 OFF 时锁定入口是禁用的,那条路径不可达** ——
+// 照原样跑会卡在一个点不动的按钮上。
+//
+// 改写方式是**替换,不是删除**:
+//   · 新增 **阶段 0b**,在真实 Chrome 上断言 ADR-076 的新真相 ——
+//     主开关 OFF 时「+ 添加规则」与「🔒 时间锁定」**都禁用**、点了零写入
+//     零视图变化,且**带一条探针有效性**(注入一个仍 enabled 的按钮必须被抓到);
+//   · 原「启动后主开关自动变 ON」那条断言,改为
+//     「启动锁定**不连带改动** masterEnabled」(ADR-057 的副作用已删除);
+//   · 原「确认框告知会一并开启滤镜」那条,改为
+//     「确认框里**没有**那段告知」(文案已整条删除)。
+//
+// 🔴 **其余条款(INV-11/12/13/14、跨重启、自然到期、全部负向对照)
+//    一条未删、一条未放宽。** 条款数 38 → 49。
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // ## 两条路径都要测,这是 INV-14 的要求
@@ -108,7 +128,7 @@ async function lockState(browser) {
 }
 
 (async () => {
-  const results = { clause: 'T7【新增】锁定端到端(INV-11/12/13/14 + ADR-053/057)', assertions: [], data: {}, pass: true };
+  const results = { clause: 'T7【新增】锁定端到端(INV-11/12/13/14 + ADR-053 + ADR-076)', assertions: [], data: {}, pass: true };
   const assert = L.makeAsserter(results);
 
   fs.rmSync(udd, { recursive: true, force: true });
@@ -158,8 +178,108 @@ async function lockState(browser) {
     assert('复位:主开关 OFF、1 条规则、未锁定',
       st.masterEnabled === false && st.rules.length === 1 && st.lockUntil === null, st);
 
-    // ═══ 阶段 1:🔴 主开关 OFF 状态下,**通过 UI** 启动 1 分钟锁定 ═════════
+    /* ═══ 🔴🔴 阶段 0b:ADR-076 —— 主开关 OFF ⇒ 两个入口禁用、路径不可达 ═══
+     *
+     * 这一段**替换**了原来的「主开关 OFF 下启动锁定 → 主开关自动变 ON」。
+     * 那条路径现在不可达,而「不可达」本身必须被端到端证明 ——
+     * 否则「ADR-076 已实现」就只是一句话。
+     *
+     * 磁盘此刻:主开关 OFF、1 条规则、未锁定(上一步刚复位)。
+     */
     popup = await L.openPopup(browser, id);
+    await L.waitTestId(popup, 'lock-entry');
+    const offUi = await popup.evaluate(() => {
+      const q = (id) => document.querySelector(`[data-testid="${id}"]`);
+      return {
+        addRuleDisabled: q('add-rule')?.disabled ?? null,
+        addRuleTitle: q('add-rule')?.getAttribute('title') ?? null,
+        lockOpenDisabled: q('lock-open')?.disabled ?? null,
+        lockOpenTitle: q('lock-open')?.getAttribute('title') ?? null,
+        // 主开关自己必须仍可用 —— 它是唯一的回头路。
+        masterDisabled: q('master-switch')?.disabled ?? null,
+        masterChecked: q('master-switch')?.getAttribute('aria-checked') ?? null,
+        // ADR-076 连带:那条提示条已整条删除。
+        hasMasterOffNotice: !!q('master-off-notice'),
+        masterOffText: document.body.innerText
+          .includes('已全局关闭,所有规则暂不生效'),
+      };
+    });
+    results.data.adr076_off = offUi;
+    fs.writeFileSync(path.join(L.OUT, 'lock-00a-master-off-disabled.png'),
+      Buffer.from(await popup.screenshot()));
+
+    assert('🔴🔴 ADR-076:主开关 OFF → 「+ 添加规则」与「🔒 时间锁定」**两个入口都禁用**',
+      offUi.addRuleDisabled === true && offUi.lockOpenDisabled === true, offUi);
+    assert('🔴 ADR-076:主开关**自己仍可用**(唯一的回头路),且两个入口都说得出原因',
+      offUi.masterDisabled === false && offUi.masterChecked === 'false'
+      && offUi.addRuleTitle === offUi.lockOpenTitle
+      && typeof offUi.addRuleTitle === 'string'
+      && offUi.addRuleTitle.includes('请先开启主开关'), offUi);
+    assert('🔴🔴 ADR-076 连带:「已全局关闭,所有规则暂不生效」提示条**已整条删除**',
+      offUi.hasMasterOffNotice === false && offUi.masterOffText === false, offUi);
+
+    // 🔴 点下去什么都不发生:不换视图、磁盘零写入。
+    const beforeOffClicks = await lockState(browser);
+    for (const tid of ['add-rule', 'lock-open']) {
+      await popup.click(`[data-testid="${tid}"]`).catch(() => { /* 禁用 → 点不中是预期 */ });
+    }
+    await new Promise((r) => setTimeout(r, 600));
+    const afterOffClicks = await lockState(browser);
+    const offAfter = await popup.evaluate(() => ({
+      view: document.querySelector('[data-testid="popup"]')?.dataset.view ?? null,
+      hasStart: !!document.querySelector('[data-testid="lock-start"]'),
+      hasPattern: !!document.querySelector('[data-testid="pattern-input"]'),
+    }));
+    results.data.adr076_clicks = { beforeOffClicks, afterOffClicks, offAfter };
+    assert('🔴🔴 ADR-076:点这两个禁用入口 → **视图不变 + 磁盘零写入**(锁定路径确实不可达)',
+      offAfter.view === 'list' && offAfter.hasStart === false
+      && offAfter.hasPattern === false
+      && afterOffClicks.lockUntil === beforeOffClicks.lockUntil
+      && afterOffClicks.masterEnabled === beforeOffClicks.masterEnabled
+      && JSON.stringify(afterOffClicks.rules) === JSON.stringify(beforeOffClicks.rules),
+      { offAfter, beforeOffClicks, afterOffClicks });
+
+    /*
+     * 🔴 探针有效性:上面那条「两个都 disabled」必须真的能被一个
+     *   **仍然 enabled** 的按钮证伪 —— 否则它可能只是因为读错属性而恒成立。
+     */
+    await popup.evaluate(() => {
+      document.querySelector('[data-testid="lock-open"]').disabled = false;
+    });
+    const probeEnabled = await popup.evaluate(() => ({
+      lockOpenDisabled: document.querySelector('[data-testid="lock-open"]').disabled,
+      addRuleDisabled: document.querySelector('[data-testid="add-rule"]').disabled,
+    }));
+    await popup.evaluate(() => {
+      document.querySelector('[data-testid="lock-open"]').disabled = true;
+    });
+    results.data.adr076_probe = probeEnabled;
+    assert('🔴 ADR-076 探针有效性:把「时间锁定」的 disabled 去掉 → 同一组读数**当场翻转**',
+      probeEnabled.lockOpenDisabled === false
+      && probeEnabled.addRuleDisabled === true, probeEnabled);
+
+    /*
+     * 🔴 开回主开关 —— ADR-076 的出路:「要用先开主开关」。
+     *   两个入口必须**一起**恢复,否则后面的阶段根本走不下去。
+     */
+    await L.clickTestId(popup, 'master-switch');
+    await popup.waitForFunction(() => {
+      const el = document.querySelector('[data-testid="master-switch"]');
+      return (el.getAttribute('aria-checked') ?? String(el.checked)) === 'true';
+    }, { timeout: 20000 });
+    const onUi = await popup.evaluate(() => ({
+      addRuleDisabled: document.querySelector('[data-testid="add-rule"]').disabled,
+      lockOpenDisabled: document.querySelector('[data-testid="lock-open"]').disabled,
+    }));
+    results.data.adr076_on = onUi;
+    assert('🔴🔴 ADR-076:主开关 ON → 两个入口**一起恢复可用**(禁用是可逆的)',
+      onUi.addRuleDisabled === false && onUi.lockOpenDisabled === false, onUi);
+
+    st = await lockState(browser);
+    assert('阶段 0b 收尾:主开关 ON、1 条规则、仍未锁定(后续阶段的前置)',
+      st.masterEnabled === true && st.rules.length === 1 && st.lockUntil === null, st);
+
+    // ═══ 阶段 1:**通过 UI** 启动 1 分钟锁定(主开关 ON —— 唯一可达的入口态)═══
     // 列表页:只有一行折叠入口,**没有**内联的时长选择器。
     await L.waitTestId(popup, 'lock-entry');
     const listCollapsed = await popup.evaluate(() => ({
@@ -223,12 +343,30 @@ async function lockState(browser) {
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await popup.select('[data-testid="lock-start-unit"]', 'minute');
-    // ADR-057:主开关关闭时确认框必须告知「会一并开启滤镜」。
+    /*
+     * 🔴🔴 **原断言:「ADR-057:主开关 OFF 时确认框告知『启动锁定会一并开启
+     *    滤镜』」。ADR-057 已由 ADR-076 废止,该告知**整条删除**,故本条款
+     *    **反向重写**:确认框里不得出现那段文案。**
+     *
+     *    不是删掉:删掉之后有人把 `LOCK_WILL_ENABLE_MASTER` 加回来也不会红,
+     *    而 ADR-076 的「连带删除」明确要求它不复存在。
+     */
     await L.clickTestId(popup, 'lock-start');
     await L.waitTestId(popup, 'lock-confirm-backdrop');
     const willEnable = await popup.$('[data-testid="lock-will-enable-master"]');
-    assert('🔴 ADR-057:主开关 OFF 时确认框告知「启动锁定会一并开启滤镜」',
-      willEnable !== null, { present: willEnable !== null });
+    const confirmBody = await L.textOf(popup, 'lock-confirm');
+    assert('🔴🔴 ADR-076:确认框里**没有**「将同时开启滤镜」那段告知(ADR-057 已废止)',
+      willEnable === null && !confirmBody.includes('同时开启滤镜'),
+      { present: willEnable !== null, confirmBody });
+    // 对照:ADR-056 的三条后果照旧逐条在场 —— 删的只是 ADR-057 那一段。
+    const consequences = await popup.evaluate(() =>
+      [...document.querySelectorAll('[data-testid="lock-consequences"] li')]
+        .map((li) => li.textContent));
+    assert('对照 / ADR-056:三条后果照旧逐条在场(删除是精准的,没有误伤确认框)',
+      JSON.stringify(consequences)
+        === JSON.stringify(['无法修改任何设置', '无法关闭滤镜', '无法提前结束(只能延长)']),
+      consequences);
+    const masterBeforeStart = (await lockState(browser)).masterEnabled;
     const confirmText = await L.textOf(popup, 'lock-confirm-duration');
     await L.clickTestId(popup, 'lock-confirm-ok');
     /*
@@ -247,8 +385,15 @@ async function lockState(browser) {
     results.data.phase1 = { ...st, countdown0, confirmText, lockUntilAttr };
     assert('🔴 阶段 1:UI 启动锁定后磁盘上 lockUntil 为未来时间戳(ADR-053 绝对时间)',
       typeof st.lockUntil === 'number' && st.remainingMs > 0 && st.remainingMs <= 61_000, st);
-    assert('🔴🔴 ADR-057:主开关 OFF 状态下启动锁定 → 主开关**自动变 ON**',
-      st.masterEnabled === true, { masterEnabled: st.masterEnabled });
+    /*
+     * 🔴🔴 **原断言:「ADR-057:主开关 OFF 状态下启动锁定 → 主开关自动变 ON」。**
+     *    该路径已不可达(阶段 0b 刚刚端到端证明),副作用写入也已从仓储层删除。
+     *    本条款**反向重写**:启动锁定**不连带改动** masterEnabled ——
+     *    有人把 ADR-057 那行代码加回来就会红。
+     */
+    assert('🔴🔴 ADR-076:启动锁定**不连带改动** masterEnabled(ADR-057 的副作用已删除)',
+      st.masterEnabled === masterBeforeStart && st.masterEnabled === true,
+      { masterBeforeStart, masterAfterStart: st.masterEnabled });
 
     /*
       🔴 启动成功后仍在子页面,且它**当场**换成延长区(ADR-052:锁定中

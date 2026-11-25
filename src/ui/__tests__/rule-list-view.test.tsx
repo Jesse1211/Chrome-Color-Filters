@@ -29,10 +29,12 @@ import {
   CAPACITY_NOTICE,
   EMPTY_HINT,
   EMPTY_TITLE,
-  MASTER_OFF_NOTICE,
+  LOCKED_DISABLED_REASON,
+  MASTER_OFF_DISABLED_REASON,
   NOT_INJECTABLE_MESSAGE,
   PRIORITY_HINT,
 } from '../strings.js';
+import { LockEntryRow } from '../LockEntryRow.js';
 import { LIVE_LABEL, SHADOWED_LABEL } from '../components/RuleRow.js';
 import { installPopupStyles } from './css-harness.js';
 
@@ -67,6 +69,14 @@ interface Harness {
   readonly onAddRule?: () => void;
   readonly onOpenRule?: (index: number) => void;
   readonly locked?: boolean;
+  /**
+   * 🔴 ADR-076:是否挂上真实的 `LockEntryRow` 插槽(与 `App.tsx` 同构接线)。
+   *
+   * 默认 `false` —— T6a 的既有断言与锁定入口无关,不该因为多了一个
+   * 按钮而改变它们的 DOM 期望。需要验 ADR-076 的那几条显式打开。
+   */
+  readonly withLockEntry?: boolean;
+  readonly onOpenLock?: () => void;
 }
 
 function renderView(h: Harness = {}) {
@@ -79,6 +89,28 @@ function renderView(h: Harness = {}) {
     onAddRule: h.onAddRule ?? (() => undefined),
     onOpenRule: h.onOpenRule ?? (() => undefined),
     ...(h.locked === undefined ? {} : { locked: h.locked }),
+    /*
+      🔴 与 `App.tsx` **逐字同构**的插槽接线(ADR-076):
+      禁用状态来自 `RuleListView` 自己算出的 `lockEntryDisabled`,
+      替身不复算 —— 否则测的是替身的判据,不是产品的。
+    */
+    ...(h.withLockEntry
+      ? {
+          lockEntry: ({
+            disabled,
+            reason,
+          }: {
+            disabled: boolean;
+            reason?: string;
+          }) => (
+            <LockEntryRow
+              onOpen={h.onOpenLock ?? (() => undefined)}
+              disabled={disabled}
+              disabledReason={reason}
+            />
+          ),
+        }
+      : {}),
   };
   return render(<RuleListView {...props} />);
 }
@@ -467,11 +499,26 @@ describe('§5.4 状态变体 ③主开关 OFF', () => {
     rules: [rule('a.com'), rule('b.com')],
   });
 
-  it('提示条变琥珀,文案为「已全局关闭,所有规则暂不生效」', () => {
+  /*
+   * 🔴🔴 **ADR-076:原先这里断言的是琥珀提示条「已全局关闭,所有规则暂不
+   *    生效」。那条提示条已被整条删除,故本断言被**替换**为它的反面 ——
+   *    「提示条不存在」+「常驻优先级提示条照常在场」。**
+   *
+   *    这不是删掉一条断言:删掉会让「谁都可以把那条横幅加回来」不被察觉,
+   *    而 ADR-076 的决定恰恰是「它不该在」。断言的方向反转,强度不变。
+   */
+  it('🔴 ADR-076:主开关 OFF 时**没有**「已全局关闭」提示条(该提示条已删除)', () => {
     renderView({ settings: off });
-    const notice = screen.getByTestId('master-off-notice');
-    expect(notice.textContent).toBe(MASTER_OFF_NOTICE);
-    expect(notice.className).toContain('notice--warn');
+    expect(screen.queryByTestId('master-off-notice')).toBeNull();
+    // 文案本身也必须不在页面上 —— 换个 testid 重新加回来一样算违规。
+    expect(document.body.textContent).not.toContain('已全局关闭,所有规则暂不生效');
+  });
+
+  it('🔴 ADR-076:OFF 时 ADR-031 的常驻优先级提示条**照常在场**(不再被替换掉)', () => {
+    renderView({ settings: off });
+    const hint = screen.getByTestId('priority-hint');
+    expect(hint.textContent).toBe(PRIORITY_HINT);
+    expect(screen.queryByTestId('capacity-notice')).toBeNull();
   });
 
   it('列表与底部 opacity .42 + 降饱和', () => {
@@ -509,6 +556,144 @@ describe('§5.4 状态变体 ③主开关 OFF', () => {
       tabState: injectableTab({ activeRuleIndex: 0 }),
     });
     expect(screen.queryByTestId('rule-live-0')).toBeNull();
+  });
+
+  /*
+   * ═══════════════════════ 🔴🔴 ADR-076 ═══════════════════════
+   *
+   * > 主开关 OFF 时,「+ 添加规则」与「🔒 时间锁定」入口**一并禁用**;
+   * > 主开关自己**保持可用**(它是唯一的回头路)。
+   *
+   * 下面五条分别钉住:两个入口都真的 `disabled`、原因说得出、
+   * 主开关没被连带禁用、点击真的什么都不发生、以及
+   * **与 ADR-050 的组合**(两个禁用理由同时成立时一条都不丢)。
+   */
+  it('🔴 ADR-076:两个入口的**视觉**也一致淡化(不能一个灰一个亮)', () => {
+    renderView({ settings: off, withLockEntry: true });
+    const foot = document.querySelector('.popup__foot') as HTMLElement;
+    const entryRow = document.querySelector('.lock-entry-row') as HTMLElement;
+    // 被同一条 ADR 一起禁用的两个入口,视觉信号必须一致。
+    const footOpacity = Number.parseFloat(getComputedStyle(foot).opacity);
+    const rowOpacity = Number.parseFloat(getComputedStyle(entryRow).opacity);
+    expect(footOpacity).toBeCloseTo(0.42, 5);
+    expect(
+      rowOpacity,
+      '锁定入口行未随「添加规则」一起淡化 —— 两个同样点不动的东西给出了矛盾的视觉信号',
+    ).toBeCloseTo(0.42, 5);
+  });
+
+  it('🔴 ADR-076:主开关 OFF → 「添加规则」与「时间锁定」**两个入口都真的 disabled**', () => {
+    renderView({ settings: off, withLockEntry: true });
+    const add = screen.getByTestId('add-rule') as HTMLButtonElement;
+    const lock = screen.getByTestId('lock-open') as HTMLButtonElement;
+    // 真 `disabled` 属性 —— 不是只画成灰的(键盘用户同样挡得住)。
+    expect(add.disabled, '添加规则').toBe(true);
+    expect(lock.disabled, '时间锁定').toBe(true);
+    // 真 disabled 的按钮不可聚焦 —— 这是「genuinely disabled」的可观察判据。
+    add.focus();
+    expect(document.activeElement).not.toBe(add);
+    lock.focus();
+    expect(document.activeElement).not.toBe(lock);
+  });
+
+  it('🔴 ADR-076:两个入口都说得出**为什么**被禁用,且用的是同一句话', () => {
+    renderView({ settings: off, withLockEntry: true });
+    const add = screen.getByTestId('add-rule');
+    const lock = screen.getByTestId('lock-open');
+    expect(add.getAttribute('title')).toBe(MASTER_OFF_DISABLED_REASON);
+    expect(lock.getAttribute('title')).toBe(MASTER_OFF_DISABLED_REASON);
+    // 文案须指明出路,而不只是陈述「不可用」。
+    expect(MASTER_OFF_DISABLED_REASON).toContain('请先开启主开关');
+  });
+
+  it('🔴 ADR-076:点击被禁用的两个入口 → 回调一次都不触发', () => {
+    const onAddRule = vi.fn();
+    const onOpenLock = vi.fn();
+    renderView({ settings: off, withLockEntry: true, onAddRule, onOpenLock });
+    fireEvent.click(screen.getByTestId('add-rule'));
+    fireEvent.click(screen.getByTestId('lock-open'));
+    expect(onAddRule).not.toHaveBeenCalled();
+    expect(onOpenLock).not.toHaveBeenCalled();
+  });
+
+  it('🔴 ADR-076:主开关重新 ON → 两个入口**同时**恢复可用(禁用不是单向的)', () => {
+    const on = settingsWith({
+      masterEnabled: true,
+      rules: [rule('a.com'), rule('b.com')],
+    });
+    renderView({ settings: on, withLockEntry: true });
+    const add = screen.getByTestId('add-rule') as HTMLButtonElement;
+    const lock = screen.getByTestId('lock-open') as HTMLButtonElement;
+    expect(add.disabled).toBe(false);
+    expect(lock.disabled).toBe(false);
+    // 恢复可用后不该再挂着一句「为什么禁用」。
+    expect(add.getAttribute('title')).toBeNull();
+    expect(lock.getAttribute('title')).toBeNull();
+  });
+
+  /*
+   * 🔴🔴 **两个禁用理由的组合(ADR-076 × ADR-050)。**
+   *
+   * ADR-050:不可注入页上**仅**禁用规则编辑类控件,全局主开关保持可用。
+   * ADR-076:主开关 OFF 时「添加规则」与「时间锁定」禁用。
+   *
+   * 两者同时成立时必须:
+   *   a) 「添加规则」仍禁用(两个理由都指向禁用,或式不可能丢);
+   *   b) 不可注入的**横幅照常在场** —— 它是独立渲染的,不参与
+   *      `disabledReason` 的「挑一条说」,所以这条解释不会被挤掉;
+   *   c) 控件的 `title` 说的是**更根本**的那条(主开关 OFF)——
+   *      开了主开关这页也还是不可注入,但关着主开关时「这页能不能注入」
+   *      根本不重要;
+   *   d) 🔒 时间锁定在**仅**不可注入(主开关 ON)时**仍可用** ——
+   *      锁定锁的是整个扩展,不是当前标签页(与主开关同理,ADR-050)。
+   */
+  it('🔴🔴 ADR-076 × ADR-050:主开关 OFF + 不可注入页 → 添加仍禁用,且两条解释都没丢', () => {
+    renderView({
+      settings: off,
+      tabState: injectableTab({ injectable: false }),
+      withLockEntry: true,
+    });
+    const add = screen.getByTestId('add-rule') as HTMLButtonElement;
+    // (a) 禁用没丢。
+    expect(add.disabled).toBe(true);
+    // (b) 不可注入的横幅照常在场 —— 这条解释没有被主开关那条挤掉。
+    const banner = screen.getByTestId('not-injectable-notice');
+    expect(banner.textContent).toContain(NOT_INJECTABLE_MESSAGE);
+    // (c) 控件的 title 说更根本的那条。
+    expect(add.getAttribute('title')).toBe(MASTER_OFF_DISABLED_REASON);
+    // ADR-050 不变:主开关自己仍可用。
+    expect((screen.getByTestId('master-switch') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('🔴 ADR-050 不被 ADR-076 污染:**仅**不可注入(主开关 ON)时,🔒 时间锁定仍可用', () => {
+    renderView({
+      settings: settingsWith({ masterEnabled: true, rules: [rule('a.com')] }),
+      tabState: injectableTab({ injectable: false }),
+      withLockEntry: true,
+    });
+    // 规则编辑类控件照 ADR-050 禁用……
+    expect((screen.getByTestId('add-rule') as HTMLButtonElement).disabled).toBe(true);
+    // ……但锁定入口是**全局**的,与当前页是什么无关 → 仍可用。
+    const lock = screen.getByTestId('lock-open') as HTMLButtonElement;
+    expect(
+      lock.disabled,
+      '锁定锁的是整个扩展,不是当前标签页 —— 不可注入不该是禁用它的理由',
+    ).toBe(false);
+    // 这一格也是**判别力**的证明:若实现把 notInjectable 也算进
+    // lockEntryDisabled,上面那条 ADR-076 的断言仍会绿,本条会红。
+  });
+
+  it('🔴 ADR-051 仍优先:锁定中两个入口照旧禁用,原因说的是锁定', () => {
+    renderView({
+      settings: settingsWith({ masterEnabled: true, rules: [rule('a.com')] }),
+      locked: true,
+      withLockEntry: true,
+    });
+    const add = screen.getByTestId('add-rule') as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+    expect(add.getAttribute('title')).toBe(LOCKED_DISABLED_REASON);
+    // ADR-051 优先于 ADR-050:主开关一并锁死。
+    expect((screen.getByTestId('master-switch') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('主开关本身仍可点 —— 否则关掉就再也打不开了', () => {

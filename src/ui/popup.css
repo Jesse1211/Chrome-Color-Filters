@@ -472,7 +472,18 @@ body {
  * 各控件的 `disabled` 属性(键盘用户绕不过 pointer-events),
  * 最终防线在仓储层(INV-14 / ADR-055)。
  */
+/*
+ * 🔴 **ADR-076:`.lock-entry-row` 也要一起淡化。**
+ *
+ * 主开关 OFF 时「🔒 时间锁定」与「+ 添加规则」是**被同一条 ADR 一起禁用的**,
+ * 若只淡化底栏而让入口行保持全亮,用户看到的是「一个灰的、一个亮的」——
+ * 两个同样点不动的东西给出矛盾的视觉信号。
+ *
+ * ⚠️ 这只是**视觉**的第二道防线;真正的禁用是两个按钮的 `disabled` 属性
+ *    (`pointer-events:none` 挡不住键盘),最终防线在仓储层(INV-14)。
+ */
 .popup--dimmed .rule-list,
+.popup--dimmed .lock-entry-row,
 .popup--dimmed .popup__foot {
   opacity: .42;
   filter: saturate(.3);
@@ -481,6 +492,7 @@ body {
 
 /* 骨架态(ADR-044:popup 在收到 TabState 响应前渲染骨架态,控件禁用、不显示错误)。 */
 .popup--skeleton .rule-list,
+.popup--skeleton .lock-entry-row,
 .popup--skeleton .popup__foot {
   opacity: .6;
 }
@@ -697,6 +709,60 @@ body {
   flex: 1 1 auto;
   overflow-y: auto;
 }
+
+/*
+ * ── 📌 子页面底栏:主操作钉在最下沿(产品负责人决定)──
+ *
+ * > 「点击『时间锁定』进入页面后,『启动锁定』要和『添加规则』一样的页面设计,
+ * > 『save』按钮放在最下面」
+ *
+ * 🔴 **复用仓内既有的底栏惯用法,不发明第三种。** 本规则与
+ * `.popup__foot`(列表页:+ 添加规则 + 计数)、`.edit__foot`(编辑页:
+ * 保存 / 删除)取**同一组** token:`flex: 0 0 auto` 钉底、
+ * `border-top: 1px solid var(--line)` 与主体分隔、`padding: 12px 15px`
+ * (与 `.edit__foot` 逐值相同 —— 两者都是「子页面的主操作栏」)。
+ *
+ * 钉底的机制与那两个底栏完全一样:主体 `flex: 1 1 auto` 吃掉剩余高度
+ * 并自己滚动,底栏 `flex: 0 0 auto` 永远贴在 352×452 的最下沿。
+ * 没有 `position: absolute` —— 绝对定位会脱离文档流、盖住主体最后一行。
+ */
+.lock-view__foot {
+  display: flex;
+  gap: 9px;
+  padding: 12px 15px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  flex: 0 0 auto;
+}
+
+/*
+ * 底栏里的主操作撑满一行 —— 与 `.edit__save`(`flex: 1 1 auto`)、
+ * `.add-button`(同样 `flex: 1 1 auto`)一致。
+ *
+ * ⚠️ 只管**布局**;外观仍由各自的 `.lock-entry__start` / `.lock-extend__button`
+ *    提供(实心强调色 / 描边),与 `.edit__save` 和 `.edit__foot` 的分工相同。
+ */
+.lock-view__foot-action {
+  flex: 1 1 auto;
+}
+
+/*
+ * 🔴 **锁定中的底栏不降透明度 —— 这与 `.popup--locked .popup__foot` 不同,
+ *    是刻意的。**
+ *
+ * `.popup--locked .popup__foot`(列表页)降到 `.62`,因为那条底栏里的
+ * 「+ 添加规则」在锁定期间**确实被禁用**(ADR-051),淡化是在表达禁用。
+ *
+ * 而子页面底栏在锁定中装的是**「延长」—— 锁定期间唯一可用的操作**
+ * (ADR-052)。把唯一还能用的按钮画成半透明,等于告诉用户它也不能用,
+ * 与 ADR-052 的语义正相反。
+ *
+ * ⚠️ 这不是漏了一条样式:`.popup--locked` 确实加在 `LockView` 的根上
+ *    (子页面也要 `data-locked` 同口径),所以若把选择器写成
+ *    `.popup--locked .lock-view__foot` 它**会**生效 —— 本文件刻意
+ *    **不写**那条规则。按钮自身的 `:disabled` 态仍由
+ *    `.lock-extend__button:disabled` 负责(时长非法时才触发)。
+ */
 
 /* ── 子页面:计时器入口(ADR-058) ── */
 

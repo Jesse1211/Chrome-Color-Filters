@@ -2,18 +2,22 @@
  * 锁定态的接线 —— 把时钟、锁定判定与**唯一**的写入路径收在一处(T6c)。
  *
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * 🔴 **ADR-057:启动锁定时原子开启主开关 —— 一次写入,无中间态。**
+ * 🔴 **一次写入:本 hook 对仓储层只有一处调用。**
  *
- * 本 hook 启动锁定时**只调用一次** `repository.setLockUntil(ts)`。
- * 仓储层在同一次 `storage.set` 里一并把 `masterEnabled` 置为 `true`
- * (见 `settings-repository.ts` 的 `setLockUntil`)。
+ * 启动与延长都**只调用一次** `repository.setLockUntilImmediate(ts)`。
+ * 多次写入会制造可观测的中间态,且其中一次失败时会留下用户没要求过的状态。
  *
- * ⚠️ **绝不**写成「先 `setMasterEnabled(true)` 再 `setLockUntil(ts)`」——
- * 那是两次写入、两次落盘,中间存在一个「主开关已开但还没锁」的可观测窗口;
- * 且第二次失败时会留下一个用户没要求过的状态。ADR-057 要的就是消灭这个窗口。
+ * ⚠️ **ADR-076 废止了 ADR-057。** 原先这里记着「仓储层会在同一次
+ * `storage.set` 里把 `masterEnabled` 一并置为 `true`」—— 那条行为已删除。
  *
- * ⚠️ 同样**绝不**在 `masterEnabled === false` 时拒绝启动锁定 ——
- * ADR-057 的全部意义就是让这种情况**也能**启动,并把主开关带开。
+ * 现在主开关 OFF 时根本进不到锁定子页面(列表页的「🔒 时间锁定」入口
+ * 被 `RuleListView` 的 `lockEntryDisabled` 禁用),所以:
+ * - 本 hook **不需要**、也**不会**碰 `masterEnabled`;
+ * - 「启动锁定把扩展冻结在关闭状态」这个危险状态**在 UI 上不可达**,
+ *   不是靠这里补救,而是靠入口根本点不动。
+ *
+ * ⚠️ 依旧**绝不**写成「先 `setMasterEnabled(…)` 再 `setLockUntil(ts)`」——
+ * 两次写入有中间态。这条禁令与 ADR-057 的存废无关,静态门禁继续守着它。
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
  * ## ADR-061:立即落盘,不做防抖
@@ -69,7 +73,7 @@ export interface LockState {
   readonly now: number;
   /** 绝对到期时间戳;未锁定为 `null`。 */
   readonly lockUntil: number | null;
-  /** 启动锁定 —— 一次写入,原子开启主开关(ADR-057)。 */
+  /** 启动锁定 —— 一次写入(ADR-076 后不再连带开启主开关)。 */
   readonly startLock: (duration: LockDuration) => Promise<ActionResult>;
   /** 延长锁定 —— 在**现有到期时间**之上追加(ADR-052:只增不减)。 */
   readonly extendLock: (duration: LockDuration) => Promise<ActionResult>;
@@ -138,7 +142,7 @@ export function useLockState({
           },
         };
       }
-      // 🔴 一次写入(ADR-057 的原子性由仓储层保证);不防抖(ADR-061)。
+      // 🔴 一次写入;不防抖(ADR-061)。
       //
       // 用 `setLockUntilImmediate` 而非 `setLockUntil`:后者第一行是
       // `await #readContext()`(一次跨进程 storage.get 往返),而 popup
@@ -159,8 +163,9 @@ export function useLockState({
   /**
    * 启动锁定:`lockUntil = now + 时长`。
    *
-   * 🔴 **只调 `setLockUntil` 一次** —— 主开关由仓储层在同一次写入里带开
-   * (ADR-057)。这里不碰 `setMasterEnabled`,见文件头。
+   * 🔴 **只调一次写入** —— 且只写 `lockUntil`。
+   * 这里不碰 `setMasterEnabled`(ADR-076 后主开关 OFF 时本路径不可达),
+   * 见文件头。
    */
   const startLock = useCallback(
     (duration: LockDuration) => apply(lockUntilFrom(readNow(), duration)),

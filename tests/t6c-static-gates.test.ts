@@ -5,7 +5,8 @@
  * 这边断言**源码**。两者互为第二道防线 —— 渲染测试可能因为某个分支
  * 没被触发而漏掉,源码检查则不管分支。
  *
- * 覆盖 §6 T6c gate 里的负向约束与 ADR-057 / ADR-058 / ADR-061 的反模式。
+ * 覆盖 §6 T6c gate 里的负向约束与 ADR-058 / ADR-061 / ADR-076 的反模式。
+ * (原 ADR-057 的两条已随该 ADR 被 ADR-076 废止而改写,见下方区段说明。)
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -123,15 +124,45 @@ describe('🔴🔴 ADR-052 / INV-12 · 源码里不存在解除/缩短锁定的�
   });
 });
 
-describe('🔴 ADR-057 · 启动锁定是一次写入,不得拆成两次', () => {
+/*
+ * 🔴 **本区段原名「ADR-057 · 启动锁定是一次写入,不得拆成两次」。**
+ *
+ * ADR-057 已由 ADR-076 废止,但这两条断言**一条都没删** —— 它们守的是
+ * 「一次写入、无中间态」,而那条性质与 ADR-057 的存废无关:
+ *
+ * - 原来它的理由是「拆成两次会留下『已锁定但主开关仍关闭』的窗口」;
+ * - 现在锁定写入**根本不碰** `masterEnabled`,于是 `setMasterEnabled`
+ *   出现在锁定路径上**更**没有道理 —— 禁令从「别拆成两次」收紧为
+ *   「这个调用在锁定路径上完全没有位置」。
+ *
+ * 换句话说:ADR-076 让这两条断言的**理由变强**,而不是失效。
+ */
+describe('🔴 ADR-061 / ADR-076 · 启动锁定是一次写入,且不碰主开关', () => {
   it('锁定源码不在启动路径上调用 setMasterEnabled', () => {
-    // 「先 setMasterEnabled(true) 再 setLockUntil(ts)」是两次落盘、有中间态,
-    // 恰恰是 ADR-057 要消灭的东西。原子性由仓储层的 setLockUntil 一次完成。
+    /*
+      两层理由,ADR-076 之后都成立:
+      ① 「先 setMasterEnabled(…) 再 setLockUntil(ts)」是两次落盘、有中间态;
+      ② 🔴 ADR-076:锁定写入**不该改动主开关** —— 主开关 OFF 时锁定入口
+         本身禁用,这条路径不可达,UI 更没有理由去碰它。
+    */
     const text = lockText();
     expect(
       text,
-      '锁定路径调用了 setMasterEnabled —— ADR-057 要求一次写入,无中间态',
+      '锁定路径调用了 setMasterEnabled —— 一次写入,且不碰主开关(ADR-061/ADR-076)',
     ).not.toContain('setMasterEnabled');
+  });
+
+  it('🔴 ADR-076:LOCK_WILL_ENABLE_MASTER 及其文案已从源码中彻底消失', () => {
+    /*
+      ADR-076 的「连带删除」要求这条文案**不复存在**,不只是不被渲染。
+      留一个没人用的导出常量,下一个人会以为那条分支还活着。
+    */
+    const text = lockText();
+    expect(text, '常量 LOCK_WILL_ENABLE_MASTER 仍在').not.toContain(
+      'LOCK_WILL_ENABLE_MASTER',
+    );
+    expect(text, 'willEnableMaster prop 仍在').not.toContain('willEnableMaster');
+    expect(text, '文案本体仍在').not.toContain('启动锁定将同时开启滤镜');
   });
 
   it('useLockState 里对仓储层的写入调用只有一处(且是「同轮落盘」的那一个)', () => {
@@ -139,7 +170,8 @@ describe('🔴 ADR-057 · 启动锁定是一次写入,不得拆成两次', () =>
       readFileSync(resolve(ROOT, 'src/ui/useLockState.ts'), 'utf8'),
     );
     const calls = src.match(/repository\.\w+\(/g) ?? [];
-    // 🔴 ADR-057:**一处**调用 —— 拆成两次就有中间态。
+    // 🔴 **一处**调用 —— 拆成两次就有中间态(原 ADR-057 的理由,
+    //    ADR-076 之后仍然成立:见本区段的区段说明)。
     // 🔴 ADR-061 同类:必须是 `setLockUntilImmediate`,不是 `setLockUntil`。
     //    后者第一行 `await #readContext()`(一次跨进程 storage.get 往返),
     //    而 popup 一失焦即销毁 —— 那次 await 就是丢写窗口,
