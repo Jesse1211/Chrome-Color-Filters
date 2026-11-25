@@ -85,6 +85,7 @@ import {
   createPreviewChannel,
 } from '../../src/ui/preview-port.js';
 import { chromeTabStatePort } from '../../src/ui/tab-state.js';
+import { useLockExpiry } from '../../src/ui/useLockExpiry.js';
 import { useLockState } from '../../src/ui/useLockState.js';
 import { usePopupSettings } from '../../src/ui/usePopupSettings.js';
 
@@ -153,6 +154,25 @@ function App() {
   const { locked, now, lockUntil, startLock, extendLock } = useLockState({
     repository,
     settings,
+    onSettings: syncSettings,
+  });
+
+  /**
+   * 🔒 **ADR-077:到期自动关闭主开关 —— popup 开着时的那条防线。**
+   *
+   * SW 侧的闹钟(`LockExpiryScheduler`)按平台文档**迟到量无上界**,
+   * 只靠它会让 popup 开着的用户看到一段「倒计时已归零、横幅已消失、
+   * 但主开关还读 ON、页面还是灰的」中间态 —— 任务书点名禁止的 stale。
+   * 本 hook 在**到期当秒**就去调一次仓储层,于是三件事
+   * (横幅消失 / 主开关读 OFF / 控件解禁)在同一次 React 更新里一起发生。
+   *
+   * 🔴 判定与写入**都在仓储层**(`applyExpiryAutoOff`,INV-14 / ADR-055)。
+   * 本 hook 只负责「何时去问一次」,自身不含任何锁定判定 ——
+   * 故它在结构上不可能促成一次锁定期内的关闭。详见该 hook 的文件头。
+   */
+  useLockExpiry({
+    locked,
+    applyAutoOff: () => repository.applyExpiryAutoOff(),
     onSettings: syncSettings,
   });
 

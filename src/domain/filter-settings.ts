@@ -183,3 +183,72 @@ export function canSetLockUntil(
   if (next === cur) return { ok: false, reason: 'no-op' };
   return { ok: false, reason: 'cannot-shorten' };
 }
+
+// ─────────────────────── 到期自动关闭(ADR-077)───────────────────────
+
+/**
+ * `needsExpiryAutoOff(settings, now)` —— 纯函数,判定**此刻是否该做一次
+ * 到期自动关闭**(ADR-077:锁定到期时自动把 `masterEnabled` 置为 false)。
+ *
+ * 🔴 **`now` 是注入参数,函数内绝不调用 `Date.now()`** —— 与 `isLocked`
+ * 同一理由:时间边界必须可测。
+ *
+ * ## 三个合取条件,缺一不可
+ *
+ * ```
+ * needsExpiryAutoOff  ⟺  lockUntil 存在  ∧  锁已过期(!isLocked)  ∧  masterEnabled
+ * ```
+ *
+ * 1. **`lockUntil !== null`** —— 没有锁过,就没有「到期」这件事。
+ *    漏掉这条会让「从未用过锁定功能的用户」的主开关被关掉:
+ *    `lockUntil: null` 时 `isLocked` 恒为 false,只看后两条就会**恒真**。
+ *    这是本函数最容易写错的地方,故有专门的单测钉住。
+ *
+ * 2. **`!isLocked(settings, now)`** —— 🔴 **复用 `isLocked` 本身,
+ *    而不是自己写 `now >= lockUntil`。** 两者口径必须逐字一致:
+ *    `isLocked` 的边界是开区间(`now === lockUntil` 即**未锁定**,见其文档),
+ *    若这里写成 `now > lockUntil`,边界那一毫秒就会出现
+ *    「锁已解除、但自动关闭不触发」的缝 —— 而那一毫秒恰恰是
+ *    仓储层会放行写入的时刻(见 `SettingsRepository.applyExpiryAutoOff`)。
+ *
+ * 3. **`masterEnabled === true`** —— 已经是 OFF 就无需再写。
+ *    这条让整个操作**幂等**:补做一次、闹钟与 popup 同时触发一次,
+ *    第二次都是 no-op,不会产生多余的 `storage.set`、
+ *    也不会覆盖用户在到期之后手动开回去的滤镜(见下)。
+ *
+ * ## 🔴 为什么「幂等」在这里是正确性,不是优化
+ *
+ * ADR-077 的触发器有**三个**彼此独立的入口(闹钟、SW 启动补偿、popup 的
+ * 到期回调),它们**会同时命中**。若本函数不看 `masterEnabled`,
+ * 下面这个序列会把用户的操作吃掉:
+ *
+ * ```
+ * t0   锁到期 → 自动关闭,masterEnabled = false        ✅ ADR-077
+ * t1   用户手动把滤镜开回来,masterEnabled = true       ← 用户的意图
+ * t2   SW 被别的事件唤醒 → 又看到「lockUntil 已过去」→ 再关一次  ❌
+ * ```
+ *
+ * t2 那一次会**违反用户意图**,且 ADR-077 已接受的代价只是
+ * 「每次锁定结束会关掉一次,下次得手动再开」——
+ * 不是「到期之后永远开不起来」。看 `masterEnabled` 让 t2 成为 no-op:
+ * 自动关闭对每一段锁定**最多发生一次**(到期后首次观察到时)。
+ *
+ * ⚠️ 代价(刻意接受):用户在到期后手动开回滤镜,`lockUntil` 仍留着那个
+ * 过去的时间戳。这不造成任何行为差异 —— 过去的 `lockUntil` 对
+ * `isLocked` / `canSetLockUntil` 都等同于「未锁定」(ADR-053),
+ * 且下次启动锁定会把它覆盖掉。**刻意不清除它**:清除是一次额外写入,
+ * 而 ADR-052 的单向语义下「写一个更小的 lockUntil」正是被禁的方向,
+ * 为它开一个特例等于在 INV-12 上开洞(详见仓储层该方法的论证)。
+ */
+export function needsExpiryAutoOff(
+  settings: FilterSettings,
+  now: number,
+): boolean {
+  const { lockUntil } = settings;
+  // 条件 1:从未锁过 → 没有「到期」可言(漏掉这条本函数会恒真)。
+  if (lockUntil === null || !Number.isFinite(lockUntil)) return false;
+  // 条件 2:必须**真的**已过期 —— 口径与 isLocked 逐字一致(含边界)。
+  if (isLocked(settings, now)) return false;
+  // 条件 3:幂等 —— 已经 OFF 就不再写(见上方「为什么幂等是正确性」)。
+  return settings.masterEnabled;
+}

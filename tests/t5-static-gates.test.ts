@@ -11,7 +11,7 @@
  * - service worker 入口里 T4a 的 reconcile 与 T5 的协调器**共存**
  * - 协调层不持有设置快照(§6 T5:SW 不可以是聚合的真相来源)
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -43,11 +43,34 @@ function stripComments(source: string): string {
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
+/**
+ * 端口装配文件 —— 它们的**职责就是**碰 `chrome.*`,故不受「零 chrome.*」约束。
+ *
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔴 **这个列表是白名单,每新增一项都必须有理由,且下方有两道反向断言守着它。**
+ *
+ * 原先这里写死了 `background-ports.ts` 一个文件名。ADR-077 新增了
+ * `alarms-port.ts`(唯一接触 `chrome.alarms` 的地方,与 `background-ports.ts`
+ * 完全同构的薄装配层),故白名单扩到两项。
+ *
+ * ⚠️ **这不是放宽门禁** —— 放宽会长这样:把 `src/background/**` 整个排除,
+ * 或把判据改成「文件名含 port 就跳过」。那两种做法都让「新加一个碰
+ * `chrome.*` 的协调逻辑」只要改个文件名就能绕过。
+ *
+ * 这里改的是**逐一列举**,并补上两道新断言(见下方同名 describe):
+ *   (a) 白名单里的每个文件**必须真的是**薄装配层 —— 不含任何判定逻辑
+ *       (断言它们不 import 领域层);
+ *   (b) 白名单之外的 `src/background/**` 一律零 `chrome.*`(原约束,一字未动)。
+ * 于是「把协调逻辑塞进一个叫 *-port.ts 的文件里」会被 (a) 当场抓到。
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+const PORT_ASSEMBLY_FILES = ['background-ports.ts', 'alarms-port.ts'] as const;
+
 /** 协调层的产品源码,**排除**端口装配(那里本就该碰 `chrome.*`)与测试。 */
 const PURE_BACKGROUND_SOURCES = walk(resolve(ROOT, 'src/background')).filter(
   (f) =>
     !f.includes('__tests__') &&
-    !f.endsWith('background-ports.ts') &&
+    !PORT_ASSEMBLY_FILES.some((p) => f.endsWith(p)) &&
     f.endsWith('.ts'),
 );
 
@@ -71,8 +94,11 @@ describe('🔴 协调层零 `chrome.*` —— gate 可机械判定的前提', ()
       'chrome.scripting',
       'chrome.storage',
       'chrome.windows',
+      // 🔒 ADR-077 新增:闹钟同样只许出现在端口装配里。
+      'chrome.alarms',
       'browser.tabs',
       'browser.action',
+      'browser.alarms',
     ]) {
       expect(text, `协调层出现了 ${api}`).not.toContain(api);
     }
@@ -83,6 +109,75 @@ describe('🔴 协调层零 `chrome.*` —— gate 可机械判定的前提', ()
     expect(text).not.toContain('globalThis as');
     expect(text).not.toMatch(/\bchrome\s*\?\./);
     expect(text).not.toMatch(/globalThis\s*\.\s*chrome/);
+  });
+
+  it('🔴🔒 ADR-077:新增的 lock-expiry.ts 同样零 chrome.*(它在纯净集里)', () => {
+    // 显式点名,让「触发器是纯的」这件事在门禁里可读 ——
+    // 它恰好是本轮新增的、最容易被顺手写成直接调 chrome.alarms 的那个文件。
+    const lockExpiry = PURE_BACKGROUND_SOURCES.filter((f) =>
+      f.endsWith('lock-expiry.ts'),
+    );
+    expect(lockExpiry.length, 'lock-expiry.ts 必须在被检查的纯净集里').toBe(1);
+    const text = stripComments(readFileSync(lockExpiry[0]!, 'utf8'));
+    expect(text).not.toContain('chrome.');
+  });
+});
+
+describe('🔴 端口装配白名单的反向约束(ADR-077 扩了一项,故必须守住它)', () => {
+  it('白名单里的文件都真实存在(列表不得与仓库现状脱节)', () => {
+    for (const name of PORT_ASSEMBLY_FILES) {
+      expect(
+        existsSync(resolve(ROOT, 'src/background', name)),
+        `白名单里的 ${name} 不存在 —— 列表该清理了`,
+      ).toBe(true);
+    }
+  });
+
+  it('🔴 白名单里的每个文件都是**薄装配层** —— 不含任何领域判定', () => {
+    // 这是守住白名单不被滥用的那道断言:端口装配只负责把 `chrome.*` 收束成
+    // 可注入的接口,**不做判定**。判定一旦搬进来,它就不再是「本就该碰
+    // chrome.* 的装配」,而是一段逃过了「零 chrome.*」门禁的协调逻辑。
+    //
+    // 判据:不 import 领域层(`src/domain`)—— 判定所需的纯函数都在那里。
+    for (const name of PORT_ASSEMBLY_FILES) {
+      const source = readFileSync(resolve(ROOT, 'src/background', name), 'utf8');
+      expect(
+        source,
+        `${name} import 了领域层 —— 它在做判定,不再是薄装配层`,
+      ).not.toMatch(/from\s+['"][^'"]*domain[^'"]*['"]/);
+    }
+  });
+
+  it('🔴 白名单之外的 src/background/** 一律零扩展 API 调用(原约束,未放宽)', () => {
+    /*
+      ⚠️ 与本文件上方那条同理:**不能**简单 grep `chrome.` ——
+      `injectable-url.ts` 的商店 host 列表里有**数据**字符串
+      `'chrome.google.com'` / `'chrome:'`(ADR-013 的判定依据),
+      它们是字面量而非 API 调用。故逐个点名真正会碰平台的命名空间,
+      与上方那条用同一张清单(外加 ADR-077 的 `chrome.alarms`)。
+    */
+    const others = walk(resolve(ROOT, 'src/background')).filter(
+      (f) =>
+        f.endsWith('.ts') &&
+        !f.includes('__tests__') &&
+        !PORT_ASSEMBLY_FILES.some((p) => f.endsWith(p)),
+    );
+    expect(others.length).toBeGreaterThanOrEqual(5);
+    for (const f of others) {
+      const text = stripComments(readFileSync(f, 'utf8'));
+      for (const api of [
+        'chrome.tabs',
+        'chrome.action',
+        'chrome.runtime',
+        'chrome.scripting',
+        'chrome.storage',
+        'chrome.windows',
+        // 🔒 ADR-077 新增:闹钟的唯一写入者是 `alarms-port.ts`。
+        'chrome.alarms',
+      ]) {
+        expect(text, `${f} 出现了 ${api}`).not.toContain(api);
+      }
+    }
   });
 });
 

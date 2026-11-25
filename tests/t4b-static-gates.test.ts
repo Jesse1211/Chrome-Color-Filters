@@ -220,7 +220,27 @@ describe.skipIf(!built)(
       expect(code).not.toMatch(/\.(target|currentTarget)\s*\.\s*value/);
       // 正向对偶:产物里 `.value` 的出现次数被钉死。新增任何一处都会让
       // 这里变红,迫使后续任务显式论证它的来历(而不是悄悄多一处)。
-      expect((code.match(/\.value\b/g) ?? []).length).toBe(1);
+      //
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // 🔴 **1 → 2 的来历(ADR-077,本轮;门禁按设计把它逼出来了)**
+      //
+      // 新增的那一处来自 `SettingsRepository.applyExpiryAutoOff()`:
+      //
+      //     const result = await this.#persist({ ...ctx.current, masterEnabled: false });
+      //     if (!result.ok) return writeFail(result.error);
+      //     return writeOk({ settings: result.value, applied: true });
+      //                               ↑ 这里
+      //
+      // 即**解包自家的 `WriteResult<T>`**,与原有那一处(`rules: r.value`)
+      // 同一类来历 —— 正是本断言上方注释点名说明的那种合法情形,
+      // 与「读页面表单」毫无关系。
+      //
+      // ⚠️ 判据不是「我说它合法」:上面四条**行为性**断言(拿不到表单元素、
+      // 不监听 input/change/submit、不读 event.target.value)一条未改、
+      // 一条未放宽 —— 它们才是 ADR-026 的实际防线。
+      // 本条只是「新增处必须被显式论证」的记账,现在记完了。
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      expect((code.match(/\.value\b/g) ?? []).length).toBe(2);
     });
 
     it('🔴 MutationObserver 的 observe 选项里 characterData 为 false', () => {

@@ -60,7 +60,38 @@ export default defineConfig({
     // 「ADR 定死的契约优先」处理,未自行放宽 ADR-044。
     // 不违反 ADR-026/§8 第 7 条:那条禁的是**读取/外传页面内容**,
     // 本权限只用于读当前 tab 的 URL 做可注入性分类,不读 DOM、不外传。
-    permissions: ['storage', 'scripting', 'tabs'],
+    // 🔴 `alarms` 是 **ADR-077 的前提**(锁定到期自动关闭主开关)。
+    //
+    // ADR-077 原文:
+    // > 自动关闭必须在**到期那一刻**真的发生一次写入,即使 popup 没开、
+    // > SW 已休眠。故需 `chrome.alarms` 权限 + 在设置/延长锁定时安排闹钟 +
+    // > `onStartup`/`onInstalled` 时重建闹钟(MV3 的 SW 随时会被回收,
+    // > `setTimeout` 不可靠)。
+    //
+    // 漏了这条权限,`chrome.alarms` 整个为 `undefined` → `alarms-port.ts`
+    // 降级为「什么都不做」→ 闹钟这条触发线**静默消失**。
+    // 表现是「popup 关着时锁定到期后滤镜仍开着,直到下次 SW 偶然被唤醒」,
+    // 不是一条报错 —— 故必须在**产物**上核对(ADR-038),
+    // 单测见 tests/build-manifest.test.ts。
+    //
+    // ✅ **本条不新增任何用户可见的权限警告 —— 已在真实 Chrome 上 A/B 实测。**
+    // 探针 `docs/T7-gate/alarms-permission-warning.cjs` 用
+    // `chrome.management.getPermissionWarningsByManifest()`(它返回的就是
+    // 安装/更新对话框里逐行给用户看的那几句)对同一份产物 manifest 做 A/B:
+    //   · 基线(storage/scripting/tabs):["Read and change all your data on all websites"]
+    //   · +alarms                      :["Read and change all your data on all websites"]  ← 逐字相同
+    //   · +history(探针有效性对照)     :多出 "Read and change your browsing history…"
+    // 即 `alarms` 新增 0 条、删除 0 条;对照组证明该探针读得出变化
+    // (否则「零新增」可能只是因为根本读不到警告)。
+    // 证据:docs/T7-gate/out/alarms-permission-warning.json。
+    //
+    // 📌 顺带实测到的一处**与上方 `tabs` 注释不符**的事实,如实记下:
+    // 本版本(Chrome for Testing 158.0.8127.36)上基线警告里**只有一条**
+    // 站点访问警告,没有独立的「读取您的浏览记录」那一行 —— 即在
+    // `<all_urls>` 已在场时,`tabs` 的警告被站点访问警告吸收了。
+    // 上方注释记录的是当时(更早版本)的实测结果,本轮未改动 `tabs`,
+    // 故**不修改那段历史记录**,只在此注明两者的差异来源是 Chrome 版本。
+    permissions: ['storage', 'scripting', 'tabs', 'alarms'],
 
     // ADR-045 / ADR-019:图标两态,必须是不同的图片资源。
     // 这里注册的是「未生效态」作为静态默认值;T5 在运行时按 tab 切到

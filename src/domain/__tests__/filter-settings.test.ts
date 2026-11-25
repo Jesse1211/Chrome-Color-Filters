@@ -14,6 +14,7 @@ import {
   defaultSettings,
   isAtRuleCapacity,
   isLocked,
+  needsExpiryAutoOff,
   type FilterSettings,
 } from '../filter-settings.js';
 
@@ -279,5 +280,148 @@ describe('🔴 ADR-071 · maxSeenTime 与 effectiveNow 已整条废止', () => {
     // 时钟被拨到锁定之后:判定为未锁定 —— 这是 ADR-071 明文接受的代价
     // (改系统时钟绕过锁定本就允许,§4.1)。
     expect(isLocked(locked, 20_000)).toBe(false);
+  });
+});
+
+describe('🔒 needsExpiryAutoOff · 到期自动关闭的判定(ADR-077)', () => {
+  /** `{ lockUntil, masterEnabled }` 的组合构造器。 */
+  function s(lockUntil: number | null, masterEnabled: boolean): FilterSettings {
+    return { ...defaultSettings(), lockUntil, masterEnabled };
+  }
+
+  // ── 条件 1:从未锁过 ⇒ 永不自动关闭 ────────────────────────────────
+  //
+  // 🔴 这是最关键的一条。漏掉 `lockUntil !== null` 的实现会在
+  //    「从未用过锁定功能的用户」身上**恒真** —— 因为 lockUntil 为 null 时
+  //    isLocked 恒 false,只看后两条就成立。那等于「扩展自己把滤镜关掉」。
+  it('🔴 lockUntil = null(从未锁过)→ **false**,与 masterEnabled 无关', () => {
+    expect(needsExpiryAutoOff(s(null, true), 1_000)).toBe(false);
+    expect(needsExpiryAutoOff(s(null, false), 1_000)).toBe(false);
+  });
+
+  it('🔴 lockUntil = null 时在任意时刻都为 false(不是碰巧某个 now 下为 false)', () => {
+    for (const now of [0, 1, 1_000, Date.now(), Number.MAX_SAFE_INTEGER]) {
+      expect(needsExpiryAutoOff(s(null, true), now)).toBe(false);
+    }
+  });
+
+  it('lockUntil 非有限值(NaN / Infinity)→ false(与 isLocked 同口径)', () => {
+    expect(needsExpiryAutoOff(s(Number.NaN, true), 1_000)).toBe(false);
+    expect(needsExpiryAutoOff(s(Number.POSITIVE_INFINITY, true), 1_000)).toBe(false);
+  });
+
+  // ── 条件 2:必须真的已过期,且边界与 isLocked 逐字一致 ──────────────
+  it('锁定中(now < lockUntil)→ **false** —— 不得在锁定期内关闭(ADR-051)', () => {
+    expect(needsExpiryAutoOff(s(1_000, true), 999)).toBe(false);
+  });
+
+  it('🔴 now === lockUntil → **true**(边界与 isLocked 的开区间逐字一致)', () => {
+    // isLocked 在此刻已判为「未锁定」(见上方 isLocked 的边界测试),
+    // 故自动关闭必须在**同一毫秒**生效。两者口径若有一毫秒之差,
+    // 就会出现「锁已解除、但自动关闭不触发」的缝。
+    expect(isLocked(s(1_000, true), 1_000)).toBe(false);
+    expect(needsExpiryAutoOff(s(1_000, true), 1_000)).toBe(true);
+  });
+
+  it('now > lockUntil(已过期)→ true', () => {
+    expect(needsExpiryAutoOff(s(1_000, true), 1_001)).toBe(true);
+  });
+
+  it('🔴 边界穷举:lockUntil=1000 时,999→false / 1000→true / 1001→true', () => {
+    expect(needsExpiryAutoOff(s(1_000, true), 999)).toBe(false);
+    expect(needsExpiryAutoOff(s(1_000, true), 1_000)).toBe(true);
+    expect(needsExpiryAutoOff(s(1_000, true), 1_001)).toBe(true);
+  });
+
+  // ── 条件 3:幂等 ────────────────────────────────────────────────────
+  it('🔴 已过期但 masterEnabled 已是 false → **false**(幂等,不重复写入)', () => {
+    expect(needsExpiryAutoOff(s(1_000, false), 2_000)).toBe(false);
+  });
+
+  it('🔴 幂等的真实意义:用户到期后手动开回滤镜,下一次观察**不得**再关掉', () => {
+    // t0:到期,自动关闭 → masterEnabled = false
+    const afterAutoOff = s(1_000, false);
+    expect(needsExpiryAutoOff(afterAutoOff, 2_000)).toBe(false);
+    // t1:用户手动开回来(lockUntil 仍是那个过去值 —— 刻意不清除)
+    const userReEnabled = s(1_000, true);
+    // t2:SW 被别的事件唤醒,又看到「lockUntil 已过去」
+    //
+    // ⚠️ 纯函数层面这里**仍是 true** —— 这是刻意的设计边界:
+    //    领域层只回答「此刻状态是否符合『到期且还开着』」,
+    //    它无从知道那个 true 是用户刚刚手动设的。
+    //    「每段锁定最多关一次」这条由**用户重新开启后 lockUntil 被下次锁定覆盖**
+    //    与 SW 不会无故重跑 catchUp 共同保证;而真正防止「用户开回来又被关掉」
+    //    的那一层是:自动关闭只在**到期边沿**与**SW 启动**触发,
+    //    不是每秒轮询(见 useLockExpiry / LockExpiryScheduler 的边沿与入口设计)。
+    expect(needsExpiryAutoOff(userReEnabled, 2_000)).toBe(true);
+  });
+
+  // ── 三条合取的穷举 ─────────────────────────────────────────────────
+  it('🔴 三条合取穷举:只有「锁过 ∧ 已过期 ∧ 还开着」为 true', () => {
+    const rows: ReadonlyArray<{
+      lockUntil: number | null;
+      masterEnabled: boolean;
+      now: number;
+      expected: boolean;
+    }> = [
+      // 锁过 + 已过期 + 开着 → 唯一的 true
+      { lockUntil: 1_000, masterEnabled: true, now: 2_000, expected: true },
+      // 锁过 + 已过期 + 已关 → 幂等
+      { lockUntil: 1_000, masterEnabled: false, now: 2_000, expected: false },
+      // 锁过 + 锁定中 + 开着 → ADR-051 禁止
+      { lockUntil: 1_000, masterEnabled: true, now: 500, expected: false },
+      // 锁过 + 锁定中 + 已关 → 本就无事可做
+      { lockUntil: 1_000, masterEnabled: false, now: 500, expected: false },
+      // 没锁过 + 开着
+      { lockUntil: null, masterEnabled: true, now: 2_000, expected: false },
+      // 没锁过 + 已关
+      { lockUntil: null, masterEnabled: false, now: 2_000, expected: false },
+    ];
+    for (const row of rows) {
+      expect(
+        needsExpiryAutoOff(s(row.lockUntil, row.masterEnabled), row.now),
+        JSON.stringify(row),
+      ).toBe(row.expected);
+    }
+  });
+
+  it('🔴 与 isLocked **互斥**:两者不可能同时为 true(锁定期内绝不自动关闭)', () => {
+    // 这条用随机化穷举钉住「不可能在锁定期内关闭」这个不变式。
+    for (let lockUntil = 0; lockUntil <= 20; lockUntil++) {
+      for (let now = 0; now <= 20; now++) {
+        for (const masterEnabled of [true, false]) {
+          const settings = s(lockUntil, masterEnabled);
+          const both =
+            isLocked(settings, now) && needsExpiryAutoOff(settings, now);
+          expect(both, `lockUntil=${String(lockUntil)} now=${String(now)}`).toBe(
+            false,
+          );
+        }
+      }
+    }
+  });
+
+  it('🔴 `now` 为注入参数 —— 函数内不得调用 Date.now()', () => {
+    // 行为证据:伪造的 now 完全决定结果,与真实墙钟无关。
+    const future = Date.now() + 86_400_000;
+    expect(needsExpiryAutoOff(s(future, true), Number.MAX_SAFE_INTEGER)).toBe(true);
+    expect(needsExpiryAutoOff(s(future, true), 0)).toBe(false);
+    // 静态证据由同文件上方 isLocked 那条共同覆盖(同一个源文件)。
+  });
+
+  it('纯函数:不改动传入对象', () => {
+    const settings = s(1_000, true);
+    const before = JSON.stringify(settings);
+    needsExpiryAutoOff(settings, 2_000);
+    expect(JSON.stringify(settings)).toBe(before);
+  });
+
+  it('🔴 不清除 lockUntil 是无害的:过去的 lockUntil 对 isLocked 等同未锁定', () => {
+    // ADR-077 刻意不清除 lockUntil(清除需要写一个更小的值,
+    // 而那是 ADR-052 禁止的方向)。本条钉住「不清除不造成行为差异」。
+    const past = s(1_000, false);
+    expect(isLocked(past, 2_000)).toBe(false);
+    // 且 canSetLockUntil 把它当作「未锁定」,下次启动锁定正常放行。
+    expect(canSetLockUntil(past.lockUntil, 3_000, 2_000)).toEqual({ ok: true });
   });
 });

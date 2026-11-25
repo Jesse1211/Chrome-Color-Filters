@@ -1,0 +1,163 @@
+{
+  "pass": true,
+  "assertions": [
+    {
+      "name": "三档 `when` 闹钟全部触发了(没有被静默丢弃)",
+      "ok": true,
+      "detail": [
+        {
+          "name": "p2s",
+          "requestedDeltaMs": 2000,
+          "fired": true,
+          "actualDelayMs": 2003,
+          "latenessMs": 3,
+          "scheduledTimeEqualsRequested": true
+        },
+        {
+          "name": "p10s",
+          "requestedDeltaMs": 10000,
+          "fired": true,
+          "actualDelayMs": 10003,
+          "latenessMs": 3,
+          "scheduledTimeEqualsRequested": true
+        },
+        {
+          "name": "p35s",
+          "requestedDeltaMs": 35000,
+          "fired": true,
+          "actualDelayMs": 35003,
+          "latenessMs": 3,
+          "scheduledTimeEqualsRequested": true
+        }
+      ]
+    },
+    {
+      "name": "平台把 `when` 原样记为 scheduledTime(未被向上取整到 30s)",
+      "ok": true,
+      "detail": [
+        {
+          "name": "p2s",
+          "requestedDeltaMs": 2000,
+          "fired": true,
+          "actualDelayMs": 2003,
+          "latenessMs": 3,
+          "scheduledTimeEqualsRequested": true
+        },
+        {
+          "name": "p10s",
+          "requestedDeltaMs": 10000,
+          "fired": true,
+          "actualDelayMs": 10003,
+          "latenessMs": 3,
+          "scheduledTimeEqualsRequested": true
+        },
+        {
+          "name": "p35s",
+          "requestedDeltaMs": 35000,
+          "fired": true,
+          "actualDelayMs": 35003,
+          "latenessMs": 3,
+          "scheduledTimeEqualsRequested": true
+        }
+      ]
+    },
+    {
+      "name": "🔴 记录:unpacked 下 <30s 的 `when` 闹钟是否真的提早于 30s 触发了",
+      "ok": true,
+      "detail": {
+        "note": "unpacked 无限流 ⇒ 门禁比生产宽松,结论见 README",
+        "sub30": [
+          {
+            "requested": 2000,
+            "lateness": 3
+          },
+          {
+            "requested": 10000,
+            "lateness": 3
+          }
+        ]
+      }
+    }
+  ],
+  "data": {
+    "created": {
+      "out": [
+        {
+          "name": "p2s",
+          "requestedWhen": 1795589869302,
+          "createdAt": 1795589867302
+        },
+        {
+          "name": "p10s",
+          "requestedWhen": 1795589877302,
+          "createdAt": 1795589867302
+        },
+        {
+          "name": "p35s",
+          "requestedWhen": 1795589902302,
+          "createdAt": 1795589867302
+        }
+      ],
+      "all": [
+        {
+          "name": "p2s",
+          "persistAcrossSessions": true,
+          "scheduledTime": 1795589869302
+        },
+        {
+          "name": "p10s",
+          "persistAcrossSessions": true,
+          "scheduledTime": 1795589877302
+        },
+        {
+          "name": "p35s",
+          "persistAcrossSessions": true,
+          "scheduledTime": 1795589902302
+        }
+      ]
+    },
+    "fires": [
+      {
+        "name": "p2s",
+        "firedAt": 1795589869305,
+        "scheduledTime": 1795589869302
+      },
+      {
+        "name": "p10s",
+        "firedAt": 1795589877305,
+        "scheduledTime": 1795589877302
+      },
+      {
+        "name": "p35s",
+        "firedAt": 1795589902305,
+        "scheduledTime": 1795589902302
+      }
+    ],
+    "report": [
+      {
+        "name": "p2s",
+        "requestedDeltaMs": 2000,
+        "fired": true,
+        "actualDelayMs": 2003,
+        "latenessMs": 3,
+        "scheduledTimeEqualsRequested": true
+      },
+      {
+        "name": "p10s",
+        "requestedDeltaMs": 10000,
+        "fired": true,
+        "actualDelayMs": 10003,
+        "latenessMs": 3,
+        "scheduledTimeEqualsRequested": true
+      },
+      {
+        "name": "p35s",
+        "requestedDeltaMs": 35000,
+        "fired": true,
+        "actualDelayMs": 35003,
+        "latenessMs": 3,
+        "scheduledTimeEqualsRequested": true
+      }
+    ]
+  }
+}

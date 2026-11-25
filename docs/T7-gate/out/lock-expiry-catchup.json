@@ -1,0 +1,346 @@
+{
+  "clause": "T7【新增】ADR-077 补偿语义(关机过夜后 SW 补做关闭)",
+  "assertions": [
+    {
+      "name": "回合 1 前置:播种后确实是「已过期 + 主开关 ON」",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795563005372,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591807711,
+        "remainingMs": -28802339,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴🔴🔴 ADR-077 补偿:**完全重启浏览器后、未开过 popup**,SW 把 masterEnabled 补关为 false",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795563005372,
+        "masterEnabled": false,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591814957,
+        "remainingMs": -28809585,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴 补偿只改主开关 —— 规则原样保留(INV-8)",
+      "ok": true,
+      "detail": {
+        "before": [
+          "*@100"
+        ],
+        "after": [
+          "*@100"
+        ]
+      }
+    },
+    {
+      "name": "🔴 补偿**不清除** lockUntil(ADR-052:不为自动关闭开缩短的特例)",
+      "ok": true,
+      "detail": {
+        "seeded": 1795563005372,
+        "after": 1795563005372
+      }
+    },
+    {
+      "name": "ADR-025:补偿没有新增任何持久化字段",
+      "ok": true,
+      "detail": {
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴 补偿后不留过期闹钟(reschedule 把它清掉了)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "🔴🔴 证据:全程没有任何 popup.html 页面存在过(补偿不依赖 popup)",
+      "ok": true,
+      "detail": [
+        "about:blank"
+      ]
+    },
+    {
+      "name": "🔴🔴 对照 1:锁**仍有效**时重启 → masterEnabled 保持 true(补偿不在锁定期内动手)",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795613416231,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591825684,
+        "remainingMs": 21590547,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴 对照 1 / INV-13:重启后锁仍然有效,lockUntil 原值不变(ADR-053)",
+      "ok": true,
+      "detail": {
+        "seeded": 1795613416231,
+        "after": {
+          "lockUntil": 1795613416231,
+          "masterEnabled": true,
+          "rules": [
+            "*@100"
+          ],
+          "now": 1795591825684,
+          "remainingMs": 21590547,
+          "keys": [
+            "lockUntil",
+            "masterEnabled",
+            "rules",
+            "version"
+          ]
+        }
+      }
+    },
+    {
+      "name": "🔴 对照 1:重启后闹钟被**重建**(ADR-077:闹钟不保证存活重启)",
+      "ok": true,
+      "detail": {
+        "alarms": [
+          {
+            "name": "ccf-lock-expiry",
+            "scheduledTime": 1795613416231
+          }
+        ],
+        "lockUntil": 1795613416231
+      }
+    },
+    {
+      "name": "🔴🔴 对照 2:**从未锁过**的用户重启后 masterEnabled 保持 true(绝不无故关滤镜)",
+      "ok": true,
+      "detail": {
+        "lockUntil": null,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591836406,
+        "remainingMs": null,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "对照 2:没有锁就没有闹钟",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "幂等:已过期且已是 OFF → 重启后仍是 OFF(不重复写、不翻转)",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795563005372,
+        "masterEnabled": false,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591847112,
+        "remainingMs": -28841740,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴🔴 判别力:四个回合的结果**不相同** —— 补偿确实在按数据分支,而非恒定行为",
+      "ok": true,
+      "detail": {
+        "已过期": false,
+        "锁仍有效": true,
+        "从未锁过": true,
+        "已过期且已关": false
+      }
+    }
+  ],
+  "data": {
+    "round1": {
+      "before": {
+        "lockUntil": 1795563005372,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591807711,
+        "remainingMs": -28802339,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "after": {
+        "lockUntil": 1795563005372,
+        "masterEnabled": false,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591814957,
+        "remainingMs": -28809585,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "alarmsAfter": [],
+      "urls": [
+        "about:blank"
+      ]
+    },
+    "round2": {
+      "before": {
+        "lockUntil": 1795613416231,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591818416,
+        "remainingMs": 21597815,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "after": {
+        "lockUntil": 1795613416231,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591825684,
+        "remainingMs": 21590547,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "alarmsAfter": [
+        {
+          "name": "ccf-lock-expiry",
+          "scheduledTime": 1795613416231
+        }
+      ],
+      "urls": [
+        "about:blank"
+      ]
+    },
+    "round3": {
+      "before": {
+        "lockUntil": null,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591829164,
+        "remainingMs": null,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "after": {
+        "lockUntil": null,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591836406,
+        "remainingMs": null,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "alarmsAfter": [],
+      "urls": [
+        "about:blank"
+      ]
+    },
+    "round4": {
+      "before": {
+        "lockUntil": 1795563005372,
+        "masterEnabled": false,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591839856,
+        "remainingMs": -28834484,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "after": {
+        "lockUntil": 1795563005372,
+        "masterEnabled": false,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591847112,
+        "remainingMs": -28841740,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "alarmsAfter": [],
+      "urls": [
+        "about:blank"
+      ]
+    }
+  },
+  "pass": true
+}

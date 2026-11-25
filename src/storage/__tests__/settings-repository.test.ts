@@ -1411,3 +1411,486 @@ describe('T3 · 未锁定时的正常写入路径', () => {
     expect(res.value.rules.map((r) => r.pattern)).toEqual(['x.com']);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════
+describe('🔒🔴 ADR-077 · applyExpiryAutoOff —— 到期自动关闭主开关', () => {
+  /** 布置一个「锁到 T0+60s」的已锁定状态,主开关 ON。 */
+  function lockedAt(h: Harness, untilOffsetMs = 60_000): void {
+    h.area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [rule('a.com')],
+        lockUntil: T0 + untilOffsetMs,
+      },
+    });
+  }
+
+  // ─────────────── 正路:到期后真的关掉 ───────────────
+  it('到期后 → masterEnabled 置为 false,applied 为 true', async () => {
+    const h = makeRepo();
+    lockedAt(h);
+    h.clock.set(T0 + 60_001); // 已过期
+
+    const result = await h.repo.applyExpiryAutoOff();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.applied).toBe(true);
+    expect(result.value.settings.masterEnabled).toBe(false);
+    // 真的落盘了,不只是返回值。
+    expect(persisted(h.area).masterEnabled).toBe(false);
+  });
+
+  it('🔴 边界:now === lockUntil 的那一毫秒就关(与 isLocked 的开区间同口径)', async () => {
+    const h = makeRepo();
+    lockedAt(h);
+    h.clock.set(T0 + 60_000); // 恰好等于 lockUntil
+
+    // 同一时刻 isCurrentlyLocked 必须已是 false —— 两者口径一致。
+    expect(await h.repo.isCurrentlyLocked()).toBe(false);
+
+    const result = await h.repo.applyExpiryAutoOff();
+    expect(result.ok && result.value.applied).toBe(true);
+    expect(persisted(h.area).masterEnabled).toBe(false);
+  });
+
+  it('🔴 只改 masterEnabled —— rules 原样保留(INV-8:规则全部保留)', async () => {
+    const h = makeRepo();
+    h.area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [rule('a.com'), rule('b.com', { intensity: 33 })],
+        lockUntil: T0 + 1_000,
+      },
+    });
+    h.clock.set(T0 + 2_000);
+
+    await h.repo.applyExpiryAutoOff();
+
+    const after = persisted(h.area);
+    expect(after.masterEnabled).toBe(false);
+    expect(after.rules).toEqual([
+      { pattern: 'a.com', mode: 'Grayscale', intensity: 100 },
+      { pattern: 'b.com', mode: 'Grayscale', intensity: 33 },
+    ]);
+  });
+
+  it('🔴 **不清除** lockUntil —— 它原值保留(ADR-052:不为自动关闭开缩短的特例)', async () => {
+    const h = makeRepo();
+    lockedAt(h, 1_000);
+    h.clock.set(T0 + 2_000);
+
+    await h.repo.applyExpiryAutoOff();
+
+    // lockUntil 仍是那个过去的时间戳,一字未动。
+    expect(persisted(h.area).lockUntil).toBe(T0 + 1_000);
+  });
+
+  it('持久化键集不变(ADR-025:不因本功能新增任何字段)', async () => {
+    const h = makeRepo();
+    lockedAt(h, 1_000);
+    h.clock.set(T0 + 2_000);
+
+    await h.repo.applyExpiryAutoOff();
+
+    expect(Object.keys(persisted(h.area)).sort()).toEqual(
+      [...PERSISTED_SETTINGS_KEYS].sort(),
+    );
+  });
+
+  // ─────────────── 🔴🔴 守住锁定强制:锁定期内必须拒绝 ───────────────
+  it('🔴🔴 锁定中调用 → **被拒绝**,返回 kind:locked(绝不是关主开关的后门)', async () => {
+    const h = makeRepo();
+    lockedAt(h);
+    h.clock.set(T0 + 30_000); // 锁定中,还剩 30s
+
+    const result = await h.repo.applyExpiryAutoOff();
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('locked');
+    expect(result.error.reason).toBe('locked-master-enabled');
+  });
+
+  it('🔴🔴 锁定中被拒后,**全字段**深度相等(INV-11:拒绝路径不写盘)', async () => {
+    const h = makeRepo();
+    lockedAt(h);
+    h.clock.set(T0 + 30_000);
+
+    const before = persisted(h.area);
+    const setsBefore = h.area.setCallCount;
+
+    const result = await h.repo.applyExpiryAutoOff();
+
+    expect(result.ok).toBe(false);
+    // 全字段深度相等 —— ADR-071 之后不再有任何豁免字段。
+    expect(persisted(h.area)).toEqual(before);
+    // 一次 storage.set 都没发出。
+    expect(h.area.setCallCount).toBe(setsBefore);
+  });
+
+  it('🔴🔴 与 setMasterEnabled(false) 在同一时刻**行为一致** —— 没有第二套判定', async () => {
+    const h = makeRepo();
+    lockedAt(h);
+    h.clock.set(T0 + 30_000); // 锁定中
+
+    const viaAutoOff = await h.repo.applyExpiryAutoOff();
+    const viaSetter = await h.repo.setMasterEnabled(false);
+
+    // 两条路径都被拒,且分类一致 —— 自动关闭没有比 setMasterEnabled 更宽松。
+    expect(viaAutoOff.ok).toBe(false);
+    expect(viaSetter.ok).toBe(false);
+    if (viaAutoOff.ok || viaSetter.ok) return;
+    expect(viaAutoOff.error.kind).toBe(viaSetter.error.kind);
+    expect(viaAutoOff.error.reason).toBe(viaSetter.error.reason);
+  });
+
+  it('🔴🔴 锁定期内**反复**调用都挡住(不存在「多调几次就穿了」的路径)', async () => {
+    const h = makeRepo();
+    lockedAt(h);
+    h.clock.set(T0 + 30_000);
+
+    for (let i = 0; i < 25; i++) {
+      const r = await h.repo.applyExpiryAutoOff();
+      expect(r.ok).toBe(false);
+    }
+    expect(persisted(h.area).masterEnabled).toBe(true);
+    expect(h.area.setCallCount).toBe(0);
+  });
+
+  it('🔴🔴 全时间轴扫描:锁定期内任一时刻都拒绝,到期起才放行', async () => {
+    // 这条用穷举钉住「不可能在锁定期内关闭」这个不变式 ——
+    // 比挑几个时刻更难被一次疏忽的改动绕过。
+    const LOCK_UNTIL = T0 + 10;
+    for (let now = T0; now <= T0 + 20; now++) {
+      const h = makeRepo();
+      h.area.seed({
+        [SETTINGS_KEY]: {
+          version: 1,
+          masterEnabled: true,
+          rules: [],
+          lockUntil: LOCK_UNTIL,
+        },
+      });
+      h.clock.set(now);
+
+      const result = await h.repo.applyExpiryAutoOff();
+      const shouldAllow = now >= LOCK_UNTIL;
+
+      expect(result.ok, `now=${String(now - T0)}`).toBe(shouldAllow);
+      expect(persisted(h.area).masterEnabled, `now=${String(now - T0)}`).toBe(
+        !shouldAllow,
+      );
+    }
+  });
+
+  it('🔴 不接受任何参数 —— 调用方无法伪造「已到期」(判据只来自仓储层的时钟)', () => {
+    // 签名层面的保证:零参数 ⇒ 没有可被伪造的输入。
+    // 这不是风格检查 —— 若将来有人加一个 `now` 参数,
+    // 「从 SW 传一个未来时刻即可解锁」就成立了。
+    expect(SettingsRepository.prototype.applyExpiryAutoOff.length).toBe(0);
+  });
+
+  // ─────────────── 幂等:no-op 不写盘 ───────────────
+  it('lockUntil = null(从未锁过)→ no-op,applied 为 false,**不写盘**', async () => {
+    const h = makeRepo();
+    h.area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [rule('a.com')],
+        lockUntil: null,
+      },
+    });
+
+    const result = await h.repo.applyExpiryAutoOff();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.applied).toBe(false);
+    // 🔴 主开关仍是 ON —— 从未锁过的用户的滤镜不得被关掉。
+    expect(persisted(h.area).masterEnabled).toBe(true);
+    expect(h.area.setCallCount).toBe(0);
+  });
+
+  it('已过期且 masterEnabled 已是 false → no-op,applied 为 false,**不写盘**', async () => {
+    const h = makeRepo();
+    h.area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: false,
+        rules: [],
+        lockUntil: T0 + 1_000,
+      },
+    });
+    h.clock.set(T0 + 2_000);
+
+    const result = await h.repo.applyExpiryAutoOff();
+
+    expect(result.ok && result.value.applied).toBe(false);
+    expect(h.area.setCallCount).toBe(0);
+  });
+
+  it('🔴 幂等:连续调用两次,第二次是 no-op 且不产生第二次 storage.set', async () => {
+    const h = makeRepo();
+    lockedAt(h, 1_000);
+    h.clock.set(T0 + 2_000);
+
+    const first = await h.repo.applyExpiryAutoOff();
+    const setsAfterFirst = h.area.setCallCount;
+    const second = await h.repo.applyExpiryAutoOff();
+
+    expect(first.ok && first.value.applied).toBe(true);
+    expect(second.ok && second.value.applied).toBe(false);
+    expect(h.area.setCallCount).toBe(setsAfterFirst);
+  });
+
+  // ─────────────── 其余路径 ───────────────
+  it('存储为空 → no-op(默认 lockUntil 为 null),不抛', async () => {
+    const h = makeRepo();
+    const result = await h.repo.applyExpiryAutoOff();
+    expect(result.ok && result.value.applied).toBe(false);
+  });
+
+  it('垃圾数据 → 按 ADR-041 回退默认值后 no-op,不抛', async () => {
+    const h = makeRepo();
+    h.area.seed({ [SETTINGS_KEY]: 'not an object' });
+    const result = await h.repo.applyExpiryAutoOff();
+    expect(result.ok && result.value.applied).toBe(false);
+  });
+
+  it('写入失败 → 返回 ADR-046 结构化错误,不 throw', async () => {
+    const h = makeRepo();
+    lockedAt(h, 1_000);
+    h.clock.set(T0 + 2_000);
+    h.area.failSet = () => new Error('boom');
+
+    const result = await h.repo.applyExpiryAutoOff();
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('other');
+    expect(result.error.reason).toBe('storage-failure');
+    expect(result.error.cause).toContain('boom');
+  });
+
+  it('配额失败 → 归类为 quota(与其余写入路径同一分类口径)', async () => {
+    const h = makeRepo();
+    lockedAt(h, 1_000);
+    h.clock.set(T0 + 2_000);
+    h.area.failSet = () => new Error('QUOTA_BYTES exceeded');
+
+    const result = await h.repo.applyExpiryAutoOff();
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('quota');
+  });
+
+  it('读失败 → 回退默认值(lockUntil=null)后 no-op,不抛(ADR-041)', async () => {
+    const h = makeRepo();
+    h.area.failGet = () => new Error('read boom');
+    const result = await h.repo.applyExpiryAutoOff();
+    expect(result.ok && result.value.applied).toBe(false);
+  });
+
+  it('成功的自动关闭会触发 onChanged 订阅(INV-4:popup / 其他 tab 立即跟进)', async () => {
+    const h = makeRepo();
+    lockedAt(h, 1_000);
+    h.clock.set(T0 + 2_000);
+
+    const seen: FilterSettings[] = [];
+    h.repo.subscribe((s) => seen.push(s));
+
+    await h.repo.applyExpiryAutoOff();
+
+    expect(seen.length).toBe(1);
+    expect(seen[0]?.masterEnabled).toBe(false);
+  });
+
+  it('🔴 自动关闭之后,设置立刻可改(到期即解禁,ADR-077 的「同时」)', async () => {
+    const h = makeRepo();
+    lockedAt(h, 1_000);
+    h.clock.set(T0 + 2_000);
+
+    await h.repo.applyExpiryAutoOff();
+
+    // 规则可改、主开关可开回来 —— 两者都在同一时刻放行。
+    expect((await h.repo.addRule(rule('new.com'))).ok).toBe(true);
+    expect((await h.repo.setMasterEnabled(true)).ok).toBe(true);
+    expect(persisted(h.area).masterEnabled).toBe(true);
+  });
+
+  it('🔴 自动关闭后用户手动开回滤镜 → 不会被仓储层再次关掉(单次调用幂等)', async () => {
+    const h = makeRepo();
+    lockedAt(h, 1_000);
+    h.clock.set(T0 + 2_000);
+
+    await h.repo.applyExpiryAutoOff();      // 自动关闭
+    await h.repo.setMasterEnabled(true);    // 用户手动开回来
+
+    // 此刻状态是「已过期 + 开着」,纯函数会说 true —— 但真正的防线是
+    // 调用时机(边沿 + SW 启动),见 useLockExpiry / LockExpiryScheduler。
+    // 本条钉住的是:**用户的那次写入没有被自动关闭吃掉**。
+    expect(persisted(h.area).masterEnabled).toBe(true);
+  });
+
+  it('🔴 延长锁定后到期时间推后 → 原到期时刻调用仍被拒(延长真的生效了)', async () => {
+    const h = makeRepo();
+    lockedAt(h, 10_000);           // 锁到 T0+10s
+    h.clock.set(T0 + 5_000);
+    await h.repo.setLockUntil(T0 + 60_000);  // 延长到 T0+60s
+
+    h.clock.set(T0 + 11_000);      // 过了**原**到期时刻
+    const result = await h.repo.applyExpiryAutoOff();
+
+    expect(result.ok).toBe(false); // 仍锁着 —— 延长生效
+    expect(persisted(h.area).masterEnabled).toBe(true);
+
+    h.clock.set(T0 + 60_000);      // 过了**新**到期时刻
+    expect((await h.repo.applyExpiryAutoOff()).ok).toBe(true);
+    expect(persisted(h.area).masterEnabled).toBe(false);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+describe('🔴🔴 红队 · 试图把 applyExpiryAutoOff 当成关闭主开关的后门(ADR-077)', () => {
+  /**
+   * 本组测试的立场是**攻击者**,不是使用者。
+   *
+   * ADR-077 在仓储层新增了一个会写 `masterEnabled: false` 的公开 API。
+   * 若它少一道检查,「调用它即可解锁」—— 整个锁定功能(ADR-051/052,
+   * INV-11/12/14)当场形同虚设。上面那组 describe 验的是正常语义;
+   * 本组专门尝试**绕过**。
+   */
+
+  it('🔴 并发 200 次调用 + 并发延长 → 锁定期内主开关始终为 true', async () => {
+    // 若实现里存在「先读后写」之间的竞态窗口,高并发最容易把它撞出来。
+    const h = makeRepo();
+    h.area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [],
+        lockUntil: T0 + 100_000,
+      },
+    });
+
+    const ops: Promise<unknown>[] = [];
+    for (let i = 0; i < 200; i++) {
+      ops.push(h.repo.applyExpiryAutoOff());
+      // 夹杂一些合法的延长写入,制造真实的交错。
+      if (i % 10 === 0) ops.push(h.repo.setLockUntil(T0 + 100_000 + i * 1_000));
+    }
+    await Promise.all(ops);
+
+    expect(persisted(h.area).masterEnabled).toBe(true);
+  });
+
+  it('🔴 TOCTOU:时钟在调用途中跳到未来,也不能让锁定期内的关闭成功', async () => {
+    // 判据必须在**一次** readContext 里一次性取定(ctx.now),
+    // 而不是在方法体内多次读时钟 —— 后者允许「第一次读到锁定中、
+    // 第二次读到已到期」这种自相矛盾的中间判定。
+    const area = new MemoryStorageArea({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [],
+        lockUntil: T0 + 100_000,
+      },
+    });
+    let calls = 0;
+    const repo = new SettingsRepository({
+      area,
+      // 第一次返回锁定期内,之后一律返回遥远的未来。
+      clock: () => (calls++ === 0 ? T0 : T0 + 9_999_999),
+    });
+
+    const result = await repo.applyExpiryAutoOff();
+
+    expect(result.ok).toBe(false);
+    expect(
+      (area.snapshot()[SETTINGS_KEY] as { masterEnabled: boolean }).masterEnabled,
+    ).toBe(true);
+  });
+
+  it('🔴 到期关闭 → 用户开回 → 重新上锁 → 新锁期内仍然关不掉', async () => {
+    const h = makeRepo({ now: T0 + 2_000 });
+    h.area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [],
+        lockUntil: T0 + 1_000,
+      },
+    });
+
+    // 1) 到期自动关闭(合法)
+    expect((await h.repo.applyExpiryAutoOff()).ok).toBe(true);
+    // 2) 用户手动开回来(合法 —— 此刻未锁定)
+    expect((await h.repo.setMasterEnabled(true)).ok).toBe(true);
+    // 3) 重新上一个锁
+    expect((await h.repo.setLockUntil(T0 + 60_000)).ok).toBe(true);
+    // 4) 🔴 试图在**新锁**期内用自动关闭把它关掉
+    const attack = await h.repo.applyExpiryAutoOff();
+
+    expect(attack.ok).toBe(false);
+    expect(persisted(h.area).masterEnabled).toBe(true);
+  });
+
+  it('🔴 不能通过「先把 lockUntil 写成过去值」来解锁(canSetLockUntil 挡在前面)', async () => {
+    // 这条确认两道闸是**串联**的:即使攻击者先试图把锁改短,
+    // 那一步本身就会被 ADR-052 拒绝,于是自动关闭永远看不到「已过期」。
+    const h = makeRepo();
+    h.area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [],
+        lockUntil: T0 + 100_000,
+      },
+    });
+
+    const shorten = await h.repo.setLockUntil(T0 - 1);
+    expect(shorten.ok).toBe(false);
+    const clear = await h.repo.setLockUntil(null);
+    expect(clear.ok).toBe(false);
+
+    // 锁没动 → 自动关闭仍被拒。
+    expect((await h.repo.applyExpiryAutoOff()).ok).toBe(false);
+    expect(persisted(h.area).masterEnabled).toBe(true);
+    expect(persisted(h.area).lockUntil).toBe(T0 + 100_000);
+  });
+
+  it('🔴 `setLockUntilImmediate` 的快照路径也不能被用来造出「已过期」的假象', async () => {
+    // `setLockUntilImmediate` 用 `#cachedSettings` 同步判定(为了不丢写)。
+    // 本条确认:即使那个快照是陈旧的,也不会让自动关闭在锁定期内放行 ——
+    // 因为 `applyExpiryAutoOff` **不读快照**,它自己重新读盘。
+    const h = makeRepo();
+    h.area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [],
+        lockUntil: T0 + 100_000,
+      },
+    });
+    // 让仓储层先缓存一份快照。
+    await h.repo.read();
+    // 从「别处」把盘上的锁改得更长(模拟另一个窗口),快照随之陈旧。
+    h.area.seed({
+      [SETTINGS_KEY]: {
+        version: 1,
+        masterEnabled: true,
+        rules: [],
+        lockUntil: T0 + 500_000,
+      },
+    });
+
+    const result = await h.repo.applyExpiryAutoOff();
+
+    expect(result.ok).toBe(false);
+    expect(persisted(h.area).masterEnabled).toBe(true);
+  });
+});

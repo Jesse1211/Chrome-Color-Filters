@@ -10,7 +10,7 @@
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581595883,
+        "now": 1795590579445,
         "remainingMs": null,
         "keys": [
           "lockUntil",
@@ -88,7 +88,7 @@
               "intensity": 50
             }
           ],
-          "lockUntil": 1795585195933
+          "lockUntil": 1795594179503
         }
       }
     },
@@ -101,7 +101,7 @@
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581595944,
+        "now": 1795590579517,
         "remainingMs": null,
         "keys": [
           "lockUntil",
@@ -168,7 +168,7 @@
           "rules": [
             "example.com@100"
           ],
-          "now": 1795581596390,
+          "now": 1795590579969,
           "remainingMs": null,
           "keys": [
             "lockUntil",
@@ -183,7 +183,7 @@
           "rules": [
             "example.com@100"
           ],
-          "now": 1795581597018,
+          "now": 1795590580596,
           "remainingMs": null,
           "keys": [
             "lockUntil",
@@ -219,7 +219,7 @@
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581597065,
+        "now": 1795590580644,
         "remainingMs": null,
         "keys": [
           "lockUntil",
@@ -303,12 +303,12 @@
       "name": "🔴 阶段 1:UI 启动锁定后磁盘上 lockUntil 为未来时间戳(ADR-053 绝对时间)",
       "ok": true,
       "detail": {
-        "lockUntil": 1795581657231,
+        "lockUntil": 1795590640810,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581597294,
+        "now": 1795590580873,
         "remainingMs": 59937,
         "keys": [
           "lockUntil",
@@ -363,8 +363,8 @@
       "name": "📍 列表页倒计时条与子页面回显同源(同一个 lockUntil)",
       "ok": true,
       "detail": {
-        "listLockUntilAttr": "1795581657231",
-        "subPageLockUntilAttr": "1795581657231"
+        "listLockUntilAttr": "1795590640810",
+        "subPageLockUntilAttr": "1795590640810"
       }
     },
     {
@@ -587,14 +587,14 @@
           "r": [
             "example.com@100"
           ],
-          "l": 1795581657231
+          "l": 1795590640810
         },
         "after": {
           "m": true,
           "r": [
             "example.com@100"
           ],
-          "l": 1795581657231
+          "l": 1795590640810
         }
       }
     },
@@ -609,8 +609,8 @@
       "name": "🔴 N2 / INV-12:锁定中**延长**成功(UI 路径),lockUntil 严格变大",
       "ok": true,
       "detail": {
-        "beforeExtend": 1795581657231,
-        "afterLockUntil": 1795581717231,
+        "beforeExtend": 1795590640810,
+        "afterLockUntil": 1795590700810,
         "deltaMs": 60000
       }
     },
@@ -630,18 +630,18 @@
       "name": "🔴 INV-13:完全退出并重启浏览器后,锁定仍然有效(lockUntil 原值不变)",
       "ok": true,
       "detail": {
-        "preLockUntil": 1795581717231,
-        "postLockUntil": 1795581717231,
-        "postRemainingMs": 115549
+        "preLockUntil": 1795590700810,
+        "postLockUntil": 1795590700810,
+        "postRemainingMs": 115537
       }
     },
     {
       "name": "🔴 N4 / ADR-053:重启后剩余时间**小于**重启前(存的是绝对时间,不是时长)",
       "ok": true,
       "detail": {
-        "pre": 118834,
-        "post": 115549,
-        "elapsedMs": 3285
+        "pre": 118813,
+        "post": 115537,
+        "elapsedMs": 3276
       }
     },
     {
@@ -659,7 +659,7 @@
       "detail": {
         "postCountdown": "🔒 锁定中 00:01:55",
         "shownMs": 115000,
-        "diskRemainingMs": 115549
+        "diskRemainingMs": 115537
       }
     },
     {
@@ -678,13 +678,13 @@
       "name": "锁定已自然到期(remainingMs <= 0)",
       "ok": true,
       "detail": {
-        "lockUntil": 1795581717231,
-        "masterEnabled": true,
+        "lockUntil": 1795590700810,
+        "masterEnabled": false,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581721302,
-        "remainingMs": -4071,
+        "now": 1795590704899,
+        "remainingMs": -4089,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -700,7 +700,7 @@
         "ok": true,
         "value": {
           "version": 1,
-          "masterEnabled": true,
+          "masterEnabled": false,
           "rules": [
             {
               "pattern": "example.com",
@@ -713,7 +713,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795581717231
+          "lockUntil": 1795590700810
         }
       }
     },
@@ -737,7 +737,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795581717231
+          "lockUntil": 1795590700810
         }
       }
     },
@@ -756,7 +756,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795581717231
+          "lockUntil": 1795590700810
         }
       }
     },
@@ -775,7 +775,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795581717231
+          "lockUntil": 1795590700810
         }
       }
     },
@@ -824,7 +824,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795581782612
+          "lockUntil": 1795590766166
         }
       }
     },
@@ -889,7 +889,7 @@
       "rules": [
         "example.com@100"
       ],
-      "now": 1795581595883,
+      "now": 1795590579445,
       "remainingMs": null,
       "keys": [
         "lockUntil",
@@ -956,7 +956,7 @@
               "intensity": 50
             }
           ],
-          "lockUntil": 1795585195933
+          "lockUntil": 1795594179503
         }
       },
       "n1d": {
@@ -985,7 +985,7 @@
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581596390,
+        "now": 1795590579969,
         "remainingMs": null,
         "keys": [
           "lockUntil",
@@ -1000,7 +1000,7 @@
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581597018,
+        "now": 1795590580596,
         "remainingMs": null,
         "keys": [
           "lockUntil",
@@ -1045,12 +1045,12 @@
       "ranges": 0
     },
     "phase1": {
-      "lockUntil": 1795581657231,
+      "lockUntil": 1795590640810,
       "masterEnabled": true,
       "rules": [
         "example.com@100"
       ],
-      "now": 1795581597294,
+      "now": 1795590580873,
       "remainingMs": 59937,
       "keys": [
         "lockUntil",
@@ -1060,7 +1060,7 @@
       ],
       "countdown0": "🔒 锁定中 00:01:00",
       "confirmText": "将锁定 1 分钟",
-      "lockUntilAttr": "1795581657231"
+      "lockUntilAttr": "1795590640810"
     },
     "lockedSubUi": {
       "ids": [
@@ -1123,13 +1123,13 @@
     },
     "phase2": {
       "before": {
-        "lockUntil": 1795581657231,
+        "lockUntil": 1795590640810,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581597910,
-        "remainingMs": 59321,
+        "now": 1795590581491,
+        "remainingMs": 59319,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1221,13 +1221,13 @@
       }
     },
     "phase2After": {
-      "lockUntil": 1795581657231,
+      "lockUntil": 1795590640810,
       "masterEnabled": true,
       "rules": [
         "example.com@100"
       ],
-      "now": 1795581597917,
-      "remainingMs": 59314,
+      "now": 1795590581501,
+      "remainingMs": 59309,
       "keys": [
         "lockUntil",
         "masterEnabled",
@@ -1236,15 +1236,15 @@
       ]
     },
     "phase3": {
-      "beforeExtend": 1795581657231,
+      "beforeExtend": 1795590640810,
       "afterExtend": {
-        "lockUntil": 1795581717231,
+        "lockUntil": 1795590700810,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581598390,
-        "remainingMs": 118841,
+        "now": 1795590581995,
+        "remainingMs": 118815,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1255,13 +1255,13 @@
     },
     "phase4": {
       "preRestart": {
-        "lockUntil": 1795581717231,
+        "lockUntil": 1795590700810,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581598397,
-        "remainingMs": 118834,
+        "now": 1795590581997,
+        "remainingMs": 118813,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1270,13 +1270,13 @@
         ]
       },
       "postRestart": {
-        "lockUntil": 1795581717231,
+        "lockUntil": 1795590700810,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581601682,
-        "remainingMs": 115549,
+        "now": 1795590585273,
+        "remainingMs": 115537,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1287,13 +1287,13 @@
     },
     "phase5": {
       "expired": {
-        "lockUntil": 1795581717231,
-        "masterEnabled": true,
+        "lockUntil": 1795590700810,
+        "masterEnabled": false,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795581721302,
-        "remainingMs": -4071,
+        "now": 1795590704899,
+        "remainingMs": -4089,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1307,7 +1307,7 @@
         "ok": true,
         "value": {
           "version": 1,
-          "masterEnabled": true,
+          "masterEnabled": false,
           "rules": [
             {
               "pattern": "example.com",
@@ -1320,7 +1320,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795581717231
+          "lockUntil": 1795590700810
         }
       },
       "masterOff": {
@@ -1340,7 +1340,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795581717231
+          "lockUntil": 1795590700810
         }
       },
       "removeRule": {
@@ -1355,7 +1355,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795581717231
+          "lockUntil": 1795590700810
         }
       }
     },

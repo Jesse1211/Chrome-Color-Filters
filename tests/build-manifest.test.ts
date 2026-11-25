@@ -86,6 +86,25 @@ describe.skipIf(!built)(
       expect(manifest.permissions).toContain('tabs');
     });
 
+    it("🔴🔒 ADR-077 前提 · permissions 含 'alarms'", () => {
+      // 漏了这条,`chrome.alarms` 整个为 `undefined` → `alarms-port.ts` 降级为
+      // 「什么都不做」→ 到期闹钟这条触发线**静默消失**。
+      // 表现是「popup 关着时锁定到期后滤镜仍开着,直到下次 SW 偶然被唤醒」,
+      // 不是一条报错 —— 必须在**产物**上核对(ADR-038:dev manifest 不作数)。
+      //
+      // ✅ 本权限**不新增任何用户可见的权限警告** —— 真实 Chrome A/B 实测,
+      //    见 wxt.config.ts 该权限处的注释与
+      //    docs/T7-gate/out/alarms-permission-warning.json。
+      expect(manifest.permissions).toContain('alarms');
+    });
+
+    it('🔴 permissions 恰好是这四条,没有被顺手加进别的权限', () => {
+      // 权限集是用户可见的安装对话框内容,不该在无人注意时增长。
+      expect([...(manifest.permissions ?? [])].sort()).toEqual(
+        ['alarms', 'scripting', 'storage', 'tabs'].sort(),
+      );
+    });
+
     it('🔴 content script 的 run_at 为 document_start(INV-3 的前提)', () => {
       const cs = manifest.content_scripts ?? [];
       expect(cs.length).toBeGreaterThan(0);

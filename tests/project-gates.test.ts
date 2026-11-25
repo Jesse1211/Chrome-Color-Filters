@@ -71,6 +71,45 @@ describe('ADR-004 / ADR-010 · 权限声明', () => {
     expect(wxtConfigSource).toMatch(/permissions:\s*\[[^\]]*'scripting'/);
   });
 
+  it("🔴🔒 ADR-077 前提 · wxt.config.ts 声明 permissions 含 'alarms'", () => {
+    // `alarms` 是到期自动关闭的前提(ADR-077):必须在**到期那一刻**真的
+    // 发生一次写入,即使 popup 没开、SW 已休眠。
+    // `setTimeout` 不可靠 —— MV3 的 SW 随时会被回收。
+    expect(wxtConfigSource).toMatch(/permissions:\s*\[[^\]]*'alarms'/);
+  });
+
+  it('🔴🔒 ADR-077 · 到期触发器不得用 setTimeout / setInterval(SW 会被回收)', () => {
+    // 这是一条**静态**门禁:`setTimeout(…, 3600_000)` 会随 SW 一起消失,
+    // 它不是一个更简单的方案,而是一个**不工作**的方案。
+    // 剥去注释后检查 —— 文件头正是在论证「为什么不能用它」,那段该留着。
+    const source = readFileSync(
+      resolve(ROOT, 'src/background/lock-expiry.ts'),
+      'utf8',
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    expect(source).not.toContain('setTimeout');
+    expect(source).not.toContain('setInterval');
+  });
+
+  it('🔴🔒 ADR-077 · 自动关闭的判定与写入只在仓储层(UI/SW 不得自己写 masterEnabled)', () => {
+    // INV-14 / ADR-055:锁定强制点在仓储层。到期自动关闭是一个**新的**
+    // 会写 masterEnabled 的路径,故这里静态钉住:
+    // 触发器(SW 侧与 popup 侧)都**不出现** `masterEnabled` 的赋值,
+    // 它们只调仓储层的 `applyExpiryAutoOff()`。
+    for (const rel of ['src/background/lock-expiry.ts', 'src/ui/useLockExpiry.ts']) {
+      const source = readFileSync(resolve(ROOT, rel), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+      expect(source, `${rel} 不得自己写 masterEnabled`).not.toMatch(
+        /masterEnabled\s*[:=]/,
+      );
+      expect(source, `${rel} 不得绕过仓储层直接碰 storage`).not.toContain(
+        'chrome.storage',
+      );
+    }
+  });
+
   it('🔴 ADR-010 · 未声明任何 sync 相关权限', () => {
     expect(wxtConfigSource).not.toContain('storage.sync');
   });

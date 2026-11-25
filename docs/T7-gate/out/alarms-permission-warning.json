@@ -1,0 +1,87 @@
+{
+  "pass": true,
+  "assertions": [
+    {
+      "name": "探针可用:getPermissionWarningsByManifest 调得通(无需 management 权限)",
+      "ok": true,
+      "detail": {
+        "base": {
+          "ok": true,
+          "warnings": [
+            "Read and change all your data on all websites"
+          ]
+        },
+        "withAlarms": {
+          "ok": true,
+          "warnings": [
+            "Read and change all your data on all websites"
+          ]
+        },
+        "withHistory": {
+          "ok": true,
+          "warnings": [
+            "Read and change all your data on all websites",
+            "Read and change your browsing history on all your signed-in devices"
+          ]
+        }
+      }
+    },
+    {
+      "name": "🔴 ADR-077:加 `alarms` 后权限警告列表**逐字未变**(零新增用户可见警告)",
+      "ok": true,
+      "detail": {
+        "baseSet": [
+          "Read and change all your data on all websites"
+        ],
+        "alarmsSet": [
+          "Read and change all your data on all websites"
+        ],
+        "addedByAlarms": [],
+        "removedByAlarms": []
+      }
+    },
+    {
+      "name": "🔴 探针有效性对照:`history` 确实**新增**了一条警告(证明本探针读得出变化)",
+      "ok": true,
+      "detail": {
+        "addedByHistory": [
+          "Read and change your browsing history on all your signed-in devices"
+        ],
+        "historySet": [
+          "Read and change all your data on all websites",
+          "Read and change your browsing history on all your signed-in devices"
+        ]
+      }
+    }
+  ],
+  "data": {
+    "builtPermissions": [
+      "storage",
+      "scripting",
+      "tabs"
+    ],
+    "base": {
+      "ok": true,
+      "warnings": [
+        "Read and change all your data on all websites"
+      ]
+    },
+    "withAlarms": {
+      "ok": true,
+      "warnings": [
+        "Read and change all your data on all websites"
+      ]
+    },
+    "withHistory": {
+      "ok": true,
+      "warnings": [
+        "Read and change all your data on all websites",
+        "Read and change your browsing history on all your signed-in devices"
+      ]
+    },
+    "addedByAlarms": [],
+    "addedByHistory": [
+      "Read and change your browsing history on all your signed-in devices"
+    ]
+  }
+}

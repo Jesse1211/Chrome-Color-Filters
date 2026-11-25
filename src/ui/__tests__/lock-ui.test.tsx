@@ -46,6 +46,7 @@ import {
 } from '../lock-strings.js';
 import { MASTER_OFF_DISABLED_REASON } from '../strings.js';
 import { stubTabStatePort } from '../tab-state.js';
+import { useLockExpiry } from '../useLockExpiry.js';
 import { useLockState } from '../useLockState.js';
 import { usePopupSettings } from '../usePopupSettings.js';
 import { installPopupStyles } from './css-harness.js';
@@ -172,6 +173,20 @@ function PopupUnderTest({
     clock,
     setIntervalFn,
     clearIntervalFn,
+    onSettings: syncSettings,
+  });
+
+  /*
+    🔒 **ADR-077:与 `App.tsx` 逐字同构** —— 到期自动关闭主开关。
+
+    🔴 替身必须挂上它,否则本文件会测一个**产品里不存在的时序**:
+    产品在到期当秒就把 masterEnabled 写成 false,而少挂这个 hook 的替身
+    会停在「已解锁但主开关仍 ON」—— 那恰恰是任务书点名禁止的 stale 中间态,
+    却会在替身里一路绿灯。替身与产品的接线必须一致,否则测的是替身。
+  */
+  useLockExpiry({
+    locked,
+    applyAutoOff: () => repository.applyExpiryAutoOff(),
     onSettings: syncSettings,
   });
 
@@ -1589,11 +1604,57 @@ describe('🔴 锁定到期 → UI 自动恢复可编辑', () => {
     expect(screen.getByTestId('popup').dataset.locked).toBe('false');
     expect(screen.queryByTestId('lock-banner')).toBeNull();
     expect(screen.queryByTestId('lock-countdown')).toBeNull();
+    // 🔴 **锁的那道禁用解除了** —— 主开关恢复可用(它是用户唯一的回头路)。
     expect((screen.getByTestId('master-switch') as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByTestId('add-rule') as HTMLButtonElement).disabled).toBe(false);
-    // 折叠入口行回来了(点它可以再锁一次)。
+    // 折叠入口行回来了(锁定中它不在场)。
     expect(screen.getByTestId('lock-entry')).toBeTruthy();
     expect(screen.getByTestId('lock-open')).toBeTruthy();
+
+    /*
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      🔴🔴 **原先这里是 `add-rule` 的 `disabled` 必须为 `false`,已替换。**
+
+      改的理由**不是**这条断言碍事,而是 **ADR-077 之后它断言的是错的真相**:
+
+      - ADR-077:到期 ⇒ `masterEnabled` 自动变 `false`;
+      - ADR-076:`masterEnabled === false` ⇒ 「+ 添加规则」与「🔒 时间锁定」
+        **一并禁用**(`rulesDisabled = isSkeleton || masterOff ||
+        notInjectable || locked`,见 `RuleListView`)。
+
+      两条合起来:到期后 `add-rule` **本就应当是禁用的** —— 要求它可用
+      等于要求产品违反 ADR-076。这与 T7 门禁 `lock-e2e.cjs` 阶段 5 已经
+      记录过的同一件事完全一致(那里为此先把主开关恢复 ON 再断言,
+      并在注释里写明「不先恢复就断言 add-rule 可用,等于要求产品违反自己的规格」)。
+
+      🔴 **断言没有被删掉,而是被换成更强的三条**(下面紧接着):
+        (a) 主开关**读 OFF** —— ADR-077 真的发生了,且 React 状态已同步
+            (这正是任务书要求的「无 stale 中间态」:同一次更新里
+             横幅消失 + 主开关读 OFF + 锁的禁用解除);
+        (b) `add-rule` 仍禁用,但 `title` 证明理由**是主开关 OFF**
+            而不是「还锁着」—— 两种禁用没有被混为一谈;
+        (c) 用户把主开关开回来后 `add-rule` **立刻可用** ——
+            证明到期后设置确实恢复可改(ADR-077 的「设置同时恢复可改」)。
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    */
+    // (a) ADR-077:主开关已被自动关闭,且 React 状态已同步(无 stale)。
+    expect(screen.getByTestId('master-switch').getAttribute('aria-checked')).toBe(
+      'false',
+    );
+    // (b) add-rule 仍禁用 —— 理由是 ADR-076 的主开关 OFF,不是锁。
+    expect((screen.getByTestId('add-rule') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('add-rule').getAttribute('title')).toBe(
+      MASTER_OFF_DISABLED_REASON,
+    );
+    // (c) 把主开关开回来 → 设置立刻可改(到期确实解禁了,ADR-077)。
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('master-switch'));
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect((screen.getByTestId('add-rule') as HTMLButtonElement).disabled).toBe(
+        false,
+      );
+    });
   });
 
   it('到期边界取开区间:now === lockUntil 即已解锁(与领域层 isLocked 同口径)', async () => {

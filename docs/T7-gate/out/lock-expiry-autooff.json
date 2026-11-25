@@ -1,0 +1,560 @@
+{
+  "clause": "T7【新增】ADR-077 到期自动关闭(真实 Chrome + 真实挂钟)",
+  "assertions": [
+    {
+      "name": "A:通过 UI 启动 1 分钟锁定后,磁盘上 lockUntil 为未来时间戳",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795591916616,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591856660,
+        "remainingMs": 59956,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "A:启动锁定**不连带改动** masterEnabled(ADR-076 / ADR-057 已废止)",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795591916616,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591856660,
+        "remainingMs": 59956,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴 A:启动锁定后 SW 真的排上了到期闹钟,且 when === lockUntil",
+      "ok": true,
+      "detail": {
+        "alarms": [
+          {
+            "name": "ccf-lock-expiry",
+            "scheduledTime": 1795591916616,
+            "persistAcrossSessions": true
+          }
+        ],
+        "lockUntil": 1795591916616
+      }
+    },
+    {
+      "name": "🔴 A 基线:锁定中滤镜**确实生效**(有 filter + 页面几乎无彩色像素)",
+      "ok": true,
+      "detail": {
+        "audit": {
+          "attr": true,
+          "varVal": "grayscale(1)",
+          "computedFilter": "grayscale(1)",
+          "classes": "client-js vector-feature-language-in-header-enabled vector-feature-language-in-main-menu-disabled vector-feature-language-in-main-page-header-disabled vector-feature-page-tools-pinned-disabled vector-feature-toc-pinned-clientpref-1 vector-feature-main-menu-pinned-disabled vector-feature-limited-width-clientpref-1 vector-feature-limited-width-content-enabled vector-feature-custom-font-size-clientpref-1 vector-feature-appearance-pinned-clientpref-1 skin-theme-clientpref-day vector-toc-available skin-thumbsize-clientpref-standard skin-underline-clientpref-browser vector-animations-ready ve-available",
+          "injectedSvg": 0,
+          "ccfNodes": 0
+        },
+        "color": {
+          "coloredRatio": 0,
+          "sampled": 68800,
+          "width": 1280,
+          "height": 860
+        }
+      }
+    },
+    {
+      "name": "A:到期前抽查 —— 锁仍有效且 masterEnabled 仍为 true(还没到点,不该关)",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795591916616,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591909620,
+        "remainingMs": 6996,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴🔴🔴 A / ADR-077:到期后**磁盘上** masterEnabled === false(自动关闭真的发生了)",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795591916616,
+        "masterEnabled": false,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591925623,
+        "remainingMs": -9007,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴 A:到期后 lockUntil 已是**过去**时间(到期即解锁,ADR-053)",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795591916616,
+        "masterEnabled": false,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591925623,
+        "remainingMs": -9007,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴 A:规则**原样保留**(INV-8:主开关 OFF 时所有规则保留)",
+      "ok": true,
+      "detail": {
+        "before": [
+          "*@100"
+        ],
+        "after": [
+          "*@100"
+        ]
+      }
+    },
+    {
+      "name": "A / ADR-025:持久化键集未变(自动关闭没有新增任何字段)",
+      "ok": true,
+      "detail": {
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴🔴 A:到期后页面上**没有任何滤镜**(computed filter 为 none、无注入节点)",
+      "ok": true,
+      "detail": {
+        "attr": false,
+        "varVal": "",
+        "computedFilter": "none",
+        "classes": "client-js vector-feature-language-in-header-enabled vector-feature-language-in-main-menu-disabled vector-feature-language-in-main-page-header-disabled vector-feature-page-tools-pinned-disabled vector-feature-toc-pinned-clientpref-1 vector-feature-main-menu-pinned-disabled vector-feature-limited-width-clientpref-1 vector-feature-limited-width-content-enabled vector-feature-custom-font-size-clientpref-1 vector-feature-appearance-pinned-clientpref-1 skin-theme-clientpref-day vector-toc-available skin-thumbsize-clientpref-standard skin-underline-clientpref-browser vector-animations-ready ve-available",
+        "injectedSvg": 0,
+        "ccfNodes": 0
+      }
+    },
+    {
+      "name": "🔴🔴 A:到期后**像素回到彩色**(出现灰度滤镜在数学上不可能产生的彩色像素)",
+      "ok": true,
+      "detail": {
+        "locked": {
+          "coloredRatio": 0,
+          "sampled": 68800,
+          "width": 1280,
+          "height": 860
+        },
+        "expired": {
+          "coloredRatio": 0.030959302325581396,
+          "sampled": 68800,
+          "width": 1280,
+          "height": 860
+        },
+        "note": "grayscale(1) ⇒ R=G=B ⇒ 通道差>18 的像素恒为 0;>0 即滤镜已不在"
+      }
+    },
+    {
+      "name": "🔴🔴 A 负向对照:把主开关开回 ON → 滤镜**当场回来**,像素重新变灰",
+      "ok": true,
+      "detail": {
+        "expired": {
+          "filter": "none",
+          "ratio": 0.030959302325581396
+        },
+        "control": {
+          "filter": "grayscale(1)",
+          "ratio": 0
+        }
+      }
+    },
+    {
+      "name": "🔴🔴 A 负向对照的判别力:两个灰度态都**恰为 0**,到期态 > 0(探针不是恒真)",
+      "ok": true,
+      "detail": {
+        "lockedRatio": 0,
+        "expiredRatio": 0.030959302325581396,
+        "controlRatio": 0
+      }
+    },
+    {
+      "name": "🔴 A / ADR-077:到期后 addRule **成功**(设置确实恢复可改)",
+      "ok": true,
+      "detail": {
+        "ok": true,
+        "value": {
+          "version": 1,
+          "masterEnabled": true,
+          "rules": [
+            {
+              "pattern": "*",
+              "mode": "Grayscale",
+              "intensity": 100
+            },
+            {
+              "pattern": "after-expiry.test",
+              "mode": "Grayscale",
+              "intensity": 40
+            }
+          ],
+          "lockUntil": 1795591916616
+        }
+      }
+    },
+    {
+      "name": "🔴 A / ADR-077:到期后 setMasterEnabled **成功**(设置确实恢复可改)",
+      "ok": true,
+      "detail": {
+        "ok": true,
+        "value": {
+          "version": 1,
+          "masterEnabled": false,
+          "rules": [
+            {
+              "pattern": "*",
+              "mode": "Grayscale",
+              "intensity": 100
+            },
+            {
+              "pattern": "after-expiry.test",
+              "mode": "Grayscale",
+              "intensity": 40
+            }
+          ],
+          "lockUntil": 1795591916616
+        }
+      }
+    },
+    {
+      "name": "🔴 A / ADR-077:到期后 setLockUntil **成功**(设置确实恢复可改)",
+      "ok": true,
+      "detail": {
+        "ok": true,
+        "value": {
+          "version": 1,
+          "masterEnabled": false,
+          "rules": [
+            {
+              "pattern": "*",
+              "mode": "Grayscale",
+              "intensity": 100
+            },
+            {
+              "pattern": "after-expiry.test",
+              "mode": "Grayscale",
+              "intensity": 40
+            }
+          ],
+          "lockUntil": 1795592052749
+        }
+      }
+    },
+    {
+      "name": "🔴 B:storage 变更后 SW **自动重排**闹钟(subscribe → onSettingsChanged 接线正确)",
+      "ok": true,
+      "detail": {
+        "alarms": [
+          {
+            "name": "ccf-lock-expiry",
+            "scheduledTime": 1795591944760
+          }
+        ],
+        "seedUntil": 1795591944760
+      }
+    },
+    {
+      "name": "B:播种后确实处于锁定中且主开关 ON",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795591944760,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591933966,
+        "remainingMs": 10794,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴🔴 B / ADR-077:popup **从未打开**,到期后 masterEnabled 仍被自动关为 false",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795591944760,
+        "masterEnabled": false,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591951969,
+        "remainingMs": -7209,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "B:到期后闹钟被清掉(不留一个永不重置的过期闹钟)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "🔴 B 幂等:到期后用户手动把滤镜开回来,**不会**被再次自动关掉",
+      "ok": true,
+      "detail": {
+        "lockUntil": 1795591944760,
+        "masterEnabled": true,
+        "rules": [
+          "*@100"
+        ],
+        "now": 1795591957974,
+        "remainingMs": -13214,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    }
+  ],
+  "data": {
+    "phaseA_started": {
+      "lockUntil": 1795591916616,
+      "masterEnabled": true,
+      "rules": [
+        "*@100"
+      ],
+      "now": 1795591856660,
+      "remainingMs": 59956,
+      "keys": [
+        "lockUntil",
+        "masterEnabled",
+        "rules",
+        "version"
+      ]
+    },
+    "phaseA_alarms": [
+      {
+        "name": "ccf-lock-expiry",
+        "scheduledTime": 1795591916616,
+        "persistAcrossSessions": true
+      }
+    ],
+    "phaseA_lockedPage": {
+      "audit": {
+        "attr": true,
+        "varVal": "grayscale(1)",
+        "computedFilter": "grayscale(1)",
+        "classes": "client-js vector-feature-language-in-header-enabled vector-feature-language-in-main-menu-disabled vector-feature-language-in-main-page-header-disabled vector-feature-page-tools-pinned-disabled vector-feature-toc-pinned-clientpref-1 vector-feature-main-menu-pinned-disabled vector-feature-limited-width-clientpref-1 vector-feature-limited-width-content-enabled vector-feature-custom-font-size-clientpref-1 vector-feature-appearance-pinned-clientpref-1 skin-theme-clientpref-day vector-toc-available skin-thumbsize-clientpref-standard skin-underline-clientpref-browser vector-animations-ready ve-available",
+        "injectedSvg": 0,
+        "ccfNodes": 0
+      },
+      "color": {
+        "coloredRatio": 0,
+        "sampled": 68800,
+        "width": 1280,
+        "height": 860
+      }
+    },
+    "phaseA_beforeExpiry": {
+      "lockUntil": 1795591916616,
+      "masterEnabled": true,
+      "rules": [
+        "*@100"
+      ],
+      "now": 1795591909620,
+      "remainingMs": 6996,
+      "keys": [
+        "lockUntil",
+        "masterEnabled",
+        "rules",
+        "version"
+      ]
+    },
+    "phaseA_expired": {
+      "lockUntil": 1795591916616,
+      "masterEnabled": false,
+      "rules": [
+        "*@100"
+      ],
+      "now": 1795591925623,
+      "remainingMs": -9007,
+      "keys": [
+        "lockUntil",
+        "masterEnabled",
+        "rules",
+        "version"
+      ]
+    },
+    "phaseA_expiredPage": {
+      "audit": {
+        "attr": false,
+        "varVal": "",
+        "computedFilter": "none",
+        "classes": "client-js vector-feature-language-in-header-enabled vector-feature-language-in-main-menu-disabled vector-feature-language-in-main-page-header-disabled vector-feature-page-tools-pinned-disabled vector-feature-toc-pinned-clientpref-1 vector-feature-main-menu-pinned-disabled vector-feature-limited-width-clientpref-1 vector-feature-limited-width-content-enabled vector-feature-custom-font-size-clientpref-1 vector-feature-appearance-pinned-clientpref-1 skin-theme-clientpref-day vector-toc-available skin-thumbsize-clientpref-standard skin-underline-clientpref-browser vector-animations-ready ve-available",
+        "injectedSvg": 0,
+        "ccfNodes": 0
+      },
+      "color": {
+        "coloredRatio": 0.030959302325581396,
+        "sampled": 68800,
+        "width": 1280,
+        "height": 860
+      }
+    },
+    "phaseA_negativeControl": {
+      "audit": {
+        "attr": true,
+        "varVal": "grayscale(1)",
+        "computedFilter": "grayscale(1)",
+        "classes": "client-js vector-feature-language-in-header-enabled vector-feature-language-in-main-menu-disabled vector-feature-language-in-main-page-header-disabled vector-feature-page-tools-pinned-disabled vector-feature-toc-pinned-clientpref-1 vector-feature-main-menu-pinned-disabled vector-feature-limited-width-clientpref-1 vector-feature-limited-width-content-enabled vector-feature-custom-font-size-clientpref-1 vector-feature-appearance-pinned-clientpref-1 skin-theme-clientpref-day vector-toc-available skin-thumbsize-clientpref-standard skin-underline-clientpref-browser vector-animations-ready ve-available",
+        "injectedSvg": 0,
+        "ccfNodes": 0
+      },
+      "color": {
+        "coloredRatio": 0,
+        "sampled": 68800,
+        "width": 1280,
+        "height": 860
+      }
+    },
+    "phaseA_writes": {
+      "addRule": {
+        "ok": true,
+        "value": {
+          "version": 1,
+          "masterEnabled": true,
+          "rules": [
+            {
+              "pattern": "*",
+              "mode": "Grayscale",
+              "intensity": 100
+            },
+            {
+              "pattern": "after-expiry.test",
+              "mode": "Grayscale",
+              "intensity": 40
+            }
+          ],
+          "lockUntil": 1795591916616
+        }
+      },
+      "setMasterEnabled": {
+        "ok": true,
+        "value": {
+          "version": 1,
+          "masterEnabled": false,
+          "rules": [
+            {
+              "pattern": "*",
+              "mode": "Grayscale",
+              "intensity": 100
+            },
+            {
+              "pattern": "after-expiry.test",
+              "mode": "Grayscale",
+              "intensity": 40
+            }
+          ],
+          "lockUntil": 1795591916616
+        }
+      },
+      "setLockUntil": {
+        "ok": true,
+        "value": {
+          "version": 1,
+          "masterEnabled": false,
+          "rules": [
+            {
+              "pattern": "*",
+              "mode": "Grayscale",
+              "intensity": 100
+            },
+            {
+              "pattern": "after-expiry.test",
+              "mode": "Grayscale",
+              "intensity": 40
+            }
+          ],
+          "lockUntil": 1795592052749
+        }
+      }
+    },
+    "phaseB_alarms": [
+      {
+        "name": "ccf-lock-expiry",
+        "scheduledTime": 1795591944760
+      }
+    ],
+    "phaseB_expired": {
+      "lockUntil": 1795591944760,
+      "masterEnabled": false,
+      "rules": [
+        "*@100"
+      ],
+      "now": 1795591951969,
+      "remainingMs": -7209,
+      "keys": [
+        "lockUntil",
+        "masterEnabled",
+        "rules",
+        "version"
+      ]
+    },
+    "phaseB_afterUserReEnable": {
+      "lockUntil": 1795591944760,
+      "masterEnabled": true,
+      "rules": [
+        "*@100"
+      ],
+      "now": 1795591957974,
+      "remainingMs": -13214,
+      "keys": [
+        "lockUntil",
+        "masterEnabled",
+        "rules",
+        "version"
+      ]
+    }
+  },
+  "pass": true
+}

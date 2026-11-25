@@ -174,3 +174,62 @@ export class FakeMessaging implements MessagingPort {
     return null;
   }
 }
+
+// ──────────────────── ADR-077:闹钟替身 ────────────────────
+
+/**
+ * `AlarmsPort` 的内存替身(ADR-077)。
+ *
+ * 🔴 **刻意复刻平台的「同名替换」语义** —— `LockExpiryScheduler` 的延长路径
+ * 正是靠它原地改期(不先 clear 再 create,那会留下一个没有闹钟的窗口)。
+ * 若替身用「同名追加」实现,那条设计就测不出来了。
+ *
+ * 另外**刻意不自动触发**:闹钟何时响由测试显式 `fire()` 决定 ——
+ * 平台的闹钟迟到量无上界(见 `lock-expiry.ts`),
+ * 「真实时间到了就响」是一个本产品不能依赖的性质,替身不该提供它。
+ */
+export class FakeAlarms {
+  /** 当前已排的闹钟:name → when。同名 create 覆盖(平台语义)。 */
+  readonly alarms = new Map<string, number>();
+  /** 全部 create 调用的流水(断言「排了几次、每次排到哪」)。 */
+  readonly createCalls: { name: string; when: number }[] = [];
+  /** 全部 clear 调用的流水。 */
+  readonly clearCalls: string[] = [];
+  /** 下一次 create 抛错(测平台失败时不抛给上层)。 */
+  failNextCreate = false;
+
+  readonly #listeners = new Set<(name: string) => void>();
+
+  create(name: string, info: { readonly when: number }): Promise<void> {
+    if (this.failNextCreate) {
+      this.failNextCreate = false;
+      return Promise.reject(new Error('alarms.create failed'));
+    }
+    this.createCalls.push({ name, when: info.when });
+    // 平台语义:同名闹钟被**替换**,不是追加。
+    this.alarms.set(name, info.when);
+    return Promise.resolve();
+  }
+
+  clear(name: string): Promise<void> {
+    this.clearCalls.push(name);
+    this.alarms.delete(name);
+    return Promise.resolve();
+  }
+
+  onAlarm(listener: (name: string) => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  /** 模拟闹钟触发。@returns 被通知的监听器数量。 */
+  fire(name: string): number {
+    const listeners = [...this.#listeners];
+    for (const l of listeners) l(name);
+    return listeners.length;
+  }
+
+  get listenerCount(): number {
+    return this.#listeners.size;
+  }
+}

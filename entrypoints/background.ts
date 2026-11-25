@@ -3,7 +3,9 @@ import { SettingsRepository } from '../src/storage/index.js';
 import { Reconciler, defaultScriptingPort } from '../src/injection/index.js';
 import {
   BackgroundCoordinator,
+  LockExpiryScheduler,
   defaultActionPort,
+  defaultAlarmsPort,
   defaultEventsPort,
   defaultMessagingPort,
   defaultTabsPort,
@@ -48,6 +50,28 @@ export default defineBackground(() => {
     readSettings: () => repo.read(),
   });
 
+  /*
+    ══ 🔒 ADR-077:锁定到期自动关闭主开关 ════════════════════════════════
+
+    与 `reconciler` / `coordinator` **共用同一个 `repo`** —— 于是共用同一条
+    `chrome.storage` 读取路径、同一套订阅机制、**同一个锁定强制点**。
+    不存在第二份真相,也不存在第二道(可能与仓储层分歧的)锁定判定:
+    本类只决定「何时去问一次」,判定与写入都在
+    `repo.applyExpiryAutoOff()`(INV-14 / ADR-055)。
+
+    🔴 为什么到期触发器**必须**在 SW 而不是 popup:
+    popup 关着时也要生效(ADR-077:「即使 popup 没开、SW 已休眠」)。
+    popup 侧另有一条**独立**防线(`src/ui/useLockExpiry.ts`),
+    它负责「popup 开着时到期当秒就正确」—— 因为闹钟会迟到,
+    迟到量按平台文档**无上界**(见 lock-expiry.ts 的论证)。
+  */
+  const lockExpiry = new LockExpiryScheduler({
+    alarms: defaultAlarmsPort(),
+    readSettings: () => repo.read(),
+    applyAutoOff: () => repo.applyExpiryAutoOff(),
+  });
+  lockExpiry.start();
+
   // ── 触发点 1:onInstalled —— 🔴 强制项(ADR-065) ─────────────────────
   //
   // 扩展**更新**时 Chrome 会清除全部动态注册(已核实:注册能存活
@@ -60,6 +84,8 @@ export default defineBackground(() => {
   // 按 diff 走会误判「都没变」而什么都不做(见 reconcile.ts 的 forceRebuild)。
   chromeRuntime()?.onInstalled?.addListener(() => {
     void reconciler.request('installed');
+    // 🔒 ADR-077:扩展**更新**后闹钟不保证存活 → 补做漏掉的到期关闭 + 重建闹钟。
+    void lockExpiry.catchUpAndReschedule();
   });
 
   // ── 触发点 2:onStartup —— 廉价的双重保险 ────────────────────────────
@@ -69,6 +95,17 @@ export default defineBackground(() => {
   // 「持久化出于任何原因没生效」这种情况能自愈。
   chromeRuntime()?.onStartup?.addListener(() => {
     void reconciler.request('startup');
+    /*
+      🔒 ADR-077 的**补偿语义**在此(这是「关机过夜」唯一的防线):
+
+      > 浏览器关闭期间闹钟不会触发。SW 下次启动时若发现 `lockUntil` 已过去
+      > 且 `masterEnabled` 仍为 `true`,**必须补做这次关闭**。
+
+      这条**不是**上面 reconciler 那种「廉价的双重保险」—— 它是必需的:
+      锁定在浏览器关闭期间到期时,没有任何闹钟会响,
+      不补做则自动关闭**静默失效**。
+    */
+    void lockExpiry.catchUpAndReschedule();
   });
 
   // ── 触发点 3 + 4:规则增删改 / storage.onChanged ─────────────────────
@@ -80,6 +117,16 @@ export default defineBackground(() => {
   // 这正是 ADR-064 要求幂等的用途,不是冗余。
   repo.subscribe(() => {
     void reconciler.request('storage-changed');
+    /*
+      🔒 ADR-077:启动/延长锁定都是一次 `lockUntil` 的写入 → 走到这里
+      → 重排闹钟。这是闹钟**被建立**的主路径
+      (ADR-077:「在设置/延长锁定时安排闹钟」)。
+
+      🔴 这里只 `reschedule`,**不** `catchUp` —— 后者成功时会产生一次写入,
+      再次触发本回调,形成自触发循环(详见
+      `LockExpiryScheduler.onSettingsChanged` 的论证)。
+    */
+    void lockExpiry.onSettingsChanged();
   });
 
   // ── 冷启动兜底 ───────────────────────────────────────────────────────
@@ -91,6 +138,18 @@ export default defineBackground(() => {
   // 🔴 这**不是** INV-3 的承担者 —— 首帧保证来自磁盘上已有的注册,
   //    不依赖本次 SW 启动做成任何事(ADR-062)。这里只负责「自愈」。
   void reconciler.request('startup');
+
+  /*
+    🔒 ADR-077 冷启动兜底 —— **补偿语义的第二个落点,且是最常走到的那个。**
+
+    `onStartup` 只在**浏览器启动**时触发一次;而 SW 被回收后因消息/导航/闹钟
+    被重新唤醒时**不触发** `onStartup`。于是「锁定在 SW 休眠期间到期、
+    浏览器一直开着、闹钟又恰好没能送达」这种情况,只有这里能兜住。
+
+    成本:一次 `storage.get`(与上面 reconciler 的冷启动兜底同量级)。
+    不该关时仓储层 no-op,不写盘(见 `needsExpiryAutoOff` 的幂等论证)。
+  */
+  void lockExpiry.catchUpAndReschedule();
 
   // ══ T5:后台协调与图标状态 ══════════════════════════════════════════
   //

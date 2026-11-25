@@ -46,6 +46,7 @@ import {
   coerceRule,
   coerceSettings,
   isLocked,
+  needsExpiryAutoOff,
   validateGlobPattern,
 } from '../domain/index.js';
 import {
@@ -694,6 +695,104 @@ export class SettingsRepository {
   async isCurrentlyLocked(): Promise<boolean> {
     const ctx = await this.#readContext();
     return ctx.locked;
+  }
+
+  // ──────────────────── 到期自动关闭(ADR-077) ────────────────────
+
+  /**
+   * 🔴 **锁定到期后的自动关闭**(ADR-077)——
+   * 把 `masterEnabled` 置为 `false`,滤镜随之停止。
+   *
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   * ## 🔴🔴 这是本功能唯一的风险点:**绝不能变成关闭主开关的后门**
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   *
+   * ADR-051 / INV-11 / INV-14 要求:**锁定期内任何清除 `masterEnabled` 的
+   * 写入都必须被拒绝**,包括绕过 UI 从 SW 或控制台发起的。本方法是一个
+   * 新的、会写 `masterEnabled: false` 的公开 API —— 若它少一道检查,
+   * 整个锁定功能当场形同虚设(调用它即可解锁)。
+   *
+   * 守法共三层,**每一层单独都足以挡住锁定期内的调用**:
+   *
+   * 1. **自己重新读盘定判**(本方法第一行 `#readContext()`)。
+   *    判据不来自调用方 —— 调用方**不能传入任何参数**(看签名:无参),
+   *    于是没有任何可被伪造的输入。闹钟/SW/popup 谁来调都一样:
+   *    「现在到底过期没有」由仓储层用自己的注入时钟 `clock()` 现场算。
+   *
+   * 2. **`needsExpiryAutoOff` 的三条合取**(领域层纯函数,ADR-077)。
+   *    其中第二条 `!isLocked(current, now)` 与 `#assertWritable` 用的是
+   *    **同一个** `isLocked` + 同一个 `ctx.now`,故两者的判定**在构造上
+   *    不可能分歧**:锁定中 → `isLocked` 为真 → 本方法返回
+   *    `kind:'locked'` 拒绝,与 `setMasterEnabled` 在同一时刻的行为逐字一致。
+   *
+   * 3. **冗余的显式断言**(下方 `#assertWritable` 那一行)。
+   *    第 2 层已经蕴含它了 —— 这一行是**刻意的冗余**:
+   *    它让「锁定中拒绝」这件事在本方法体内**肉眼可见**,
+   *    而不是要读者去推导 `needsExpiryAutoOff` 的内部。
+   *    若将来有人修改 `needsExpiryAutoOff`(比如为了某个新场景放宽条件 2),
+   *    这一行会**独立地**继续挡住锁定期内的写入。
+   *    这正是任务书所说「不要在那道强制上开洞」的具体落实。
+   *
+   * ## 为什么不走 `setMasterEnabled(false)`
+   *
+   * 走不通,**且不该走通**:`setMasterEnabled` 的第一件事就是
+   * `#assertWritable` —— 锁定中拒绝。而自动关闭发生在**锁定结束之后**,
+   * 那一刻 `#assertWritable` 本就会放行,所以理论上可以复用它。
+   *
+   * 但**刻意不复用**,因为语义不同:
+   * - `setMasterEnabled` 是**用户意图**,任何时候调用都该被当作用户意图;
+   * - 本方法是**系统收尾**,它只在「刚刚到期且还开着」这一个窄条件下做事,
+   *   其余任何时候都必须是 **no-op**(见 `needsExpiryAutoOff` 的幂等论证:
+   *   否则用户到期后手动开回的滤镜会被下一次 SW 唤醒再关掉)。
+   *
+   * 把这两件事合成一个方法,就得让调用方自己先判断「该不该关」——
+   * 而那正是 ADR-055 禁止的「把判定交给调用方」。故本方法**自带判定**,
+   * 并且**不接受参数**。
+   *
+   * ## 为什么**不清除** `lockUntil`
+   *
+   * 清除需要写一个「更小的 lockUntil」(null),而 `canSetLockUntil` 对
+   * `null` 的回答是拒绝(`cannot-clear-while-locked` / `no-op`)——
+   * ADR-052 的单向语义正是这么定的。为自动关闭开一个「可以清除」的特例,
+   * 就是在 INV-12 上开洞:那个特例一旦存在,「调用自动关闭来清锁」
+   * 就成了一条待发现的绕过路径。
+   *
+   * 而**不清除是无害的**:过去的 `lockUntil` 对 `isLocked` /
+   * `canSetLockUntil` 都等同于「未锁定」(ADR-053 存绝对时间的直接结果),
+   * UI 也据此不显示倒计时条。下次启动锁定时它被正常覆盖。
+   * 于是「清除」只有仪式价值,没有行为价值,却要付出一个 INV-12 的特例。
+   *
+   * @returns `applied: true` = 本次真的关了;`applied: false` = no-op
+   *          (未到期 / 从未锁过 / 已经是 OFF)。失败返回 ADR-046 结构化错误。
+   */
+  async applyExpiryAutoOff(): Promise<
+    WriteResult<{ readonly settings: FilterSettings; readonly applied: boolean }>
+  > {
+    // 第 1 层:判据只来自仓储层自己重新读出的盘 + 注入时钟,无任何入参。
+    const ctx = await this.#readContext();
+
+    /*
+      第 3 层(冗余但刻意):锁定中一律拒绝 —— 与 `setMasterEnabled` 同一道闸、
+      同一个 `ctx`。第 2 层已蕴含本条,保留它是为了让这道强制在本方法体内
+      可见且可独立存活(见上方论证)。
+    */
+    const denied = this.#assertWritable(ctx, 'locked-master-enabled', '主开关');
+    if (denied) return writeFail(denied);
+
+    // 第 2 层:ADR-077 的三条合取(领域层纯函数)。
+    if (!needsExpiryAutoOff(ctx.current, ctx.now)) {
+      // no-op —— **不写盘**。幂等的落点就在这里。
+      return writeOk({ settings: ctx.current, applied: false });
+    }
+
+    /*
+      🔴 只改 `masterEnabled` 这一个字段:`rules` 原样保留(INV-8 的要求 ——
+      主开关 OFF 时「所有规则原样保留」),`lockUntil` 也原样保留(见上方
+      「为什么不清除 lockUntil」)。
+    */
+    const result = await this.#persist({ ...ctx.current, masterEnabled: false });
+    if (!result.ok) return writeFail(result.error);
+    return writeOk({ settings: result.value, applied: true });
   }
 
   // ───────────────── 列表侧连续操作的防抖(T3 gate F10) ─────────────────

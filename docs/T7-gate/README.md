@@ -29,6 +29,12 @@ node docs/T7-gate/build-probe.mjs
 node docs/T7-gate/inv6-e2e.cjs             # INV-6 端到端:UI 建规则 → 实际渲染
 node docs/T7-gate/inv10-pathological.cjs   # INV-10 病态模式在真实页面加载路径上
 node docs/T7-gate/lock-e2e.cjs             # 🔒 锁定端到端(含真实 ~2 分钟等待到期)
+
+# 🔒 ADR-077(到期自动关闭)—— 本轮新增的四个脚本
+node docs/T7-gate/alarms-permission-warning.cjs  # 加 alarms 是否新增用户可见警告(A/B)
+node docs/T7-gate/alarms-minimum-probe.cjs       # 闹钟最小粒度与迟到量实测(~75s)
+node docs/T7-gate/lock-expiry-autooff.cjs        # 到期自动关闭(含真实 ~60s 挂钟等待 + 像素)
+node docs/T7-gate/lock-expiry-catchup.cjs        # 补偿语义:关机过夜 → 重启后补做关闭
 node docs/T7-gate/persist-concurrency.cjs  # 持久化(ADR-010)+ 并发安全(ADR-071)
 node docs/T7-gate/csp-fidelity.cjs         # CSP 无关性(ADR-075)+ 灰阶强度档保真
 node docs/T7-gate/inv9-network.cjs         # INV-9 (c) 真实 Network 录制
@@ -60,6 +66,10 @@ npx vitest run tests/t4b-static-gates.test.ts --reporter=verbose
 | **INV-6 端到端**(UI 建规则 → 实际渲染) | **PASS 9/9** | `[x.com@100, *@30]` 全程经 popup UI 创建 → x.com 实测 `grayscale(1)`、example.com / hn 实测 `grayscale(0.3)` |
 | **INV-10** 病态模式(100 个 `*`)在真实加载路径 | **PASS 23/23** | 在**扩展的 isolated world**(content script 真正运行处)直接测**产品自己的** `matchGlob`:100 个 `*` **0.25µs/次**、对照单个 `*` 0.05µs/次;负向对照 `/^(a*)*b$/` 单次 **12 837ms** |
 | **🔒 锁定端到端**(INV-11/12/13/14) | **PASS 40/40** | 主开关 OFF 启动锁定 → 自动 ON;10 条绕过 UI 的写入全被拒且全字段未变;延长 +60s 成功;**真退出重启**后 lockUntil 原值不变、剩余 115.9s;真实等待到期后恢复可写 |
+| **🔒 ADR-077 到期自动关闭** | **PASS 20/20** | UI 启动 1 分钟锁 → 闹钟 `when === lockUntil` → **真实 60s 挂钟等待(popup 已关闭)** → 磁盘 `masterEnabled: false`、规则原样保留;页面 `filter: none` 且彩色像素 0→**0.0310**;负向对照开回 ON 后回到 **0.000000** |
+| **🔒 ADR-077 补偿语义(关机过夜)** | **PASS 14/14** | 播种 8 小时前到期的锁 → **完全退出并重启** → **未开过 popup**(实证:页面只有 `about:blank`)→ `masterEnabled` 补关为 false;三组对照(锁仍有效 / 从未锁过 / 已是 OFF)结果各不相同 |
+| **🔒 ADR-077 `alarms` 权限警告 A/B** | **PASS 3/3** | `getPermissionWarningsByManifest` 实测:+alarms **新增 0 条、删除 0 条**;对照组 +history 新增 1 条(证明探针读得出变化) |
+| **🔒 ADR-077 闹钟粒度实测** | **PASS 3/3** | unpacked 下 `when` **无 30s 限流**:请求 2s/10s/35s 实测迟到均 **3ms**,`scheduledTime` 原样保留 |
 | **持久化(ADR-010)** | **PASS 11/11**(与并发条款同脚本) | 3 条规则经 UI 建好 → 完全退出重启 → 磁盘与 popup 列表顺序、强度逐字段完好 |
 | **并发安全(ADR-071)** | **(同上脚本)** | 两种相位各 8 轮,用户写入 8/8 保留;持久化键集恒为 `[lockUntil, masterEnabled, rules, version]` |
 | **CSP 无关性(ADR-075)** | **(与保真同脚本,18/18)** | hn 带 CSP(`default-src 'self'`)下 `grayscale(1)` 生效、全图 maxSpread **0**(基线 255)、**零 violation** |
@@ -85,6 +95,64 @@ npx vitest run tests/t4b-static-gates.test.ts --reporter=verbose
 | INV-9 (a)(b) 静态断言 | **PASS 19/19,verbose 确认全部执行、零 skip** |
 | INV-9 (c) Network 实测 | **PASS 13/13**(归因逻辑被重写,见 §4) |
 | 单测 / `tsc --noEmit` / `eslint` | **1007 passed / 0 / 0** |
+
+## 1bis. 🔒 ADR-077 的两个实测结论(都影响了架构)
+
+### (1) `alarms` 权限**不新增**任何用户可见警告
+
+任务书要求「若新增警告就停下来先报告」。实测结论是**不新增**,故本轮照常推进。
+
+判据用的是 `chrome.management.getPermissionWarningsByManifest()` —— 它返回的就是
+Chrome **安装/更新对话框里逐行显示给用户的那几句话**,比读文档可靠(文档不保证
+与本版本一致),也比人眼看截图可机械判定。对**同一份产物 manifest** 做 A/B:
+
+| 权限集 | 警告列表 |
+|---|---|
+| 基线 `storage, scripting, tabs` | `["Read and change all your data on all websites"]` |
+| **`+ alarms`** | `["Read and change all your data on all websites"]` ← **逐字相同** |
+| `+ history`(探针有效性对照) | 多出 `"Read and change your browsing history on all your signed-in devices"` |
+
+对照组是必需的:没有它,「零新增」可能只是因为探针根本读不出警告。
+
+> 📌 **顺带实测到一处与 `wxt.config.ts` 里 `tabs` 那段注释不符的事实**,如实记下:
+> 本版本(Chrome for Testing 158.0.8127.36)的基线警告里**只有一条**站点访问警告,
+> 没有独立的「读取您的浏览记录」那一行 —— 即 `<all_urls>` 在场时 `tabs` 的警告被它
+> 吸收了。那段注释记录的是更早版本的实测结果;本轮**未改动 `tabs`**,
+> 故不修改那段历史记录,只在此注明差异来源是 Chrome 版本。
+
+### (2) 🔴 闹钟在 unpacked 下**无限流** —— 门禁因此比生产宽松
+
+Chrome 官方文档(引自 `@wxt-dev/browser` 的 `d.ts`)写明两件事:
+
+> Chrome limits alarms to at most once every 30 seconds but **may delay them an
+> arbitrary amount more**. … `when` can be set to less than 30 seconds after
+> "now" without warning but **won't actually cause the alarm to fire for at
+> least 30 seconds**.
+>
+> To help you debug your app or extension, **when you've loaded it unpacked,
+> there's no limit** to how often the alarm can fire.
+
+实测(`alarms-minimum-probe.cjs`,unpacked 产物)**证实了后半句**:
+
+| 请求 `when` | 实际触发迟到 | `scheduledTime` 是否原样 |
+|---|---|---|
+| +2 000ms | **3ms** | 是 |
+| +10 000ms | **3ms** | 是 |
+| +35 000ms | **3ms** | 是 |
+
+即 **2 秒的闹钟在门禁里 2.003 秒就响了**,而真实用户(安装自商店的 packed 扩展)
+会被压到至少 30 秒,且迟到量**无上界**。
+
+**这两件事直接决定了架构:**
+
+1. **闹钟不是 UI 正确性的承担者。** 若只靠它,popup 开着时用户会看到一段
+   「倒计时归零、横幅消失、但主开关还读 ON、页面还是灰的」中间态,长度不可控 ——
+   正是任务书点名禁止的 stale。故 popup 侧有一条**独立**的到期触发
+   (`src/ui/useLockExpiry.ts`,到期当秒生效),它不依赖闹钟。
+2. **「只在门禁里绿」的风险被显式挡住。** 到期自动关闭有**三条彼此独立**的触发线:
+   闹钟 / SW 启动补偿(`catchUp`)/ popup 的 UI 边沿。
+   任何一条失效,其余两条仍然成立 —— 这不是冗余,是对「闹钟可能迟到 30 秒以上」
+   这个**已知平台事实**的正面应对。
 
 ## 2. 「绕过 UI 的写入」通道 —— `build-probe.mjs`
 
