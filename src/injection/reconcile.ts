@@ -295,6 +295,25 @@ export interface ReconcilePlan {
   readonly unchangedIds: readonly string[];
 }
 
+/**
+ * 「什么都不用做」的 plan。
+ *
+ * `reconciler.ts` 有两个这样的出口共用它:读设置失败的兜底,
+ * 以及「已跑完且无排队」的 no-op 返回。原先两处各写一遍同样的
+ * 四个空数组字面量 —— 将来 `ReconcilePlan` 加字段时漏改其中一处,
+ * 会得到一个**少一个字段**的 plan,而 `isNoOpPlan` 只看三个字段,
+ * 未必报得出来。
+ *
+ * ⚠️ 共享同一个实例是安全的:`ReconcilePlan` 全字段 `readonly`、
+ *    各处只读不改,不存在被某个调用方就地改坏的路径。
+ */
+export const EMPTY_PLAN: ReconcilePlan = {
+  toRegister: [],
+  toUpdate: [],
+  toUnregisterIds: [],
+  unchangedIds: [],
+};
+
 /** 空 plan —— 幂等的可观测证据:第二次 reconcile 应当返回这个。 */
 export function isNoOpPlan(plan: ReconcilePlan): boolean {
   return (

@@ -47,6 +47,7 @@ import { type FilterSettings } from '../domain/index.js';
 import {
   type ReconcileResult,
   type ScriptingPort,
+  EMPTY_PLAN,
   reconcile,
 } from './reconcile.js';
 
@@ -136,12 +137,7 @@ export class Reconciler {
         // 读设置失败:仓储层已有 ADR-041 的默认值回退,走到这里是极端情况。
         // 不抛 —— 见 `reconcile.ts` 对「不抛异常」的论证。
         result = {
-          plan: {
-            toRegister: [],
-            toUpdate: [],
-            toUnregisterIds: [],
-            unchangedIds: [],
-          },
+          plan: EMPTY_PLAN,
           ok: false,
           errors: [`readSettings: ${String(error)}`],
         };
@@ -169,12 +165,7 @@ export class Reconciler {
     if (pending === null) {
       // 已跑完,且无排队 —— 返回一个 no-op 结果而不是再跑一次。
       return Promise.resolve({
-        plan: {
-          toRegister: [],
-          toUpdate: [],
-          toUnregisterIds: [],
-          unchangedIds: [],
-        },
+        plan: EMPTY_PLAN,
         ok: true,
         errors: [],
       });
