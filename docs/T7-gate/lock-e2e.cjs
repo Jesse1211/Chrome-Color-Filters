@@ -21,6 +21,19 @@
 // 是一次真实的 ~60 秒挂钟等待,**不伪造时钟**。伪造时钟会把 ADR-071
 // 「时钟由用户自行负责」那条语义一并绕过,测出来的不是产品行为。
 //
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ## 📍 UI 路径随「锁定 UI 折叠」改版(2025-11,产品负责人决定)
+//
+// 列表页只剩一行入口「🔒 时间锁定 ›」(未锁定)/ 倒计时条(锁定中),
+// 时长选择 / 启动 / 延长全部搬进**子页面**。两个入口共用
+// `data-testid="lock-open"` 且互斥在场。
+//
+// 🔴 **本次只改导航步骤(多一次点击),一条断言都没删、也没放宽。**
+//    条款数前后相同;新增的几条是**子页面上的** INV-12 负向断言 ——
+//    控件搬了家,「DOM 里没有解除入口」必须在控件现在所在的那一页重验,
+//    否则这条门禁会变成一句空话(只扫了一个已经没有锁定控件的页面)。
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//
 // ## 负向对照(每条断言的探针有效性)
 //   N1 锁定**之前**:同样的三个写入(改规则/关主开关/缩短)必须**成功** ——
 //      否则「锁定中失败」可能只是因为这些调用本来就不工作。
@@ -54,6 +67,29 @@ async function viaRepository(browser, op, arg) {
     probePage = await L.openProbe(browser, id);
   }
   return L.probeOp(probePage, op, arg);
+}
+
+/**
+ * 进入锁定子页面 —— 点列表页上那个唯一的锁定入口。
+ *
+ * 未锁定时它是折叠入口行,锁定中它是倒计时条,两者共用 `lock-open`
+ * 且**互斥**在场(INV-12 的结构前提),故一个 helper 覆盖两条路径。
+ */
+async function gotoLockView(popup) {
+  await L.clickTestId(popup, 'lock-open');
+  await popup.waitForFunction(
+    () => document.querySelector('[data-testid="popup"]')?.dataset.view === 'lock',
+    { timeout: 20000 },
+  );
+}
+
+/** 返回列表视图(子页面顶栏的返回键)。**只切视图,不碰存储**。 */
+async function backToList(popup) {
+  await L.clickTestId(popup, 'lock-back');
+  await popup.waitForFunction(
+    () => document.querySelector('[data-testid="popup"]')?.dataset.view === 'list',
+    { timeout: 20000 },
+  );
 }
 
 /** 读磁盘上的锁定状态。 */
@@ -124,7 +160,61 @@ async function lockState(browser) {
 
     // ═══ 阶段 1:🔴 主开关 OFF 状态下,**通过 UI** 启动 1 分钟锁定 ═════════
     popup = await L.openPopup(browser, id);
+    // 列表页:只有一行折叠入口,**没有**内联的时长选择器。
     await L.waitTestId(popup, 'lock-entry');
+    const listCollapsed = await popup.evaluate(() => ({
+      hasEntryRow: !!document.querySelector('[data-testid="lock-entry"]'),
+      entryIsButton:
+        document.querySelector('[data-testid="lock-open"]')?.tagName ?? null,
+      inlineStart: !!document.querySelector('[data-testid="lock-start"]'),
+      inlineAmount: !!document.querySelector('[data-testid="lock-start-amount"]'),
+      inlinePreset: !!document.querySelector('[data-testid="lock-start-preset-1-hour"]'),
+      numberInputs: document.querySelectorAll('input[type="number"]').length,
+      selects: document.querySelectorAll('select').length,
+    }));
+    results.data.listCollapsed = listCollapsed;
+    assert('📍 折叠:列表页只有一行入口(真 <button>),**无**内联时长选择器/启动按钮',
+      listCollapsed.hasEntryRow === true
+      && listCollapsed.entryIsButton === 'BUTTON'
+      && listCollapsed.inlineStart === false
+      && listCollapsed.inlineAmount === false
+      && listCollapsed.inlinePreset === false
+      && listCollapsed.numberInputs === 0
+      && listCollapsed.selects === 0, listCollapsed);
+    fs.writeFileSync(path.join(L.OUT, 'lock-00-list-collapsed.png'),
+      Buffer.from(await popup.screenshot()));
+
+    // 🔴 点入口行进子页面,时长控件在那里(改版后的用户路径)。
+    const beforeNavLock = (await lockState(browser)).lockUntil;
+    await gotoLockView(popup);
+    const afterNavLock = (await lockState(browser)).lockUntil;
+    assert('🔴 ADR-061:导航进子页面**零写入**(lockUntil 仍为 null)',
+      beforeNavLock === null && afterNavLock === null,
+      { beforeNavLock, afterNavLock });
+    const subPage = await popup.evaluate(() => ({
+      view: document.querySelector('[data-testid="popup"]')?.dataset.view ?? null,
+      title: document.querySelector('[data-testid="lock-view-title"]')?.textContent ?? null,
+      hasBack: !!document.querySelector('[data-testid="lock-back"]'),
+      hasStart: !!document.querySelector('[data-testid="lock-start"]'),
+      hasAmount: !!document.querySelector('[data-testid="lock-start-amount"]'),
+      hasPresets: !!document.querySelector('[data-testid="lock-start-preset-1-hour"]'),
+      // I2:子页面里没有任何预览/规则编辑控件。
+      hasSlider: !!document.querySelector('[data-testid="intensity-slider"]'),
+      hasPattern: !!document.querySelector('[data-testid="pattern-input"]'),
+      hasRuleList: !!document.querySelector('[data-testid="rule-list"]'),
+      ranges: document.querySelectorAll('input[type="range"]').length,
+    }));
+    results.data.subPage = subPage;
+    assert('📍 子页面:返回键 + 时长选择器 + 预设 + 启动按钮俱在',
+      subPage.view === 'lock' && subPage.hasBack === true
+      && subPage.hasStart === true && subPage.hasAmount === true
+      && subPage.hasPresets === true, subPage);
+    assert('🔴 I2:锁定子页面里**没有**预览通道或规则编辑控件(与编辑视图无锁定入口对称)',
+      subPage.hasSlider === false && subPage.hasPattern === false
+      && subPage.hasRuleList === false && subPage.ranges === 0, subPage);
+    fs.writeFileSync(path.join(L.OUT, 'lock-00b-subpage.png'),
+      Buffer.from(await popup.screenshot()));
+
     // 自定义时长:1 分钟(UI 的最小粒度,ADR-058 没有 'second')。
     await popup.evaluate(() => {
       const el = document.querySelector('[data-testid="lock-start-amount"]');
@@ -141,9 +231,14 @@ async function lockState(browser) {
       willEnable !== null, { present: willEnable !== null });
     const confirmText = await L.textOf(popup, 'lock-confirm-duration');
     await L.clickTestId(popup, 'lock-confirm-ok');
-    await L.waitTestId(popup, 'lock-banner');
-    const countdown0 = await L.textOf(popup, 'lock-countdown');
-    const lockUntilAttr = await popup.$eval('[data-testid="lock-countdown"]',
+    /*
+      🔴 确认后**仍在子页面** —— 它当场换成延长区(ADR-052)。
+         倒计时此刻读的是子页面的只读回显;列表页的倒计时条要
+         返回之后才在场(下面 `backToList` 之后另有一次读 + 对账)。
+    */
+    await L.waitTestId(popup, 'lock-extend-panel');
+    const countdown0 = await L.textOf(popup, 'lock-view-countdown');
+    const lockUntilAttr = await popup.$eval('[data-testid="lock-view-countdown"]',
       (el) => el.getAttribute('data-lock-until'));
     fs.writeFileSync(path.join(L.OUT, 'lock-01-banner.png'),
       Buffer.from(await popup.screenshot()));
@@ -155,6 +250,48 @@ async function lockState(browser) {
     assert('🔴🔴 ADR-057:主开关 OFF 状态下启动锁定 → 主开关**自动变 ON**',
       st.masterEnabled === true, { masterEnabled: st.masterEnabled });
 
+    /*
+      🔴 启动成功后仍在子页面,且它**当场**换成延长区(ADR-052:锁定中
+         唯一可用的操作),启动区同时消失 —— 先在子页面扫一遍 INV-12,
+         因为控件现在住在这里;再返回列表页扫列表页那一遍。
+    */
+    const lockedSubUi = await popup.evaluate(() => {
+      const ids = [...document.querySelectorAll('[data-testid]')]
+        .map((e) => e.getAttribute('data-testid'));
+      const body = document.body.innerText;
+      return {
+        ids,
+        view: document.querySelector('[data-testid="popup"]')?.dataset.view ?? null,
+        title: document.querySelector('[data-testid="lock-view-title"]')?.textContent ?? null,
+        hasStart: ids.includes('lock-start'),
+        hasStartSection: ids.includes('lock-start-section'),
+        hasExtend: ids.includes('lock-extend'),
+        // 子页面上的按钮全集 —— 只允许「返回」与「延长」两个。
+        buttons: [...document.querySelectorAll('button')]
+          .map((b) => b.getAttribute('data-testid')),
+        releaseWords: ['解除', '取消锁定', '提前结束', '缩短', '结束锁定', '解锁', '中止', '终止']
+          .filter((k) => body.includes(k)),
+      };
+    });
+    results.data.lockedSubUi = lockedSubUi;
+    assert('🔴🔴 INV-12(子页面):锁定中子页面只有「返回 + 延长」两个按钮,无启动/解除入口',
+      JSON.stringify(lockedSubUi.buttons) === JSON.stringify(['lock-back', 'lock-extend'])
+      && lockedSubUi.hasStart === false && lockedSubUi.hasStartSection === false
+      && lockedSubUi.hasExtend === true, lockedSubUi);
+    assert('🔴🔴 INV-12(子页面):锁定中子页面文案里不出现任何解除类词汇',
+      lockedSubUi.releaseWords.length === 0, lockedSubUi.releaseWords);
+
+    await backToList(popup);
+    await L.waitTestId(popup, 'lock-banner');
+    // 两处读的必须是**同一个** lockUntil —— 子页面回显与列表倒计时条同源。
+    const listLockUntilAttr = await popup.$eval('[data-testid="lock-countdown"]',
+      (el) => el.getAttribute('data-lock-until'));
+    assert('📍 列表页倒计时条与子页面回显同源(同一个 lockUntil)',
+      listLockUntilAttr === lockUntilAttr,
+      { listLockUntilAttr, subPageLockUntilAttr: lockUntilAttr });
+    fs.writeFileSync(path.join(L.OUT, 'lock-01b-list-banner.png'),
+      Buffer.from(await popup.screenshot()));
+
     // UI 第二道防线:锁定中 DOM 里不得有任何解除/取消/结束/缩短入口(INV-12)。
     const lockUi = await popup.evaluate(() => {
       const ids = [...document.querySelectorAll('[data-testid]')]
@@ -164,15 +301,36 @@ async function lockState(browser) {
         ids,
         hasLockEntry: ids.includes('lock-entry'),
         hasLockStart: ids.includes('lock-start'),
+        // 延长搬进子页面了 —— 列表页上**不该**有它,但必须**可达**。
         hasExtend: ids.includes('lock-extend'),
+        // 倒计时留在列表页(产品负责人决定:剩余时间一眼可见)。
+        hasCountdown: ids.includes('lock-countdown'),
+        // 通往子页面的那一个入口(锁定中它就是倒计时条本身)。
+        hasLockOpen: ids.includes('lock-open'),
+        // 倒计时条里的按钮全集 —— 只允许那一个导航键。
+        bannerButtons: [...document.querySelectorAll('[data-testid="lock-banner"] button')]
+          .map((b) => b.getAttribute('data-testid')),
+        // 列表页上没有任何会改 lockUntil 的输入控件。
+        bannerInputs: document.querySelectorAll('[data-testid="lock-banner"] input, [data-testid="lock-banner"] select').length,
         masterDisabled: document.querySelector('[data-testid="master-switch"]')?.disabled ?? null,
         addRuleDisabled: document.querySelector('[data-testid="add-rule"]')?.disabled ?? null,
         releaseWords: ['解除', '取消锁定', '提前结束', '缩短', '结束锁定'].filter((k) => body.includes(k)),
       };
     });
     results.data.lockUi = lockUi;
-    assert('🔴 INV-12(UI 第二道防线):锁定中 DOM 无启动/解除入口,只有「延长」',
-      lockUi.hasLockEntry === false && lockUi.hasLockStart === false && lockUi.hasExtend === true, lockUi);
+    /*
+      原条款:「锁定中 DOM 无启动/解除入口,只有『延长』」。
+      改版后「延长」住在子页面 —— 故列表页这一条改为**更强**的形式:
+      列表页连延长都没有,倒计时条里**一个写入控件都没有**(唯一的按钮
+      是导航),而延长仍然**可达**(上面 `lockedSubUi` 刚刚逐条验过)。
+      启动/解除入口照旧必须不存在。
+    */
+    assert('🔴 INV-12(UI 第二道防线):锁定中列表页无启动/解除入口,且倒计时条里零写入控件',
+      lockUi.hasLockEntry === false && lockUi.hasLockStart === false
+      && lockUi.hasExtend === false && lockUi.hasCountdown === true
+      && lockUi.hasLockOpen === true
+      && JSON.stringify(lockUi.bannerButtons) === JSON.stringify(['lock-open'])
+      && lockUi.bannerInputs === 0, lockUi);
     assert('INV-11(UI 第二道防线):锁定中主开关与「新增规则」均置灰',
       lockUi.masterDisabled === true && lockUi.addRuleDisabled === true, lockUi);
     assert('INV-12:锁定中文案里不出现「解除/取消锁定/提前结束/缩短/结束锁定」',
@@ -219,6 +377,11 @@ async function lockState(browser) {
     // ═══ 阶段 3:N2 —— 延长必须成功(UI 路径 + 仓储层路径各一次)═══════════
     popup = await L.openPopup(browser, id);
     await L.waitTestId(popup, 'lock-banner');
+    // 🔴 延长控件住在子页面 —— 点倒计时条进去(改版后的用户路径)。
+    await gotoLockView(popup);
+    const extendTitle = await L.textOf(popup, 'lock-view-title');
+    assert('📍 锁定中点倒计时条 → 直达子页面的延长控件(标题为「延长锁定」)',
+      extendTitle === '延长锁定', { extendTitle });
     await popup.evaluate(() => {
       const el = document.querySelector('[data-testid="lock-extend-amount"]');
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -228,6 +391,13 @@ async function lockState(browser) {
     await popup.select('[data-testid="lock-extend-unit"]', 'minute');
     const beforeExtend = (await lockState(browser)).lockUntil;
     await L.clickTestId(popup, 'lock-extend');
+    // 子页面的只读回显当场变长……
+    await popup.waitForFunction((prev) => {
+      const el = document.querySelector('[data-testid="lock-view-countdown"]');
+      return el && Number(el.getAttribute('data-lock-until')) > prev;
+    }, { timeout: 20000 }, beforeExtend);
+    // ……返回列表页,倒计时条也是变长后的值(两处同一个 lockUntil)。
+    await backToList(popup);
     await popup.waitForFunction((prev) => {
       const el = document.querySelector('[data-testid="lock-countdown"]');
       return el && Number(el.getAttribute('data-lock-until')) > prev;
@@ -333,22 +503,36 @@ async function lockState(browser) {
 
     popup = await L.openPopup(browser, id);
     await L.waitTestId(popup, 'lock-entry');
-    const expiredUi = await popup.evaluate(() => ({
+    const expiredList = await popup.evaluate(() => ({
       hasBanner: !!document.querySelector('[data-testid="lock-banner"]'),
       hasEntry: !!document.querySelector('[data-testid="lock-entry"]'),
       locked: document.querySelector('[data-testid="popup"]')?.dataset.locked ?? null,
       masterDisabled: document.querySelector('[data-testid="master-switch"]')?.disabled ?? null,
       addRuleDisabled: document.querySelector('[data-testid="add-rule"]')?.disabled ?? null,
-      lockStartPresent: !!document.querySelector('[data-testid="lock-start"]'),
     }));
     fs.writeFileSync(path.join(L.OUT, 'lock-03-expired.png'),
       Buffer.from(await popup.screenshot()));
+    /*
+      🔴 `lockStartPresent`(「可以再锁一次」)现在要进子页面才能看到 ——
+         原断言一个字没少,只是去它现在所在的那一页读。
+    */
+    await gotoLockView(popup);
+    const expiredSub = await popup.evaluate(() => ({
+      lockStartPresent: !!document.querySelector('[data-testid="lock-start"]'),
+      startDisabled: document.querySelector('[data-testid="lock-start"]')?.disabled ?? null,
+      hasExtend: !!document.querySelector('[data-testid="lock-extend"]'),
+      title: document.querySelector('[data-testid="lock-view-title"]')?.textContent ?? null,
+    }));
     await L.closePopup(popup);
+    const expiredUi = { ...expiredList, ...expiredSub };
     results.data.expiredUi = expiredUi;
     assert('🔴 到期后 UI 自动解锁:倒计时条消失、计时器入口回来、data-locked=false、控件可编辑',
       expiredUi.hasBanner === false && expiredUi.hasEntry === true
       && expiredUi.locked === 'false' && expiredUi.lockStartPresent === true
+      && expiredUi.startDisabled === false
       && expiredUi.masterDisabled === false && expiredUi.addRuleDisabled === false, expiredUi);
+    assert('📍 到期后子页面回到「启动」形态:标题为「专注锁定」、无延长控件',
+      expiredUi.title === '专注锁定' && expiredUi.hasExtend === false, expiredUi);
 
     // 🔴 探针有效性:上面那条断言必须真的能被「还锁着」证伪。
     //    做法 —— 重新锁 1 分钟,同一组读数必须**翻过来**。
@@ -357,21 +541,33 @@ async function lockState(browser) {
     assert('N5 前置:重新启动一次锁定以检验上条断言的判别力', relock.ok === true, relock);
     const popupRelocked = await L.openPopup(browser, id);
     await L.waitTestId(popupRelocked, 'lock-banner');
-    const relockedUi = await popupRelocked.evaluate(() => ({
+    const relockedList = await popupRelocked.evaluate(() => ({
       hasBanner: !!document.querySelector('[data-testid="lock-banner"]'),
       hasEntry: !!document.querySelector('[data-testid="lock-entry"]'),
       locked: document.querySelector('[data-testid="popup"]')?.dataset.locked ?? null,
       masterDisabled: document.querySelector('[data-testid="master-switch"]')?.disabled ?? null,
       addRuleDisabled: document.querySelector('[data-testid="add-rule"]')?.disabled ?? null,
+    }));
+    // 🔴 与到期组**同一个取数位置**:启动按钮在子页面上读。
+    await gotoLockView(popupRelocked);
+    const relockedSub = await popupRelocked.evaluate(() => ({
       lockStartPresent: !!document.querySelector('[data-testid="lock-start"]'),
+      hasExtend: !!document.querySelector('[data-testid="lock-extend"]'),
+      title: document.querySelector('[data-testid="lock-view-title"]')?.textContent ?? null,
     }));
     await L.closePopup(popupRelocked);
+    const relockedUi = { ...relockedList, ...relockedSub };
     results.data.relockedUi = relockedUi;
     assert('🔴 N5 负向对照:重新锁上后同一组读数**全部翻转** —— 「到期后可编辑」不是恒真',
       relockedUi.hasBanner === true && relockedUi.hasEntry === false
       && relockedUi.locked === 'true' && relockedUi.lockStartPresent === false
       && relockedUi.masterDisabled === true && relockedUi.addRuleDisabled === true,
       { expired: expiredUi, relocked: relockedUi });
+    assert('🔴 N5 负向对照(子页面):重新锁上后子页面也翻成延长形态',
+      relockedUi.title === '延长锁定' && relockedUi.hasExtend === true
+      && relockedUi.lockStartPresent === false,
+      { expired: { title: expiredUi.title, hasExtend: expiredUi.hasExtend },
+        relocked: { title: relockedUi.title, hasExtend: relockedUi.hasExtend } });
 
     // ADR-071:持久化 JSON 中不得出现 maxSeenTime(全程抽查)。
     const finalState = await lockState(browser);

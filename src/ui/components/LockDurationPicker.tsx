@@ -39,7 +39,7 @@ export interface LockDurationPickerProps {
   /** `data-testid` 前缀 —— 启动区与延长区同时在场时需要区分。 */
   readonly idPrefix: string;
   readonly amountLabel: string;
-  readonly unitLabel: string;
+    readonly unitLabel: string;
   readonly presetLabel?: string;
 }
 
@@ -99,7 +99,10 @@ export function LockDurationPicker({
         真正的判定仍在 `isValidDuration`(用户可以粘贴任意文本)。
       */}
       <div className="lock-duration__custom">
-        <label className="lock-duration__label" htmlFor={amountId}>
+        <label
+          className="lock-duration__label"
+          htmlFor={amountId}
+        >
           {amountLabel}
         </label>
         <input

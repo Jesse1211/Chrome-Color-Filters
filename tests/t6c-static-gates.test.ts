@@ -8,7 +8,7 @@
  * 覆盖 §6 T6c gate 里的负向约束与 ADR-057 / ADR-058 / ADR-061 的反模式。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -32,8 +32,24 @@ const UI_SOURCES = [
   ...walk(resolve(ROOT, 'entrypoints/popup')),
 ].filter((f) => !f.includes('__tests__'));
 
-/** 锁定相关的产品源码(注释已剥离,见 T6a 同名函数的说明)。 */
-const LOCK_SOURCES = UI_SOURCES.filter((f) => /lock|Lock/.test(f));
+/**
+ * 锁定相关的产品源码(注释已剥离,见 T6a 同名函数的说明)。
+ *
+ * ⚠️ 按**仓库相对路径**判定,不是绝对路径。
+ *
+ * 绝对路径里会掺进 checkout 目录名:在一个叫 `ff-lockpage/` 的工作树里,
+ * `/lock/` 命中**每一个** UI 源文件,于是 `LOCK_SOURCES` 退化成「全部 UI 源码」——
+ * 本门禁随即对 `App.tsx` 这类文件施加只应施加于锁定模块的禁令
+ * (实测:`setMasterEnabled` 与 `setTimeout(` 两条当场误报)。
+ *
+ * 反过来更危险:一个叫 `unlocked-build/` 的目录会让**所有**文件都被纳入,
+ * 而一个真正违规的锁定文件若恰好落在被别的规则跳过的路径上就会漏网。
+ * 改成相对路径是**收紧**,不是放宽 —— 判定范围从「路径里有 lock 字样」
+ * 变成「仓库里的锁定模块」,与这些断言本来想守的东西完全一致。
+ */
+const LOCK_SOURCES = UI_SOURCES.filter((f) =>
+  /lock|Lock/.test(relative(ROOT, f)),
+);
 
 /**
  * 去掉注释后的源码。
@@ -211,6 +227,134 @@ describe('🔴 ADR-055 / INV-14 · 锁定写入一律经仓储层', () => {
         /chrome\.storage\.(local|sync)\.(get|set|remove|clear)\(/,
       );
     }
+  });
+});
+
+/* ════════ 🔴 I2 · 锁定子页面不得有预览通道(与 T6b 的 I2 对称) ════════
+ *
+ * §6 T6b gate 的 I2 原文:
+ * > **预览与锁定永不共存** …… **此性质须保持** —— 不得在编辑视图添加锁定快捷入口。
+ *
+ * 原先 I2 的两道结构保证是:(a) 编辑视图没有锁定插槽;
+ * (b) 锁定入口只在列表视图。锁定 UI 折叠改造新增了第三个视图,于是
+ * **I2 需要一道对称的新门禁**:锁定子页面不得有预览通道或规则编辑控件。
+ *
+ * 缺了它,「在锁定页顺手加个强度滑块预览一下」就只靠口头约定了 ——
+ * 而那正是 I2 要排除的那个状态(预览活动时启动锁定)。
+ */
+describe('🔴 I2 · 锁定子页面不得有预览通道或规则编辑控件', () => {
+  const lockViewSource = () =>
+    readFileSync(resolve(ROOT, 'src/ui/LockView.tsx'), 'utf8');
+
+  it('LockView 不 import 任何预览相关的东西', () => {
+    /*
+     * 剥注释 —— 与本文件 `stripComments` 的理由完全相同(见其文档):
+     * 本项目要求在代码里写明「为什么这里没有预览通道」,那段解释文字
+     * 必然包含 `previewChannel` 一词。连注释一起 grep 的唯一通过方式
+     * 就是**删掉解释**,那恰好惩罚了文档纪律。
+     * 真的 import 了预览通道的实现,其 import 语句仍会被抓到。
+     */
+    const source = stripComments(lockViewSource());
+    for (const banned of [
+      'usePreview',
+      'preview-port',
+      'previewChannel',
+      'PreviewChannel',
+      'PREVIEW_FILTER',
+      'PREVIEW_CLEAR',
+      'createPreviewChannel',
+    ]) {
+      expect(source, `锁定子页面出现了 ${banned}`).not.toContain(banned);
+    }
+  });
+
+  it('LockView 不 import 编辑视图,也不含任何规则编辑回调', () => {
+    const text = stripComments(lockViewSource());
+    for (const banned of [
+      'RuleEditView',
+      'RuleRow',
+      'FilterSwatch',
+      'onSave',
+      'onDelete',
+      'onMoveToTop',
+      'onReindex',
+      'saveRule',
+      'deleteRule',
+      'reorderRules',
+      'intensity',
+      'pattern',
+    ]) {
+      expect(text, `锁定子页面出现了 ${banned}`).not.toContain(banned);
+    }
+
+    /*
+     * `RuleListView` 的模块名允许出现 —— 但**只能**是那个
+     * `import { type ActionResult }`(写入结果的共享形状,全部锁定组件都用它)。
+     * 把它一并禁掉等于逼着实现者给同一个类型换个住处,门禁就此瞄错了目标。
+     *
+     * 真正要排除的是「把列表视图 render 进锁定页」:故按**值导入**与
+     * **JSX 使用**判定,而不是按模块名。
+     */
+    expect(text, '锁定子页面值导入了 RuleListView').not.toMatch(
+      /import\s*\{\s*RuleListView/,
+    );
+    expect(text, '锁定子页面渲染了 <RuleListView>').not.toContain('<RuleListView');
+    expect(text, '锁定子页面渲染了 <RuleRow>').not.toContain('<RuleRow');
+  });
+
+  it('🔴 App 里 previewChannel **只**出现在编辑视图那一处', () => {
+    const text = stripComments(
+      readFileSync(resolve(ROOT, 'entrypoints/popup/App.tsx'), 'utf8'),
+    );
+    /*
+     * 允许的三处:模块级构造(含常量名一次)+ 传给 RuleEditView 的那一次。
+     * 多出来的任何一次都意味着第二个视图拿到了预览通道 —— I2 被破。
+     */
+    const hits = text.match(/previewChannel/g) ?? [];
+    expect(hits.length, `previewChannel 出现了 ${String(hits.length)} 次`).toBe(3);
+    // 且它**不**出现在 LockView 的 JSX 块里。
+    const lockBlock = /<LockView[\s\S]*?\/>/.exec(text)?.[0] ?? '';
+    expect(lockBlock.length, '找不到 <LockView .../> 块').toBeGreaterThan(0);
+    expect(lockBlock).not.toContain('previewChannel');
+  });
+
+  it('🔴 ADR-022:View 判别联合里确实有且仅有三个 kind', () => {
+    const text = stripComments(
+      readFileSync(resolve(ROOT, 'entrypoints/popup/App.tsx'), 'utf8'),
+    );
+    /*
+     * 从 `type View =` 读到下一个顶层声明之前。
+     * ⚠️ 不能用 `/type View =([\s\S]*?);/`:`edit` 那一支里有
+     *    `index: number | null };`,非贪婪匹配会在那个 `;` 上提前收尾,
+     *    于是第三个 kind 永远读不到(本断言因此会**假绿**)。
+     */
+    const union =
+      /type View =([\s\S]*?)\n\n(?:function|const|export|type|interface)/.exec(
+        text,
+      )?.[1] ?? '';
+    const kinds = (union.match(/kind: '(\w+)'/g) ?? []).map((m) =>
+      /'(\w+)'/.exec(m)?.[1],
+    );
+    expect(kinds.sort()).toEqual(['edit', 'list', 'lock']);
+    /*
+     * 🔴 并行机制的反模式:另起一个布尔开关会让「编辑中 + 锁定页」
+     *    这种状态可表达,而那恰好是 I2 要排除的。
+     */
+    for (const banned of ['showLock', 'lockPageOpen', 'isLockPage', 'lockVisible']) {
+      expect(text, `App 里出现了与 View 并行的 ${banned}`).not.toContain(banned);
+    }
+  });
+
+  it('🔴 ADR-061:导航路径上没有防抖、没有 setTimeout、没有 await', () => {
+    const text = stripComments(
+      readFileSync(resolve(ROOT, 'entrypoints/popup/App.tsx'), 'utf8'),
+    );
+    // 打开锁定页的回调必须是一次**同步**的 setView,别无他物。
+    const open = /const openLockView = useCallback\(\(\) => \{([\s\S]*?)\}, \[\]\);/.exec(
+      text,
+    )?.[1];
+    expect(open, '找不到 openLockView 的同步实现').toBeTruthy();
+    expect((open ?? '').trim()).toBe("setView({ kind: 'lock' });");
   });
 });
 

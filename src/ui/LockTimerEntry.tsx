@@ -2,15 +2,25 @@
  * **未锁定**时的计时器入口(ADR-058 + ADR-056 + ADR-057)。
  *
  * ```
+ * ┌──────────────────────────────────┐
+ * │ ‹ 返回        专注锁定            │  ← 子页面顶栏,由 `LockView` 提供
  * ├──────────────────────────────────┤
- * │ 专注锁定                          │
- * │ 锁定后无法修改设置,只能延长…      │
+ * │ 锁定后无法修改设置,只能延长…      │  ↓ 以下由本组件渲染
  * │ 锁定时长                          │
  * │ [30 分钟][1 小时][4 小时][8 小时] │  预设按钮(ADR-058)
  * │ 自定义时长 [  4 ] [小时 ▾]        │  数字 + 单位下拉(ADR-058)
  * │ [        启动锁定        ]        │  → 二次确认(ADR-056)
  * └──────────────────────────────────┘
  * ```
+ *
+ * ## 📍 本组件现在住在**子页面**里,不在列表视图(折叠改造)
+ *
+ * 列表视图只留一行 `LockEntryRow`(「🔒 时间锁定 ›」),点它才进
+ * `LockView`,本组件是 `LockView` 的**未锁定**分支。
+ *
+ * 搬家只改**位置**:下面三条硬性约束与原先逐字相同,
+ * 区段标题(原来的 `<h2>专注锁定`)改由 `LockView` 的顶栏承担 ——
+ * 同一页上出现两个「专注锁定」是重复,不是更清楚。
  *
  * ## 三条硬性约束
  *
@@ -39,7 +49,6 @@ import {
   LOCK_INVALID_DURATION,
   LOCK_PRESET_LABEL,
   LOCK_SECTION_HINT,
-  LOCK_SECTION_TITLE,
   LOCK_START_LABEL,
   LOCK_UNIT_LABEL,
 } from './lock-strings.js';
@@ -97,12 +106,13 @@ export function LockTimerEntry({
   }, [duration, onStartLock]);
 
   return (
-    <section className="lock-entry" data-testid="lock-entry">
-      <div className="lock-entry__head">
-        <h2 className="lock-entry__title">{LOCK_SECTION_TITLE}</h2>
-        {/* ADR-052 的单向语义必须在点开确认框之前就可见。 */}
-        <p className="lock-entry__hint">{LOCK_SECTION_HINT}</p>
-      </div>
+    <section className="lock-entry" data-testid="lock-start-section">
+      {/*
+        ADR-052 的单向语义必须在点开确认框之前就可见 ——
+        搬进子页面后它仍是用户在**点启动之前**读到的第一句话。
+        区段标题由 `LockView` 的顶栏给(`LOCK_VIEW_TITLE`),此处不重复。
+      */}
+      <p className="lock-entry__hint">{LOCK_SECTION_HINT}</p>
 
       <LockDurationPicker
         idPrefix="lock-start"
@@ -145,7 +155,8 @@ export function LockTimerEntry({
       )}
 
       {/*
-        ⚠️ 本组件只在**未锁定**时渲染(见 `RuleListView` 的 `locked` 分支)。
+        ⚠️ 本组件只在**未锁定**时渲染(见 `LockView` 的 `locked` 分支:
+        锁定中它渲染的是 `LockExtendPanel`,根本不挂本组件)。
         锁定中没有任何解除/取消/结束/缩短入口 —— ADR-052 / INV-12。
       */}
     </section>
