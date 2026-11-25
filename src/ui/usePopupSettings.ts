@@ -60,7 +60,7 @@ export interface PopupSettingsState {
    * 仓储层的 `subscribe` 走 `storage.onChanged`,它只在**别处**改动时触发;
    * 本窗口自己的写入必须显式回灌 —— 上面的 `apply` 正是这么做的。
    * 锁定写入(`useLockState`)不走本 hook 的 `apply`(它直接调
-   * `repository.setLockUntil`,一次写入,ADR-057 的原子性在仓储层),
+   * `repository.setLockUntilImmediate`,一次写入),
    * 故把这个 setter 暴露出来供其回灌。
    *
    * ⚠️ 这**不是**一个绕过仓储层的写入口:它只改 React 的本地状态,

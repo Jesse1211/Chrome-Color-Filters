@@ -960,10 +960,30 @@ describe('🔴 T3 gate · 锁定强制(INV-14 / ADR-055)—— 直接调用仓�
 });
 
 // ════════════════════════════════════════════════════════════════════════
-describe('🔴 T3 gate · 启动锁定原子地置 masterEnabled: true(ADR-057)', () => {
-  it('未锁定时启动锁定 → 允许,且 masterEnabled 被原子置为 true', async () => {
+/*
+ * 🔴🔴 **本区段原为「启动锁定原子地置 masterEnabled: true(ADR-057)」。**
+ *
+ * ADR-057 已由 ADR-076 废止 —— 它补救的场景(主开关 OFF 时启动锁定)
+ * 现在**在 UI 上不可达**(入口禁用),于是仓储层的那个副作用写入已删除。
+ *
+ * 前两条用例断言的正是那个副作用**必须发生**,故它们已失效:
+ *   (1)「未锁定时启动锁定 → masterEnabled 被原子置为 true」
+ *   (2)「onChanged 看到的也是已经置好 masterEnabled 的那一帧」
+ *
+ * 两条**不是删掉求绿**,而是被**替换**为同一片风险的反面断言:
+ * 「启动锁定**不碰** masterEnabled」+「仍是恰好一次写入、一帧通知」。
+ * 原用例守的「无中间态 / 一次写入」一字未丢 —— 那部分与 ADR-057 无关,
+ * 原样保留在新用例里。有人把 ADR-057 那行代码加回来,新用例会当场变红。
+ */
+describe('🔴 T3 gate · 启动锁定只写 lockUntil,不碰 masterEnabled(ADR-076)', () => {
+  it('🔴 主开关 OFF 时启动锁定 → 允许,但 masterEnabled **原样保持 false**', async () => {
     const { repo, clock, area } = makeRepo();
-    // 先把主开关关掉 —— 这正是 ADR-057 要防的前置状态
+    /*
+      前置状态仍取「主开关 OFF」—— 虽然 UI 上已不可达,但仓储层是
+      **独立的强制层**(INV-14 / ADR-055):绕过 UI 的调用(service worker、
+      控制台)照样能走到这里。所以这条路径的**行为**必须被钉死,
+      而新行为是「不碰主开关」,不是「拒绝」。
+    */
     await repo.setMasterEnabled(false);
     expect((await repo.read()).masterEnabled).toBe(false);
 
@@ -974,13 +994,17 @@ describe('🔴 T3 gate · 启动锁定原子地置 masterEnabled: true(ADR-057)'
     expect(res.ok).toBe(true);
     const s = await repo.read();
     expect(s.lockUntil).toBe(until);
-    expect(s.masterEnabled).toBe(true);
+    // 🔴 ADR-076:主开关**没有**被悄悄带开。
+    expect(
+      s.masterEnabled,
+      'ADR-076:启动锁定不得连带开启主开关(ADR-057 已废止)',
+    ).toBe(false);
 
-    // 「一次写入完成,无中间态」—— 恰好一次 storage.set
+    // 「一次写入完成,无中间态」—— 这条与 ADR-057 无关,原样保留。
     expect(area.setCallCount - setsBefore).toBe(1);
   });
 
-  it('onChanged 看到的也是已经置好 masterEnabled 的那一帧(无中间态)', async () => {
+  it('onChanged 只看到一帧,且那一帧的 masterEnabled 未被改动', async () => {
     const { repo, clock } = makeRepo();
     await repo.setMasterEnabled(false);
 
@@ -989,15 +1013,26 @@ describe('🔴 T3 gate · 启动锁定原子地置 masterEnabled: true(ADR-057)'
 
     await repo.setLockUntil(clock.now() + 60_000);
 
+    // 一帧 —— 「无中间态」的原断言,一字未动。
     expect(frames).toHaveLength(1);
-    expect(frames[0]?.masterEnabled).toBe(true);
     expect(frames[0]?.lockUntil).not.toBeNull();
+    // 🔴 ADR-076:那一帧里 masterEnabled 仍是调用前的值。
+    expect(frames[0]?.masterEnabled).toBe(false);
+  });
+
+  it('🔴 主开关 ON 时启动锁定同样不碰它(两个方向都钉住,排除「恒为 false」)', async () => {
+    const { repo, clock } = makeRepo();
+    expect((await repo.read()).masterEnabled).toBe(true);
+
+    expect((await repo.setLockUntil(clock.now() + 60_000)).ok).toBe(true);
+    expect((await repo.read()).masterEnabled).toBe(true);
   });
 
   it('锁定中延长不改动 masterEnabled —— 它本就已被 ADR-051 冻结', async () => {
     const { repo, clock } = makeRepo();
     const until = clock.now() + 60_000;
     await repo.setLockUntil(until);
+    // 默认即 ON,且启动锁定没有改动它(ADR-076)。
     expect((await repo.read()).masterEnabled).toBe(true);
 
     const res = await repo.setLockUntil(until + 60_000);

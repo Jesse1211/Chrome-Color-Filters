@@ -7,7 +7,8 @@
  *
  * - 未锁定时的计时器入口(ADR-058):预设 + 数字 + 单位下拉,**不接受裸时间戳**
  * - 二次确认(ADR-056):出现时机、三条后果文案、取消不写入
- * - 🔴 启动时**原子**开启主开关(ADR-057):一次写入,无中间态
+ * - 🔴 **ADR-076**:主开关 OFF 时锁定入口禁用、子页面不可达,
+ *   且锁定写入**不碰** `masterEnabled`(ADR-057 已废止)
  * - 倒计时(ADR-051):`HH:MM:SS`、每秒刷新、按差值算、卸载清 interval
  * - 锁定态控件禁用(ADR-051),点击不产生写入
  * - 🔴 锁定优先于 ADR-050:不可注入页 + 锁定中 → 主开关**仍然禁用**
@@ -43,6 +44,7 @@ import {
   LOCK_CONSEQUENCE_NO_EARLY_END,
   LOCK_CONSEQUENCE_NO_SETTINGS,
 } from '../lock-strings.js';
+import { MASTER_OFF_DISABLED_REASON } from '../strings.js';
 import { stubTabStatePort } from '../tab-state.js';
 import { useLockState } from '../useLockState.js';
 import { usePopupSettings } from '../usePopupSettings.js';
@@ -186,7 +188,7 @@ function PopupUnderTest({
   if (onLockView) {
     return (
       <LockView
-        settings={settings}
+        /* ADR-076:`settings` prop 已删除(原为 ADR-057 的告知判据)。 */
         locked={locked}
         lockUntil={lockUntil}
         now={now}
@@ -214,7 +216,22 @@ function PopupUnderTest({
         ) : undefined
       }
       lockEntry={
-        !locked ? <LockEntryRow onOpen={openLockView} disabled={!loaded} /> : undefined
+        /*
+          🔴 ADR-076:与 `App.tsx` **逐字同构** —— 禁用状态由 `RuleListView`
+             算好经插槽传进来(含主开关 OFF 这条新理由),测试替身不自己复算。
+             替身若在这里写 `disabled={!loaded}`,它就比产品**少**一个禁用
+             理由,于是「主开关 OFF 时锁定入口被禁用」这条新行为在本文件里
+             永远测不出来 —— 替身与产品的接线必须一致,否则测的是替身。
+        */
+        !locked
+          ? ({ disabled, reason }) => (
+              <LockEntryRow
+                onOpen={openLockView}
+                disabled={disabled}
+                disabledReason={reason}
+              />
+            )
+          : undefined
       }
     />
   );
@@ -232,6 +249,22 @@ async function gotoLockView() {
   await waitFor(() => {
     expect(screen.getByTestId('popup').dataset.view).toBe('lock');
   });
+}
+
+/**
+ * 把宏任务队列推几轮 —— 用于证明「什么都没发生」。
+ *
+ * ⚠️ 断言「零写入」必须先给实现**机会**去写:不推队列就断言,
+ *    绿灯可能只是因为写入还在半路上。推完仍然没有,才是真的没有。
+ */
+async function drainMacrotasks() {
+  for (let i = 0; i < 3; i += 1) {
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+  }
 }
 
 /** 等到骨架态结束(设置与 TabState 都已到位)。 */
@@ -620,10 +653,53 @@ describe('🔴 二次确认(ADR-056)', () => {
   });
 });
 
-// ═══════════════════════ 3. ADR-057 原子开启主开关 ═══════════════════════
+// ═══════════════════ 3. ADR-076:主开关 OFF ⇒ 锁定入口不可达 ═══════════════════
+//
+// 🔴🔴 **本区段原先是「ADR-057 原子开启主开关」,3 条用例。**
+//
+// ADR-057 已由 ADR-076 废止:它解决的问题是「用户在主开关 OFF 时启动锁定,
+// 把扩展永久冻结在关闭状态」,而 ADR-076 让那个场景**在 UI 上不可达** ——
+// 入口被禁用,用户点不动。
+//
+// 原 3 条用例测的全是那条路径上的行为:
+//   (1)「OFF 时启动 → 一次写入同时设 masterEnabled=true 与 lockUntil」
+//   (2)「绝不出现『只写了 lockUntil 但 masterEnabled 还是 false』的中间态」
+//   (3)「主开关本就开启时,确认框不显示『将同时开启滤镜』的告知」
+//
+// 它们**不是被删掉以求绿灯**,而是因为所断言的产品行为已不存在:
+// (1)(2) 要求一个已删除的副作用写入必须发生;(3) 断言一段已删除的文案缺席
+// —— 整段文案不复存在,这条断言退化为恒真。
+//
+// 替换为下面 4 条,覆盖同一片风险、方向反转:
+//   · OFF 时入口**真的禁用**,且点不动(路径从源头断掉);
+//   · 子页面因此**到不了**(原危险路径的入口被堵死);
+//   · 确认框里**没有**那段告知(文案真的不在场,不是靠 prop 关掉);
+//   · 锁定写入**不碰** `masterEnabled`(原 ADR-057 的副作用真的没了)——
+//     这一条守的正是 (1)(2) 的反面:有人把那行代码加回来就会红。
 
-describe('🔴 启动时原子开启主开关(ADR-057)', () => {
-  it('masterEnabled=false 时启动锁定 → **一次写入**同时设 masterEnabled=true 与 lockUntil', async () => {
+describe('🔴🔴 ADR-076 · 主开关 OFF ⇒ 锁定入口禁用,启动路径不可达', () => {
+  it('主开关 OFF → 「🔒 时间锁定」入口**真的 disabled**,且点击不切视图', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({ masterEnabled: false }));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+
+    const entry = screen.getByTestId('lock-open') as HTMLButtonElement;
+    expect(entry.disabled, 'ADR-076:主开关 OFF → 锁定入口禁用').toBe(true);
+    // 真 disabled:不可聚焦,键盘用户同样进不去。
+    entry.focus();
+    expect(document.activeElement).not.toBe(entry);
+    // 禁用了还说得出为什么(无障碍)。
+    expect(entry.getAttribute('title')).toBe(MASTER_OFF_DISABLED_REASON);
+
+    // 点它 —— 视图不变,仍在列表页。
+    fireEvent.click(entry);
+    expect(screen.getByTestId('popup').dataset.view).toBe('list');
+  });
+
+  it('🔴 主开关 OFF 时**到不了**子页面 → 启动按钮与确认框在任何情况下都不可达', async () => {
     const clock = makeClock();
     const area = new MemoryStorageArea(seeded({ masterEnabled: false }));
     const setSpy = vi.spyOn(area, 'set');
@@ -632,85 +708,27 @@ describe('🔴 启动时原子开启主开关(ADR-057)', () => {
     render(<PopupUnderTest repository={repo} clock={clock.now} />);
     await settled();
 
-    // 前置:主开关确实是关的(在**列表页**上读,子页面没有主开关)。
-    expect(
-      screen.getByTestId('master-switch').getAttribute('aria-checked'),
-    ).toBe('false');
-
-    await gotoLockView();
-    fireEvent.click(screen.getByTestId('lock-start'));
-
-    // ADR-057 的告知必须在**不可逆操作之前**出现。
-    expect(screen.getByTestId('lock-will-enable-master')).toBeTruthy();
-
     const before = setSpy.mock.calls.length;
-    fireEvent.click(screen.getByTestId('lock-confirm-ok'));
+    fireEvent.click(screen.getByTestId('lock-open'));
+    await drainMacrotasks();
 
-    await waitFor(() => {
-      expect(screen.getByTestId('popup').dataset.locked).toBe('true');
-    });
-
-    // 启动成功后仍在子页面,且它**当场**换成延长区(ADR-052:
-    // 锁定中唯一可用的操作),启动区同时消失。
-    expect(screen.getByTestId('popup').dataset.view).toBe('lock');
-    expect(screen.getByTestId('lock-extend-panel')).toBeTruthy();
+    // 既没进子页面,也没有启动按钮 / 确认框。
+    expect(screen.getByTestId('popup').dataset.view).toBe('list');
     expect(screen.queryByTestId('lock-start')).toBeNull();
-
-    // 🔴 **一次写入** —— 不是「先开主开关、再写 lockUntil」两次。
-    const writes = setSpy.mock.calls.slice(before);
-    expect(writes.length, `发生了 ${String(writes.length)} 次写入,ADR-057 要求恰好 1 次`).toBe(1);
-
-    // 🔴 那一次写入里两个字段**同时**到位 —— 无中间态。
-    const payload = (writes[0]?.[0] as Record<string, unknown>)[SETTINGS_KEY] as {
+    expect(screen.queryByTestId('lock-confirm')).toBeNull();
+    // 🔴 整条路径零写入 —— 磁盘上既没有 lockUntil,也没被偷偷开主开关。
+    expect(setSpy.mock.calls.length).toBe(before);
+    const persisted = (await area.get(SETTINGS_KEY))[SETTINGS_KEY] as {
       masterEnabled: boolean;
       lockUntil: number | null;
     };
-    expect(payload.masterEnabled).toBe(true);
-    expect(payload.lockUntil).toBe(T0 + HOUR);
-
-    // 落盘结果一致。
-    const persisted = (await area.get(SETTINGS_KEY))[SETTINGS_KEY] as {
-      masterEnabled: boolean;
-      lockUntil: number;
-    };
-    expect(persisted.masterEnabled).toBe(true);
-    expect(persisted.lockUntil).toBe(T0 + HOUR);
+    expect(persisted.lockUntil).toBeNull();
+    expect(persisted.masterEnabled).toBe(false);
   });
 
-  it('🔴 绝不出现「只写了 lockUntil 但 masterEnabled 还是 false」的中间态', async () => {
+  it('🔴 ADR-076:确认框里**没有**「将同时开启滤镜」那段告知(文案已删除)', async () => {
     const clock = makeClock();
-    const area = new MemoryStorageArea(seeded({ masterEnabled: false }));
-    const setSpy = vi.spyOn(area, 'set');
-    const repo = new SettingsRepository({ area, clock: clock.now });
-
-    render(<PopupUnderTest repository={repo} clock={clock.now} />);
-    await settled();
-    await gotoLockView();
-    fireEvent.click(screen.getByTestId('lock-start'));
-    fireEvent.click(screen.getByTestId('lock-confirm-ok'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('popup').dataset.locked).toBe('true');
-    });
-
-    // 检查**每一次**落盘的快照:只要 lockUntil 是未来的,masterEnabled 必须已经是 true。
-    // 若实现成两次写入,中间那次会被这里抓住 —— 那正是「把扩展永久冻结在关闭状态」的瞬间。
-    for (const call of setSpy.mock.calls) {
-      const payload = (call[0] as Record<string, unknown>)[SETTINGS_KEY] as
-        | { masterEnabled: boolean; lockUntil: number | null }
-        | undefined;
-      if (!payload) continue;
-      if (payload.lockUntil !== null && payload.lockUntil > T0) {
-        expect(
-          payload.masterEnabled,
-          '出现了「已锁定但主开关仍关闭」的落盘快照 —— 产品意图的完美反转(ADR-057)',
-        ).toBe(true);
-      }
-    }
-  });
-
-  it('主开关本就开启时,确认框不显示「将同时开启滤镜」的告知', async () => {
-    const clock = makeClock();
+    // 唯一可达的入口状态:主开关 ON。
     const area = new MemoryStorageArea(seeded({ masterEnabled: true }));
     const repo = new SettingsRepository({ area, clock: clock.now });
 
@@ -719,11 +737,221 @@ describe('🔴 启动时原子开启主开关(ADR-057)', () => {
     await gotoLockView();
     fireEvent.click(screen.getByTestId('lock-start'));
 
+    // 元素不在场……
     expect(screen.queryByTestId('lock-will-enable-master')).toBeNull();
+    // ……文案本身也不在页面上(换个 testid 加回来一样算违规)。
+    expect(document.body.textContent).not.toContain(
+      '滤镜当前已关闭,启动锁定将同时开启滤镜',
+    );
+    // 而 ADR-056 的三条后果照旧逐条在场 —— 删的只是 ADR-057 那一段。
+    expect(
+      [...screen.getByTestId('lock-consequences').querySelectorAll('li')].map(
+        (li) => li.textContent,
+      ),
+    ).toEqual(['无法修改任何设置', '无法关闭滤镜', '无法提前结束(只能延长)']);
+  });
+
+  it('🔴🔴 ADR-076:启动锁定的那次写入**不碰** masterEnabled(ADR-057 的副作用已删除)', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({ masterEnabled: true }));
+    const setSpy = vi.spyOn(area, 'set');
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await gotoLockView();
+    fireEvent.click(screen.getByTestId('lock-start'));
+
+    const before = setSpy.mock.calls.length;
+    fireEvent.click(screen.getByTestId('lock-confirm-ok'));
+    await waitFor(() => {
+      expect(screen.getByTestId('popup').dataset.locked).toBe('true');
+    });
+
+    // 仍然是**恰好一次**写入(这条与 ADR-057 无关,是「无中间态」本身)。
+    const writes = setSpy.mock.calls.slice(before);
+    expect(
+      writes.length,
+      `发生了 ${String(writes.length)} 次写入,启动锁定要求恰好 1 次`,
+    ).toBe(1);
+
+    // 🔴 那一次写入里 masterEnabled 与写入**之前**逐字相同 ——
+    //    锁定写入只写它名字里那个字段。
+    const payload = (writes[0]?.[0] as Record<string, unknown>)[SETTINGS_KEY] as {
+      masterEnabled: boolean;
+      lockUntil: number | null;
+    };
+    expect(payload.lockUntil).toBe(T0 + HOUR);
+    expect(
+      payload.masterEnabled,
+      'ADR-076:锁定写入不得连带改动 masterEnabled',
+    ).toBe(true);
   });
 });
 
 // ═══════════════════════ 4. 倒计时(ADR-051) ═══════════════════════
+
+// ═════════════ 3b. 📌 子页面底栏:主操作钉在最下沿(产品负责人)═════════════
+//
+// > 「点击『时间锁定』进入页面后,『启动锁定』要和『添加规则』一样的页面设计,
+// > 『save』按钮放在最下面」
+//
+// 本区段断言的是**结构**(主操作是底栏的子节点、底栏是主体的后继兄弟、
+// 两个分支都如此),而不是像素 —— 像素由 T6c 真实 Chrome 门禁的截图与
+// `getBoundingClientRect` 对照验证(见 `docs/T6c-gate/lock-subpage.cjs`)。
+
+describe('📌 子页面底栏 · 主操作钉在最下沿(与 .popup__foot / .edit__foot 同构)', () => {
+  it('未锁定:「启动锁定」在底栏里,且底栏排在可滚动主体**之后**', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({ masterEnabled: true }));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await gotoLockView();
+
+    const foot = screen.getByTestId('lock-view-foot');
+    const start = screen.getByTestId('lock-start');
+    // 主操作真的住在底栏里 —— 不是碰巧长得像。
+    expect(foot.contains(start)).toBe(true);
+    expect(foot.tagName).toBe('FOOTER');
+
+    // 底栏是 `.popup` 的**直接子元素** —— 否则它只能钉在某个内层盒子的
+    // 底部,popup 最下沿仍会留死空间(本次要修的正是这个)。
+    expect(foot.parentElement?.classList.contains('popup')).toBe(true);
+
+    // 底栏排在可滚动主体之后(DOM 顺序即视觉顺序)。
+    const body = screen.getByTestId('lock-start-section');
+    expect(body.classList.contains('lock-view__body')).toBe(true);
+    expect(
+      body.compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING,
+      '底栏必须排在主体之后',
+    ).toBeTruthy();
+  });
+
+  it('未锁定:时长控件留在**主体**里,没有被一起搬进底栏', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({ masterEnabled: true }));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await gotoLockView();
+
+    const foot = screen.getByTestId('lock-view-foot');
+    // 底栏里**只有**那一个主操作按钮 —— 预设 / 数字 / 下拉全不在场。
+    expect([...foot.querySelectorAll('button')].map((b) => b.getAttribute('data-testid'))).toEqual([
+      'lock-start',
+    ]);
+    expect(foot.querySelectorAll('input, select').length).toBe(0);
+    // 时长控件仍在主体里。
+    const body = screen.getByTestId('lock-start-section');
+    expect(body.contains(screen.getByTestId('lock-start-amount'))).toBe(true);
+    expect(body.contains(screen.getByTestId('lock-start-unit'))).toBe(true);
+    expect(body.contains(screen.getByTestId('lock-start-preset-1-hour'))).toBe(true);
+  });
+
+  it('🔴 锁定中:「延长」同样在底栏里(两个分支同一个规律)', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(
+      seeded({ masterEnabled: true, lockUntil: T0 + HOUR }),
+    );
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await gotoLockView();
+
+    const foot = screen.getByTestId('lock-view-foot');
+    const extend = screen.getByTestId('lock-extend');
+    expect(foot.contains(extend)).toBe(true);
+    expect(foot.parentElement?.classList.contains('popup')).toBe(true);
+
+    // 🔴 底栏里**只有**「延长」—— 锁定中唯一的写入控件(ADR-052/INV-12)。
+    //    多出任何一个按钮都是解除入口的嫌疑。
+    expect(
+      [...foot.querySelectorAll('button')].map((b) => b.getAttribute('data-testid')),
+    ).toEqual(['lock-extend']);
+
+    // 倒计时回显、只读说明、时长输入都留在主体里(它们是参照与输入)。
+    const body = screen.getByTestId('lock-extend-panel');
+    expect(body.contains(screen.getByTestId('lock-view-countdown'))).toBe(true);
+    expect(body.contains(screen.getByTestId('lock-extend-amount'))).toBe(true);
+    expect(
+      body.compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('底栏取 `.edit__foot` 的同一组 token(钉底 + 上边框),不是新发明的第三种', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(seeded({ masterEnabled: true }));
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await gotoLockView();
+
+    const style = getComputedStyle(screen.getByTestId('lock-view-foot'));
+    // `flex: 0 0 auto` —— 不参与伸缩,恒贴最下沿。
+    expect(style.flexGrow).toBe('0');
+    expect(style.flexShrink).toBe('0');
+    expect(style.flexBasis).toBe('auto');
+    // 与 `.edit__foot` 逐值相同的内边距 —— 同一惯用法,不是另一套。
+    expect(style.padding).toBe('12px 15px');
+    /*
+      与主体之间有分隔线(两个既有底栏都有)。
+      ⚠️ jsdom 会把含 `var()` 的简写整条丢掉(`borderTop` 读回空串),
+         故这一条改在**样式表源文本**上断言 —— 并且直接与 `.edit__foot`
+         的那条比对,比读计算值更能证明「用的是同一组 token」。
+    */
+    const css = (
+      document.querySelector('[data-testid="popup-styles"]')?.textContent ?? ''
+    ).replace(/\/\*[\s\S]*?\*\//g, ' ');
+    /** 取某个选择器那一条规则的声明块(本文件的样式表里每个选择器只有一条)。 */
+    const ruleOf = (selector: string): string => {
+      const at = css.indexOf(`${selector} {`);
+      if (at < 0) return '';
+      return css.slice(at + selector.length + 2, css.indexOf('}', at));
+    };
+    const lockFoot = ruleOf('.lock-view__foot');
+    const editFoot = ruleOf('.edit__foot');
+    expect(lockFoot, '.lock-view__foot 规则未找到').not.toBe('');
+    expect(editFoot, '.edit__foot 规则未找到').not.toBe('');
+    for (const decl of [
+      'border-top: 1px solid var(--line)',
+      'padding: 12px 15px',
+      'flex: 0 0 auto',
+    ]) {
+      expect(lockFoot, `.lock-view__foot 缺少 ${decl}`).toContain(decl);
+      expect(editFoot, `.edit__foot 缺少 ${decl} —— 两者不再同构`).toContain(decl);
+    }
+    // 🔴 不是绝对定位 —— 那会脱离文档流、盖住主体最后一行。
+    expect(style.position).not.toBe('absolute');
+  });
+
+  it('🔴 锁定中的子页面底栏**不**被淡化 —— 「延长」是唯一可用的操作(ADR-052)', async () => {
+    const clock = makeClock();
+    const area = new MemoryStorageArea(
+      seeded({ masterEnabled: true, lockUntil: T0 + HOUR }),
+    );
+    const repo = new SettingsRepository({ area, clock: clock.now });
+
+    render(<PopupUnderTest repository={repo} clock={clock.now} />);
+    await settled();
+    await gotoLockView();
+
+    // 根上确实带着 popup--locked(子页面与列表页 data-locked 同口径)……
+    expect(screen.getByTestId('popup').className).toContain('popup--locked');
+    // ……但底栏不像列表页的 `.popup__foot` 那样降到 .62:
+    // 把唯一还能用的按钮画成半透明,等于暗示它也不能用。
+    const opacity = Number.parseFloat(
+      getComputedStyle(screen.getByTestId('lock-view-foot')).opacity || '1',
+    );
+    expect(opacity).toBe(1);
+    // 而它确实是**可用**的(时长合法时不禁用)。
+    expect((screen.getByTestId('lock-extend') as HTMLButtonElement).disabled).toBe(false);
+  });
+});
 
 describe('🔴 倒计时(ADR-051)', () => {
   it('格式 🔒 锁定中 HH:MM:SS,且每秒刷新', async () => {

@@ -9,9 +9,21 @@
  * │ 🔒 锁定中 02:14:07                │  只读回显,非控件
  * │ 锁定期间设置不可修改               │
  * │ 延长锁定                          │
- * │ [ 1 ] [小时 ▾]      [   延长   ]  │  ← 唯一的写入控件
+ * │ [ 1 ] [小时 ▾]                    │  时长输入(ADR-058)
+ * │              ⋮ (可滚动)           │
+ * ├──────────────────────────────────┤
+ * │ [          延长          ]        │  ← **钉在底部的底栏**;唯一的写入控件
  * └──────────────────────────────────┘
  * ```
+ *
+ * ## 📌 「延长」钉在底栏(产品负责人决定,与未锁定分支对称)
+ *
+ * 与 `LockTimerEntry` 的「启动锁定」同一个底栏惯用法 —— 主操作恒在最下沿。
+ * 两个分支都这么做,是因为「点进锁定子页面,主操作在最下面」应当是
+ * **一条规律**,而不是「未锁定时在下面、锁定中在中间」。
+ *
+ * 倒计时回显、只读说明、时长输入都留在**可滚动的主体**里:
+ * 它们是「延长多少」的**参照与输入**,不是操作本身。
  *
  * ## 📍 这块原先内联在列表页的倒计时条里(折叠改造)
  *
@@ -88,62 +100,76 @@ export function LockExtendPanel({
   }, [duration, onExtend, valid]);
 
   return (
-    <section className="lock-extend" data-testid="lock-extend-panel">
-      {/*
-        只读回显 —— 进了子页面仍看得到还剩多久,否则「延长多少」没有参照。
-        它是 `<span>`,不是控件:这里不该出现第二个可点的东西。
-        `aria-live="off"`:每秒播报会让屏幕阅读器不可用(同倒计时条)。
-      */}
-      <span
-        className="lock-extend__countdown"
-        data-testid="lock-view-countdown"
-        data-lock-until={String(lockUntil)}
-        aria-live="off"
-      >
-        {formatCountdown(lockUntil, now)}
-      </span>
-
-      <p className="lock-extend__hint">{LOCK_LIST_READONLY_HINT}</p>
-
-      {/*
-        ── 延长:锁定中**唯一**可用的操作(ADR-052)──
-        注意这里**没有**「解除」「取消锁定」「提前结束」「缩短」任何一个按钮。
-      */}
-      <div className="lock-extend__group">
-        <span className="lock-duration__label" id="lock-extend-label">
-          {LOCK_EXTEND_SECTION_LABEL}
-        </span>
-        <div
-          className="lock-extend__row"
-          role="group"
-          aria-labelledby="lock-extend-label"
-        >
-          <LockDurationPicker
-            idPrefix="lock-extend"
-            value={duration}
-            onChange={setDuration}
-            /* 延长区不给预设按钮 —— 自定义输入已覆盖全部时长。 */
-            showPresets={false}
-            amountLabel={LOCK_EXTEND_AMOUNT_LABEL}
-            /*
-              🔴 标签**可见**(产品负责人拍板)。它曾被设为 visually-hidden,
-              理由是 360px 下标签与控件挤在同一行会换行 —— 但那是用隐藏信息
-              去迁就布局。正确的解法是改布局:`.lock-extend__row` 现在是
-              纵向堆叠(标签独占一行,控件在下一行),两者都放得下。
-            */
-            unitLabel={LOCK_EXTEND_UNIT_LABEL}
-          />
-          <button
-            type="button"
-            className="lock-extend__button"
-            data-testid="lock-extend"
-            disabled={!valid}
-            onClick={handleExtend}
+    <>
+      {/* ── 可滚动的主体:回显 + 说明 + 时长输入 ── */}
+      <div className="lock-view__body">
+        <section className="lock-extend" data-testid="lock-extend-panel">
+          {/*
+            只读回显 —— 进了子页面仍看得到还剩多久,否则「延长多少」没有参照。
+            它是 `<span>`,不是控件:这里不该出现第二个可点的东西。
+            `aria-live="off"`:每秒播报会让屏幕阅读器不可用(同倒计时条)。
+          */}
+          <span
+            className="lock-extend__countdown"
+            data-testid="lock-view-countdown"
+            data-lock-until={String(lockUntil)}
+            aria-live="off"
           >
-            {LOCK_EXTEND_LABEL}
-          </button>
-        </div>
+            {formatCountdown(lockUntil, now)}
+          </span>
+
+          <p className="lock-extend__hint">{LOCK_LIST_READONLY_HINT}</p>
+
+          {/*
+            ── 延长的**时长输入**(ADR-058:数字 + 单位,不接受裸时间戳)──
+            注意这里**没有**「解除」「取消锁定」「提前结束」「缩短」任何一个
+            按钮;底栏里也只有「延长」那一个(ADR-052 / INV-12)。
+          */}
+          <div className="lock-extend__group">
+            <span className="lock-duration__label" id="lock-extend-label">
+              {LOCK_EXTEND_SECTION_LABEL}
+            </span>
+            <div
+              className="lock-extend__row"
+              role="group"
+              aria-labelledby="lock-extend-label"
+            >
+              <LockDurationPicker
+                idPrefix="lock-extend"
+                value={duration}
+                onChange={setDuration}
+                /* 延长区不给预设按钮 —— 自定义输入已覆盖全部时长。 */
+                showPresets={false}
+                amountLabel={LOCK_EXTEND_AMOUNT_LABEL}
+                /*
+                  🔴 标签**可见**(产品负责人拍板)。它曾被设为 visually-hidden,
+                  理由是 360px 下标签与控件挤在同一行会换行 —— 但那是用隐藏信息
+                  去迁就布局。正确的解法是改布局:`.lock-extend__row` 是
+                  纵向堆叠(标签独占一行,控件在下一行),两者都放得下。
+                */
+                unitLabel={LOCK_EXTEND_UNIT_LABEL}
+              />
+            </div>
+          </div>
+        </section>
       </div>
-    </section>
+
+      {/*
+        ── 📌 底栏:「延长」钉在最下沿,与未锁定分支的「启动锁定」同位 ──
+        🔴 这里仍然是锁定中**唯一**的写入控件(ADR-052)。
+           搬了位置,没有多一个按钮,也没有少一道约束。
+      */}
+      <footer className="lock-view__foot" data-testid="lock-view-foot">
+        <button
+          type="button"
+          className="lock-view__foot-action lock-extend__button"
+          data-testid="lock-extend"
+          disabled={!valid}
+          onClick={handleExtend}
+        >
+          {LOCK_EXTEND_LABEL}
+        </button>
+      </footer>
+    </>
   );
 }

@@ -478,7 +478,7 @@ export class SettingsRepository {
     return { ok: true, value: out };
   }
 
-  // ─────────────────────── 锁定写入(ADR-052/057) ───────────────────────
+  // ───────────────────────── 锁定写入(ADR-052) ─────────────────────────
 
   /**
    * 写入 `lockUntil`。**本项目唯一能在锁定期内成功的用户写入。**
@@ -489,12 +489,24 @@ export class SettingsRepository {
    * - 锁定中 → `next < current`(缩短)/ `next === current` / `null`(清除):**拒绝**
    * - 任何情况 → 过去的时间戳:**拒绝**(否则等于一键解锁)
    *
-   * ⚛️ **ADR-057:从未锁定状态启动锁定时,原子地把 `masterEnabled` 置为 `true`。**
-   * > 否则用户可在主开关已关闭时启动锁定,把扩展永久冻结在「关闭」状态 ——
-   * > 产品意图的完美反转,且 ADR-052 保证无路可逃。
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   * 🔴 **ADR-076 废止了 ADR-057:本方法不再碰 `masterEnabled`。**
    *
-   * 「原子」在此的含义:**一次 `storage.set` 完成,无中间态** ——
-   * 不存在「先写 lockUntil 再写 masterEnabled」的窗口。
+   * 原行为:从未锁定状态启动锁定时,原子地把 `masterEnabled` 置为 `true`,
+   * 以免用户在主开关已关闭时启动锁定、把扩展永久冻结在「关闭」状态。
+   *
+   * ADR-076 从**源头**消除了那个场景 —— 主开关 OFF 时 UI 上的
+   * 「🔒 时间锁定」入口是禁用的,用户启动不了锁定。于是:
+   * - 「锁住关闭状态」这个危险状态不再可达,**不需要补救**;
+   * - 本方法因此退回「只写它名字里那个字段」,职责单一。
+   *
+   * > ADR-076:原逻辑是「允许在关闭态启动锁定,但悄悄替用户把滤镜打开」
+   * > —— 它要补救的是一个**本不该发生的操作**。
+   *
+   * ⚠️ 这不是把判定交给 UI(那会违反 INV-14 / ADR-055)——
+   *    **锁定本身的全部强制(拒绝缩短/清除/过去值)一字未动,仍在本层。**
+   *    删掉的只是一个**额外的副作用写入**,不是一道检查。
+   * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    *
    * 判定用注入的 `clock()`(ADR-071)—— 系统时钟由用户自行负责,扩展不做防范。
    */
@@ -517,11 +529,11 @@ export class SettingsRepository {
     // verdict.ok 蕴含 next 是有限的未来时间戳(canSetLockUntil 已拒绝 null / 过去值)。
     const lockUntil = next as number;
 
-    // ADR-057:启动锁定(此前未锁定)→ 同一次写入里置 masterEnabled: true。
-    // 锁定中延长(ctx.locked)则不碰主开关 —— 它本就已被 ADR-051 冻结。
-    const masterEnabled = ctx.locked ? ctx.current.masterEnabled : true;
-
-    return this.#persist({ ...ctx.current, lockUntil, masterEnabled });
+    /*
+      🔴 ADR-076:**只写 `lockUntil`,`masterEnabled` 原样保留。**
+         (原先这里有 ADR-057 的 `masterEnabled = ctx.locked ? … : true`。)
+    */
+    return this.#persist({ ...ctx.current, lockUntil });
   }
 
   /**
@@ -563,8 +575,9 @@ export class SettingsRepository {
    *    且我们刚刚写小了,立刻用磁盘值补写回去。这条路径只在并发写
    *    (多窗口)下才会走到,且补写方向永远是「变长」。
    *
-   * ⚛️ **ADR-057 的原子性照旧**:启动锁定时 `masterEnabled` 与 `lockUntil`
-   * 在**同一次** `storage.set` 里落盘,无中间态。
+   * 🔴 **ADR-076:本方法同样不再碰 `masterEnabled`**(ADR-057 已废止,
+   * 理由见 `setLockUntil` 的说明)。上面两道结构性保证针对的是
+   * `lockUntil` 的单调性,与主开关无关,**一条未动**。
    *
    * ADR-071:判定直接用注入的 `clock()`,不再包单调下界。
    * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -602,10 +615,8 @@ export class SettingsRepository {
         ? cachedLock
         : requested;
 
-    // ADR-057:启动锁定(快照显示此前未锁定)→ 同一次写入里置 masterEnabled: true。
-    const masterEnabled = ctx.locked ? current.masterEnabled : true;
-
-    const settings: FilterSettings = { ...current, lockUntil, masterEnabled };
+    // 🔴 ADR-076:只写 `lockUntil`,主开关原样保留(ADR-057 已废止)。
+    const settings: FilterSettings = { ...current, lockUntil };
 
     // 🔴 关键:**同步**发出 get + set —— 本方法到此为止没有出现过任何 await。
     // 即使 popup 在下一刻被拆掉,两个请求都已经交给浏览器进程了。
@@ -663,7 +674,8 @@ export class SettingsRepository {
         diskLock > mineLock
       ) {
         // 写入前磁盘上的锁比我们刚写的更晚 → 快照当时确实陈旧,我们写小了。
-        // 用磁盘值补回去(只变长),并保留 ADR-057 已带开的主开关。
+        // 用磁盘值补回去(只变长)。其余字段用我们刚写的那一份
+        // (ADR-076 之后它与 `current` 的差别只有 `lockUntil`)。
         return this.#persist({ ...written, lockUntil: diskLock });
       }
     } catch {

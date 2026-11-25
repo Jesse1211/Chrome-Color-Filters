@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 🔴 **锁定写入必须活过 popup 拆除**(T6c gate「启动时原子开启主开关(ADR-057)」
+ * 🔴 **锁定写入必须活过 popup 拆除**(T6c gate「启动锁定端到端落盘」
  * 与「延长按钮…点击后倒计时变长」在**真实时序**下的回归测试)。
  *
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -171,7 +171,7 @@ function PopupUnderTest({
   if (onLockView) {
     return (
       <LockView
-        settings={settings}
+        /* ADR-076:`settings` prop 已删除(原为 ADR-057 的告知判据)。 */
         locked={locked}
         lockUntil={lockUntil}
         now={now}
@@ -199,7 +199,22 @@ function PopupUnderTest({
         ) : undefined
       }
       lockEntry={
-        !locked ? <LockEntryRow onOpen={openLockView} disabled={!loaded} /> : undefined
+        /*
+          🔴 ADR-076:与 `App.tsx` **逐字同构** —— 禁用状态由 `RuleListView`
+             算好经插槽传进来(含主开关 OFF 这条新理由),测试替身不自己复算。
+             替身若在这里写 `disabled={!loaded}`,它就比产品**少**一个禁用
+             理由,于是「主开关 OFF 时锁定入口被禁用」这条新行为在本文件里
+             永远测不出来 —— 替身与产品的接线必须一致,否则测的是替身。
+        */
+        !locked
+          ? ({ disabled, reason }) => (
+              <LockEntryRow
+                onOpen={openLockView}
+                disabled={disabled}
+                disabledReason={reason}
+              />
+            )
+          : undefined
       }
     />
   );
@@ -230,14 +245,26 @@ async function settled() {
 
 /**
  * ─────────────────────────────────────────────────────────────────────────
- * 第一组:启动锁定 —— 点击后立刻销毁,锁定仍必须落盘(ADR-057)。
+ * 第一组:启动锁定 —— 点击后立刻销毁,锁定仍必须落盘(ADR-061)。
  * ─────────────────────────────────────────────────────────────────────────
  */
-describe('🔴 启动锁定后立即销毁 popup,lockUntil 必须已落盘(ADR-057/ADR-061)', () => {
-  it('确认锁定 → 文档销毁(任务队列停止)→ 存储里已有 lockUntil 且主开关已开', async () => {
+describe('🔴 启动锁定后立即销毁 popup,lockUntil 必须已落盘(ADR-061)', () => {
+  /*
+    🔴 **ADR-076:fixture 由 `masterEnabled: false` 改为 `true`。**
+
+    原 fixture 刻意取「主开关 OFF」—— 那是 ADR-057 最危险的入口状态。
+    ADR-076 之后主开关 OFF 时「🔒 时间锁定」入口**是禁用的**,
+    这一组根本走不到启动按钮,fixture 描述的是一个**不可达状态**。
+
+    改成 ON 不是放宽:本组真正要守的是 **ADR-061「写入活过 popup 拆除」**,
+    与主开关的初始值无关 —— 那个丢写窗口在主开关 ON 时一模一样存在
+    (`setLockUntil` 的 `await #readContext()` 不看主开关)。
+    下方关于 `masterEnabled` 的那一条断言(ADR-057 专属)已删除并
+    **替换**为「主开关**未被连带改动**」—— 见该处说明。
+  */
+  it('确认锁定 → 文档销毁(任务队列停止)→ 存储里已有 lockUntil', async () => {
     const clock = makeClock();
-    // 🔴 ADR-057 最危险的入口状态:主开关本是 OFF。
-    const area = new AsyncStorageArea(seeded({ masterEnabled: false }));
+    const area = new AsyncStorageArea(seeded({ masterEnabled: true }));
     const repository = new SettingsRepository({ area, clock: clock.now });
 
     render(<PopupUnderTest repository={repository} clock={clock.now} />);
@@ -266,14 +293,26 @@ describe('🔴 启动锁定后立即销毁 popup,lockUntil 必须已落盘(ADR-0
       after.lockUntil,
       '🔴 锁定写入在 popup 拆除时静默丢失 —— 用户以为锁上了,其实没有',
     ).toBe(T0 + 30 * MIN);
-    // ADR-057:同一次写入里主开关也必须已开,否则扩展被永久冻结在「关闭」。
-    expect(after.masterEnabled, 'ADR-057:主开关必须随锁定一并开启').toBe(true);
+    /*
+      🔴 **ADR-076:原断言是 ADR-057 的「主开关必须随锁定一并开启」,
+         已删除并替换为下面这条:主开关**未被连带改动**。**
+
+      方向反转、强度不减:ADR-057 要求锁定写入**顺手改**主开关,
+      ADR-076 要求它**别碰**主开关(该场景不可达,无需补救)。
+      一条「不该发生的写入没有发生」同样需要被钉住 —— 否则有人把
+      ADR-057 的那行代码加回来也不会有任何测试变红。
+    */
+    expect(
+      after.masterEnabled,
+      'ADR-076:锁定写入不得连带改动 masterEnabled',
+    ).toBe(true);
     expect(isLocked(after, T0)).toBe(true);
   });
 
   it('自定义时长(数字 + 单位下拉)启动后立即销毁,同样必须落盘', async () => {
     const clock = makeClock();
-    const area = new AsyncStorageArea(seeded({ masterEnabled: false }));
+    // ADR-076:主开关 OFF 时锁定入口禁用 → fixture 必须是可达的 ON 态。
+    const area = new AsyncStorageArea(seeded({ masterEnabled: true }));
     const repository = new SettingsRepository({ area, clock: clock.now });
 
     render(<PopupUnderTest repository={repository} clock={clock.now} />);
@@ -296,6 +335,7 @@ describe('🔴 启动锁定后立即销毁 popup,lockUntil 必须已落盘(ADR-0
 
     const after = persisted(area);
     expect(after.lockUntil).toBe(T0 + 3 * HOUR);
+    // ADR-076:主开关原样保留,锁定写入不碰它。
     expect(after.masterEnabled).toBe(true);
   });
 });
@@ -509,7 +549,8 @@ describe('锁定写入活过拆除后,既有保障不得退化', () => {
 
   it('文档存活时,启动锁定照常返回成功结果并回灌 UI(倒计时出现)', async () => {
     const clock = makeClock();
-    const area = new AsyncStorageArea(seeded({ masterEnabled: false }));
+    // ADR-076:主开关 OFF 时锁定入口禁用 → fixture 必须是可达的 ON 态。
+    const area = new AsyncStorageArea(seeded({ masterEnabled: true }));
     const repository = new SettingsRepository({ area, clock: clock.now });
     const timer = manualInterval();
 

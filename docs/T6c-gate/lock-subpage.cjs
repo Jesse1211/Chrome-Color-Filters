@@ -18,9 +18,29 @@
 //   1. 列表页真的折叠成一行,且**没有**内联时长选择器;
 //   2. 入口行是真 `<button>`,与「添加规则」同一视觉基类,可**键盘**触发;
 //   3. 点它进子页面;子页面有可用的返回键,返回回到列表;
-//   4. 从子页面启动锁定端到端成功,含 ADR-056 二次确认与 ADR-057 主开关自动 ON;
+//   4. 从子页面启动锁定端到端成功,含 ADR-056 二次确认;
 //   5. 锁定中列表页显示倒计时,点它直达延长控件,延长成功;
 //   6. 🔴 **缩短 / 取消 / 解除在整个 UI(两页都算)里不存在。**
+//
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ## 📍 ADR-076(本次):主开关 OFF ⇒ 两个入口禁用;ADR-057 连带废止
+//
+// 新增条款组 **C0**:主开关 OFF 时「+ 添加规则」与「🔒 时间锁定」**都禁用**、
+// 点了什么都不发生(不换视图、不落盘),主开关 ON 后**两个一起恢复**,
+// 外加一条**探针有效性**(注入一个仍然 enabled 的按钮,同一组读数必须报错)。
+//
+// 🔴 **原 C4c / C4g 两条 ADR-057 条款(「主开关 OFF 时确认框告知会一并开启
+//    滤镜」/「启动后主开关自动变 ON」)已被 ADR-076 废止,改为 C0 组里
+//    「主开关 OFF 时锁定入口禁用、根本启动不了」+ C4c' 「确认框里没有那段
+//    告知」+ C4g' 「启动锁定不连带改动 masterEnabled」。**
+//    不是删断言:那条路径的产品行为变了,断言随之反向,条款数净增。
+//
+// ## 📌 底栏钉底(产品负责人):主操作在最下沿
+//
+// 新增条款组 **C7**:子页面的主操作(未锁定「启动锁定」/ 锁定中「延长」)
+// 必须位于**钉底的底栏**里,且其底边贴着 popup 下沿 —— 用真实
+// `getBoundingClientRect` 对照,不是看截图猜。
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // ## 不伪造任何东西
 //
@@ -69,11 +89,46 @@ async function snap(popup) {
       entryText: q('lock-open')?.textContent ?? null,
       entryAria: q('lock-open')?.getAttribute('aria-label') ?? null,
       addRuleClass: q('add-rule')?.className ?? null,
+      // 🔴 ADR-076:两个入口的**真实** disabled 属性与原因说明。
+      entryDisabled: q('lock-open')?.disabled ?? null,
+      entryTitle: q('lock-open')?.getAttribute('title') ?? null,
+      addRuleDisabled: q('add-rule')?.disabled ?? null,
+      addRuleTitle: q('add-rule')?.getAttribute('title') ?? null,
+      masterDisabled: q('master-switch')?.disabled ?? null,
+      masterChecked: q('master-switch')?.getAttribute('aria-checked') ?? null,
+      // ADR-076:那条已删除的提示条不得复活。
+      hasMasterOffNotice: !!q('master-off-notice'),
+      masterOffNoticeText: body.includes('已全局关闭,所有规则暂不生效'),
+      hasPriorityHint: !!q('priority-hint'),
       buttons: [...document.querySelectorAll('button')]
         .map((b) => b.getAttribute('data-testid')),
       numberInputs: document.querySelectorAll('input[type="number"]').length,
       selects: document.querySelectorAll('select').length,
       ranges: document.querySelectorAll('input[type="range"]').length,
+      // 📌 底栏钉底:主操作是否住在底栏里 + 真实几何(不是看截图猜)。
+      foot: (() => {
+        const f = q('lock-view-foot');
+        if (!f) return null;
+        const popupEl = q('popup');
+        const fr = f.getBoundingClientRect();
+        const pr = popupEl.getBoundingClientRect();
+        const action = f.querySelector('button');
+        return {
+          tag: f.tagName,
+          parentIsPopup: f.parentElement === popupEl,
+          // 底栏底边与 popup 底边的距离 —— 钉底则应为 0(容许 1px 取整)。
+          gapToPopupBottom: Math.round(pr.bottom - fr.bottom),
+          height: Math.round(fr.height),
+          popupHeight: Math.round(pr.height),
+          actionTestId: action?.getAttribute('data-testid') ?? null,
+          actionCount: f.querySelectorAll('button').length,
+          inputCount: f.querySelectorAll('input, select').length,
+          // 主操作的宽度占比 —— 与「+ 添加规则」一样撑满一行。
+          actionWidthRatio: action
+            ? Math.round((action.getBoundingClientRect().width / fr.width) * 100)
+            : null,
+        };
+      })(),
       // 负向词表:可见文本 + 无障碍名两处都扫。
       forbiddenInText: forbidden.filter((k) => body.includes(k)),
       forbiddenInNames: forbidden.filter((k) => names.includes(k)),
@@ -120,7 +175,7 @@ async function persisted(browser) {
   try {
     const id = await L.extensionId(browser);
 
-    // ═══ 阶段 0:建一条规则,并把主开关关掉(为 ADR-057 铺路)═══════════
+    // ═══ 阶段 0:建一条规则,并把主开关关掉(为 ADR-076 的 C0 组铺路)═══
     popup = await L.openPopup(browser, id);
     await L.createRuleViaUI(popup, 'example.com', 100);
     const masterBefore = await popup.$eval('[data-testid="master-switch"]',
@@ -135,6 +190,113 @@ async function persisted(browser) {
     results.data.phase0 = st;
     assert('阶段 0:1 条规则、主开关 OFF、未锁定',
       st.rules === 1 && st.masterEnabled === false && st.lockUntil === null, st);
+
+    /* ════════════════ 🔴🔴 条款组 C0:ADR-076 ════════════════════════════
+     *
+     * > 主开关 OFF 时,「+ 添加规则」与「🔒 时间锁定」入口**一并禁用**;
+     * > 主开关自己**保持可用**(唯一的回头路)。
+     * > 连带:「已全局关闭,所有规则暂不生效」提示条**整条删除**。
+     *
+     * 这一组在**真实 Chrome**上验,因为「点了什么都不发生」只有在真浏览器
+     * 里才算数:jsdom 的 `fireEvent.click` 不模拟真实的「禁用按钮不派发
+     * 事件」语义,而 `page.click()` 走的是真实命中测试与事件派发。
+     * ════════════════════════════════════════════════════════════════════ */
+    const sOff = await snap(popup);
+    results.data.c0_master_off = sOff;
+    fs.writeFileSync(path.join(OUT, 'sub-00a-master-off.png'),
+      Buffer.from(await popup.screenshot()));
+
+    assert('🔴🔴 C0 ADR-076:主开关 OFF → 「+ 添加规则」与「🔒 时间锁定」**两个入口都真的 disabled**',
+      sOff.addRuleDisabled === true && sOff.entryDisabled === true,
+      { addRuleDisabled: sOff.addRuleDisabled, entryDisabled: sOff.entryDisabled });
+
+    assert('🔴 C0b ADR-076:主开关**自己仍可用**(否则关掉就再也打不开了)',
+      sOff.masterDisabled === false && sOff.masterChecked === 'false',
+      { masterDisabled: sOff.masterDisabled, masterChecked: sOff.masterChecked });
+
+    assert('🔴 C0c ADR-076:两个入口都说得出**为什么**被禁用,且用的是同一句话',
+      typeof sOff.addRuleTitle === 'string' && sOff.addRuleTitle.length > 0
+      && sOff.addRuleTitle === sOff.entryTitle
+      && sOff.addRuleTitle.includes('请先开启主开关'),
+      { addRuleTitle: sOff.addRuleTitle, entryTitle: sOff.entryTitle });
+
+    assert('🔴🔴 C0d ADR-076:「已全局关闭,所有规则暂不生效」提示条**已整条删除**',
+      sOff.hasMasterOffNotice === false && sOff.masterOffNoticeText === false
+      // 删掉的是那一条,ADR-031 的常驻优先级提示条照常在场。
+      && sOff.hasPriorityHint === true,
+      { hasMasterOffNotice: sOff.hasMasterOffNotice,
+        textPresent: sOff.masterOffNoticeText,
+        hasPriorityHint: sOff.hasPriorityHint });
+
+    /*
+     * 🔴🔴 C0e —— 本次改动最核心的一条:**点下去什么都不发生。**
+     *   「视图不变」+「磁盘一个字节都没动」两项同时成立才算通过。
+     *   用真实 `page.click()`(不是 `dispatchEvent`),禁用的按钮
+     *   在真实 Chrome 里压根收不到这个事件。
+     */
+    const beforeClicks = await persisted(browser);
+    for (const id of ['add-rule', 'lock-open']) {
+      await popup.click(`[data-testid="${id}"]`).catch(() => { /* 禁用 → 点不中是预期 */ });
+    }
+    await new Promise((r) => setTimeout(r, 600));
+    const afterClicks = await persisted(browser);
+    const sAfterClicks = await snap(popup);
+    results.data.c0_clicks = { beforeClicks, afterClicks, view: sAfterClicks.view };
+    assert('🔴🔴 C0e ADR-076:点这两个禁用入口 → **视图不变 + 磁盘零写入**',
+      sAfterClicks.view === 'list'
+      && !sAfterClicks.ids.includes('lock-start')
+      && !sAfterClicks.ids.includes('pattern-input')
+      && JSON.stringify(beforeClicks) === JSON.stringify(afterClicks),
+      { view: sAfterClicks.view, beforeClicks, afterClicks });
+
+    /*
+     * 🔴 C0f 探针有效性 —— 上面那组「都 disabled」必须真的能被一个
+     *   **仍然 enabled** 的按钮证伪。做法:临时把 `lock-open` 的 disabled
+     *   去掉,同一组读数必须当场翻过来。
+     *
+     *   没有这一条,C0 可能只是因为 `snap()` 读错了属性名而恒为 true
+     *   (例如 `el.disabled` 在某个元素上是 undefined → `=== true` 恒假,
+     *   那会让断言恒**假**;反过来若写成 `!== false` 就会恒真)。
+     */
+    await popup.evaluate(() => {
+      document.querySelector('[data-testid="lock-open"]').disabled = false;
+    });
+    const sProbeEnabled = await snap(popup);
+    await popup.evaluate(() => {
+      document.querySelector('[data-testid="lock-open"]').disabled = true;
+    });
+    results.data.c0_probe = {
+      entryDisabled: sProbeEnabled.entryDisabled,
+      addRuleDisabled: sProbeEnabled.addRuleDisabled,
+    };
+    assert('🔴 C0f 探针有效性:把「时间锁定」的 disabled 去掉后,同一组读数**当场翻转**',
+      sProbeEnabled.entryDisabled === false
+      // 对照:没被动过的那个仍然是 true —— 证明读的是各自的真实属性。
+      && sProbeEnabled.addRuleDisabled === true,
+      results.data.c0_probe);
+
+    /*
+     * 🔴 C0g —— 开回主开关,**两个入口一起恢复**。
+     *   禁用必须是可逆的:ADR-076 的出路就是「要用先开主开关」。
+     */
+    await L.clickTestId(popup, 'master-switch');
+    await popup.waitForFunction(() => {
+      const el = document.querySelector('[data-testid="master-switch"]');
+      return (el.getAttribute('aria-checked') ?? String(el.checked)) === 'true';
+    }, { timeout: 20000 });
+    const sOn = await snap(popup);
+    results.data.c0_master_on = sOn;
+    fs.writeFileSync(path.join(OUT, 'sub-00b-master-on.png'),
+      Buffer.from(await popup.screenshot()));
+    assert('🔴🔴 C0g ADR-076:主开关 ON → 「添加规则」与「时间锁定」**两个一起恢复可用**,且不再挂原因',
+      sOn.addRuleDisabled === false && sOn.entryDisabled === false
+      && sOn.addRuleTitle === null && sOn.entryTitle === null,
+      { addRuleDisabled: sOn.addRuleDisabled, entryDisabled: sOn.entryDisabled,
+        addRuleTitle: sOn.addRuleTitle, entryTitle: sOn.entryTitle });
+
+    st = await persisted(browser);
+    assert('C0h 复位后状态:主开关 ON、1 条规则、仍未锁定(后续条款的前置)',
+      st.masterEnabled === true && st.rules === 1 && st.lockUntil === null, st);
 
     // ═══ 条款 1:列表页真的折叠成一行 ═══════════════════════════════════
     let s1 = await snap(popup);
@@ -254,7 +416,7 @@ async function persisted(browser) {
       && JSON.stringify(beforeBack) === JSON.stringify(afterBack),
       { view: s3b.view, beforeBack, afterBack });
 
-    // ═══ 条款 4:从子页面启动锁定(ADR-056 确认框 + ADR-057 主开关自动 ON)═══
+    // ═══ 条款 4:从子页面启动锁定(ADR-056 确认框)═══════════════════════
     await gotoLockView(popup);
     await popup.evaluate(() => {
       const el = document.querySelector('[data-testid="lock-start-amount"]');
@@ -295,10 +457,20 @@ async function persisted(browser) {
         === JSON.stringify(['无法修改任何设置', '无法关闭滤镜', '无法提前结束(只能延长)']),
       dialog.consequences);
 
-    assert('🔴 C4c ADR-057:主开关 OFF 时确认框告知「启动锁定将同时开启滤镜」',
-      dialog.willEnableMaster === true
-      && dialog.text.includes('滤镜当前已关闭,启动锁定将同时开启滤镜'),
-      { willEnableMaster: dialog.willEnableMaster });
+    /*
+     * 🔴🔴 **原 C4c:「ADR-057:主开关 OFF 时确认框告知『启动锁定将同时开启
+     *    滤镜』」。ADR-057 已由 ADR-076 废止,该告知**整条删除**,故本条款
+     *    **反向重写**:确认框里不得出现那段文案。**
+     *
+     *    为什么不是直接删掉这条:删掉之后,有人把 `LOCK_WILL_ENABLE_MASTER`
+     *    和那个 `willEnableMaster` prop 加回来也不会有任何门禁变红 ——
+     *    而 ADR-076 的「连带删除」明确要求它不复存在。断言方向反转,强度不减。
+     */
+    assert("🔴🔴 C4c' ADR-076:确认框里**没有**「将同时开启滤镜」那段告知(ADR-057 已废止)",
+      dialog.willEnableMaster === false
+      && !dialog.text.includes('滤镜当前已关闭,启动锁定将同时开启滤镜')
+      && !dialog.text.includes('同时开启滤镜'),
+      { willEnableMaster: dialog.willEnableMaster, text: dialog.text });
 
     assert('C4d 不可逆操作:确认框初始焦点落在「取消」而非「确认锁定」',
       dialog.focusedTestId === 'lock-confirm-cancel',
@@ -313,11 +485,15 @@ async function persisted(browser) {
     const sCancel = await snap(popup);
     results.data.c4_cancel = { afterCancel, view: sCancel.view };
     assert('🔴 C4e ADR-056:「取消」关框、**零写入**、仍留在子页面(可改时长再试)',
-      afterCancel.lockUntil === null && afterCancel.masterEnabled === false
+      afterCancel.lockUntil === null
+      /* 主开关在 C0g 已开回 ON(ADR-076:OFF 时根本进不来这一页)。
+         这里断言它**没被取消动作改动**,方向与原条款一致:零写入。 */
+      && afterCancel.masterEnabled === true
       && sCancel.view === 'lock' && sCancel.ids.includes('lock-start'),
       { afterCancel, view: sCancel.view });
 
-    // 真确认一次。
+    // 真确认一次。先记下主开关此刻的值 —— C4g' 要对照它没被改动。
+    const masterBeforeStart = (await persisted(browser)).masterEnabled;
     await L.clickTestId(popup, 'lock-start');
     await L.waitTestId(popup, 'lock-confirm-backdrop');
     await L.clickTestId(popup, 'lock-confirm-ok');
@@ -328,8 +504,19 @@ async function persisted(browser) {
     assert('🔴🔴 C4f 从子页面启动锁定端到端成功:磁盘上 lockUntil 为未来时间戳(ADR-053)',
       typeof st.lockUntil === 'number'
       && st.lockUntil - Date.now() > 0 && st.lockUntil - Date.now() <= 121_000, st);
-    assert('🔴🔴 C4g ADR-057:主开关 OFF 状态下启动锁定 → 主开关**自动变 ON**',
-      st.masterEnabled === true, { masterEnabled: st.masterEnabled });
+    /*
+     * 🔴🔴 **原 C4g:「ADR-057:主开关 OFF 状态下启动锁定 → 主开关自动变 ON」。**
+     *
+     *    该路径在 ADR-076 之后**不可达**(C0 组刚刚端到端证明了:主开关 OFF
+     *    时锁定入口禁用、点了什么都不发生),而仓储层的那个副作用写入也已删除。
+     *
+     *    本条款**反向重写**为:启动锁定**不连带改动** `masterEnabled`。
+     *    这守的正是原条款的反面 —— 有人把 ADR-057 那行代码加回来就会红。
+     */
+    assert("🔴🔴 C4g' ADR-076:启动锁定**不连带改动** masterEnabled(ADR-057 的副作用已删除)",
+      st.masterEnabled === true
+      && masterBeforeStart === st.masterEnabled,
+      { masterBeforeStart, masterAfterStart: st.masterEnabled });
 
     // ═══ 条款 5:锁定中 —— 列表页显示倒计时,点它直达延长 ═══════════════
     let sLocked = await snap(popup);
@@ -450,6 +637,83 @@ async function persisted(browser) {
       sPoisoned.forbiddenInText.includes('解除')
       && sPoisoned.forbiddenInNames.includes('解除'),
       results.data.c6_probe);
+
+    /* ════════════════ 📌 条款组 C7:底栏钉底(产品负责人)══════════════════
+     *
+     * > 「点击『时间锁定』进入页面后,『启动锁定』要和『添加规则』一样的页面
+     * > 设计,『save』按钮放在最下面」
+     *
+     * 🔴 用**真实几何**判定,不是看截图猜:底栏的底边必须贴着 popup 的底边
+     *    (`gapToPopupBottom === 0`),且主操作必须住在底栏里。
+     *    原先「启动锁定」紧跟时长选择器,浮在 452px 的中间 —— 那种布局下
+     *    这条断言会报出一个很大的 gap。
+     * ════════════════════════════════════════════════════════════════════ */
+
+    // ── C7a 锁定中(此刻就在锁定态的子页面上,sSubLocked 已是它的快照)──
+    results.data.c7_foot_locked = sSubLocked.foot;
+    assert('📌 C7a 锁定中子页面:「延长」住在**钉底的底栏**里,底边贴着 popup 下沿',
+      sSubLocked.foot !== null
+      && sSubLocked.foot.tag === 'FOOTER'
+      && sSubLocked.foot.parentIsPopup === true
+      && sSubLocked.foot.actionTestId === 'lock-extend'
+      && sSubLocked.foot.gapToPopupBottom === 0,
+      sSubLocked.foot);
+    assert('📌 C7b 🔴 锁定中底栏里**只有「延长」一个按钮**、零输入控件(ADR-052/INV-12)',
+      sSubLocked.foot.actionCount === 1 && sSubLocked.foot.inputCount === 0,
+      { actionCount: sSubLocked.foot.actionCount, inputCount: sSubLocked.foot.inputCount });
+
+    // ── C7c 未锁定:到期不等(本门禁不等自然到期),改用一个干净的
+    //        未锁定 profile 读同一组几何 —— 直接清掉锁再开一次 popup。
+    //        🔴 这是**门禁 fixture 的复位**,非产品路径(产品里无解除入口)。
+    await (await L.getWorker(browser)).evaluate(async () => {
+      await chrome.storage.local.set({ filterSettings: {
+        version: 1, masterEnabled: true,
+        rules: [{ pattern: 'example.com', mode: 'Grayscale', intensity: 100 }],
+        lockUntil: null } });
+    });
+    await L.closePopup(popup);
+    popup = await L.openPopup(browser, id);
+    await L.waitTestId(popup, 'lock-entry');
+    await gotoLockView(popup);
+    const sUnlockedFoot = await snap(popup);
+    results.data.c7_foot_unlocked = sUnlockedFoot.foot;
+    fs.writeFileSync(path.join(OUT, 'sub-07-footer-unlocked.png'),
+      Buffer.from(await popup.screenshot()));
+    assert('📌 C7c 未锁定子页面:「启动锁定」住在**钉底的底栏**里,底边贴着 popup 下沿',
+      sUnlockedFoot.foot !== null
+      && sUnlockedFoot.foot.tag === 'FOOTER'
+      && sUnlockedFoot.foot.parentIsPopup === true
+      && sUnlockedFoot.foot.actionTestId === 'lock-start'
+      && sUnlockedFoot.foot.gapToPopupBottom === 0,
+      sUnlockedFoot.foot);
+    assert('📌 C7d 未锁定底栏里只有主操作:预设 / 数字 / 下拉全留在可滚动主体里',
+      sUnlockedFoot.foot.actionCount === 1 && sUnlockedFoot.foot.inputCount === 0
+      /* 时长控件确实还在页面上,只是不在底栏 —— 否则这条会退化成
+         「底栏空着也算通过」。 */
+      && sUnlockedFoot.numberInputs === 1 && sUnlockedFoot.selects === 1,
+      { foot: sUnlockedFoot.foot, numberInputs: sUnlockedFoot.numberInputs,
+        selects: sUnlockedFoot.selects });
+    assert('📌 C7e 主操作撑满底栏一行(与「+ 添加规则」同一语气,≥90% 宽)',
+      sUnlockedFoot.foot.actionWidthRatio >= 90,
+      { actionWidthRatio: sUnlockedFoot.foot.actionWidthRatio });
+
+    /*
+     * 🔴 C7f 探针有效性 —— 「底边贴着 popup 下沿」必须真的能被一个
+     *    **浮在中间**的底栏证伪。做法:临时给底栏加一个大的
+     *    `margin-bottom`,同一组读数必须当场报出非零 gap。
+     *    这正是改动前那种「浮在中间」的形态。
+     */
+    await popup.evaluate(() => {
+      document.querySelector('[data-testid="lock-view-foot"]').style.marginBottom = '120px';
+    });
+    const sFootProbe = await snap(popup);
+    await popup.evaluate(() => {
+      document.querySelector('[data-testid="lock-view-foot"]').style.marginBottom = '';
+    });
+    results.data.c7_probe = { gapToPopupBottom: sFootProbe.foot.gapToPopupBottom };
+    assert('📌 C7f 探针有效性:把底栏推离下沿 120px 后,同一组几何**当场报出非零 gap**',
+      sFootProbe.foot.gapToPopupBottom >= 100,
+      results.data.c7_probe);
 
     fs.writeFileSync(path.join(OUT, 'sub-06-final.png'),
       Buffer.from(await popup.screenshot()));

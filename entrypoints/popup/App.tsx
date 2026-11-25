@@ -16,8 +16,17 @@
  * - 子页面 `LockView` → 时长选择 + 启动(未锁定)/ **延长**(锁定中)+ 确认框
  *
  * 🔴 **只改控件住在哪一页,不改任何一条语义**:ADR-056 的二次确认、
- *    ADR-057 的原子开启主开关、ADR-052 的只增不减、ADR-058 的数字+单位、
- *    ADR-051 的锁定期全禁用,全部随控件原样搬家。
+ *    ADR-052 的只增不减、ADR-058 的数字+单位、ADR-051 的锁定期全禁用,
+ *    全部随控件原样搬家。
+ *
+ * ## 📍 ADR-076:主开关 OFF 时「添加规则」与「时间锁定」一并禁用
+ *
+ * 两个入口的禁用判据都由 `RuleListView` 算出(它同时握着 `settings`
+ * 与 `tabState`),本文件只负责把结论接到 `LockEntryRow` 上 ——
+ * 见下方 `lockEntry` 插槽。**本文件不复算任何禁用条件。**
+ *
+ * 连带:ADR-057(启动锁定时原子开启主开关)已废止,因为
+ * 「主开关 OFF 时启动锁定」在 UI 上不再可达。
  *
  * ## ADR-022:三视图**互斥**
  *
@@ -116,8 +125,9 @@ type View =
   /**
    * 锁定子页面 —— 时长设置 / 启动(未锁定)或延长(锁定中)。
    *
-   * **没有任何负载**:本页不需要知道任何规则的身份,它只读
-   * `settings.masterEnabled`(ADR-057 的告知)与 `lockUntil`。
+   * **没有任何负载**:本页不需要知道任何规则的身份。
+   * ADR-076 之后它连 `settings` 都不读了(原先只为 ADR-057 的告知
+   * 读一个 `masterEnabled`),只需要 `lockUntil` 与时钟。
    */
   | { readonly kind: 'lock' };
 
@@ -218,7 +228,11 @@ function App() {
   if (view.kind === 'lock') {
     return (
       <LockView
-        settings={settings}
+        /*
+          📌 ADR-076:**不再传 `settings`** —— 原先只为 ADR-057 的
+             「将同时开启滤镜」告知读一个 `masterEnabled`,该告知已删除。
+             少传一个 prop 让 I2 更硬:本页连规则数据都拿不到。
+        */
         locked={locked}
         lockUntil={lockUntil}
         now={now}
@@ -296,9 +310,28 @@ function App() {
         时长选择 + 启动 + 二次确认全在子页面(ADR-056 / ADR-058)。
       */
       lockEntry={
-        !locked ? (
-          <LockEntryRow onOpen={openLockView} disabled={!loaded} />
-        ) : undefined
+        !locked
+          ? /*
+               🔴 **ADR-076:禁用状态由 `RuleListView` 算好传进来,这里不复算。**
+
+               主开关 OFF 时锁定入口一并禁用 —— 但判据(`masterOff` 与
+               「锁定是全局的,故 `notInjectable` **不算**理由」)住在
+               `RuleListView` 里,因为只有那里同时握着 `settings` 与
+               `tabState`。本文件若自己写一遍 `!settings.masterEnabled`,
+               同一条 ADR-076 就有了两份实现,而门禁只盯着其中一份。
+
+               `disabled` 里也仍然含骨架态(ADR-044)—— 原先那个
+               `disabled={!loaded}` 并没有被放宽,只是改由
+               `lockEntryDisabled` 的 `isSkeleton` 分量表达。
+            */
+            ({ disabled, reason }) => (
+              <LockEntryRow
+                onOpen={openLockView}
+                disabled={disabled}
+                disabledReason={reason}
+              />
+            )
+          : undefined
       }
     />
   );

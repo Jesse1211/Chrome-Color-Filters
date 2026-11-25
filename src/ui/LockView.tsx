@@ -3,10 +3,19 @@
  *
  * ```
  * ┌──────────────────────────────────┐
- * │ ‹ 返回        专注锁定            │  未锁定 → LockTimerEntry
- * │ ‹ 返回        延长锁定            │  锁定中 → LockExtendPanel
+ * │ ‹ 返回        专注锁定            │  顶栏(本组件)
+ * ├──────────────────────────────────┤
+ * │  未锁定 → LockTimerEntry          │  可滚动主体
+ * │  锁定中 → LockExtendPanel         │  (两者互斥)
+ * ├──────────────────────────────────┤
+ * │ [  启动锁定  ] / [    延长    ]   │  📌 钉底的底栏
  * └──────────────────────────────────┘
  * ```
+ *
+ * 📌 **底栏钉底**(产品负责人:「『save』按钮放在最下面」)——
+ * 两个分支都把主操作放进 `.lock-view__foot`,与列表页的
+ * `.popup__foot`(「+ 添加规则」)、编辑页的 `.edit__foot`(「保存」)
+ * 同一惯用法。本组件的根 `.popup` 是那个 flex 容器。
  *
  * 由列表视图的两个入口之一到达:
  * - 未锁定 → `LockEntryRow`(「🔒 时间锁定 ›」)
@@ -55,7 +64,6 @@
  * 返回列表后锁仍在、控件仍禁用。本页因此**没有任何** ADR-052 的后门。
  */
 
-import { type FilterSettings } from '../domain/filter-settings.js';
 import { LockExtendPanel } from './LockExtendPanel.js';
 import { LockTimerEntry } from './LockTimerEntry.js';
 import { type ActionResult } from './RuleListView.js';
@@ -64,14 +72,19 @@ import { LOCK_VIEW_TITLE, LOCK_VIEW_TITLE_LOCKED } from './lock-strings.js';
 import { BACK_LABEL } from './edit-strings.js';
 
 export interface LockViewProps {
-  /**
-   * 🔴 ADR-057:只用到 `masterEnabled` 一个字段(确认框据它决定是否追加
-   * 「将同时开启滤镜」的告知)。刻意传整个 settings 而不是只传那个布尔值,
-   * 是为了与 `RuleListView` / `RuleEditView` 的 props 形状一致。
-   *
-   * ⚠️ 本视图**不渲染任何规则**,更不编辑它们 —— 见文件头 I2 的第 1 条。
-   */
-  readonly settings: FilterSettings;
+  /*
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    🔴 **ADR-076:原先这里有 `settings: FilterSettings`,已整条删除。**
+
+    它存在的唯一理由是 ADR-057 —— 确认框要据 `settings.masterEnabled`
+    决定是否追加「将同时开启滤镜」的告知。ADR-057 已废止,那是本视图
+    读过 `settings` 的**唯一**一个字段,于是整个 prop 没有了读者。
+
+    删掉它是**收紧**,不是顺手清理:本视图现在连规则数据都拿不到,
+    「在锁定页顺手改个强度并预览一下」连数据源都没有了 ——
+    文件头 I2 的第 1 条(props 里没有任何规则编辑能力)因此更硬。
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  */
   /** 锁定中?决定渲染「启动」还是「延长」—— 两者互斥。 */
   readonly locked: boolean;
   /** 锁定中的绝对到期时间戳;未锁定时为 `null`(ADR-053)。 */
@@ -89,7 +102,6 @@ export interface LockViewProps {
 }
 
 export function LockView({
-  settings,
   locked,
   lockUntil,
   now,
@@ -125,27 +137,28 @@ export function LockView({
         </span>
       </header>
 
-      <div className="lock-view__body">
-        {/*
-          🔴 互斥的两个分支 —— 锁定中绝不渲染启动区,未锁定绝不渲染延长区。
-          三元表达式而非两个独立的 `&&`:后者允许「两个都渲染」这种状态存在,
-          前者在类型层面就只能二选一(与 App 的 View 判别联合同一思路)。
-        */}
-        {locked && lockUntil !== null ? (
-          <LockExtendPanel
-            lockUntil={lockUntil}
-            now={now}
-            onExtend={onExtendLock}
-          />
-        ) : (
-          <LockTimerEntry
-            /* ADR-057:关闭状态下启动锁定会原子地一并开启主开关。 */
-            masterEnabled={settings.masterEnabled}
-            onStartLock={onStartLock}
-            disabled={disabled}
-          />
-        )}
-      </div>
+      {/*
+        ── 📌 主体 + 底栏(产品负责人决定的底栏钉底)──
+
+        两个分支**各自**返回「可滚动的 `.lock-view__body` + 钉底的
+        `.lock-view__foot`」两个兄弟节点,它们是本根 `.popup`
+        (`display:flex; flex-direction:column`)的直接子元素 ——
+        与列表页的 `.rule-list` + `.popup__foot`、
+        编辑页的 `.edit__body` + `.edit__foot` 完全同构。
+
+        ⚠️ 这里**刻意不再包一层** `<div className="lock-view__body">`:
+           包了的话底栏就成了那个 div 的子节点,只能钉在 div 的底部而不是
+           popup 的底部,中间仍会留下死空间 —— 那正是本次要修的问题。
+
+        🔴 互斥的两个分支 —— 锁定中绝不渲染启动区,未锁定绝不渲染延长区。
+        三元表达式而非两个独立的 `&&`:后者允许「两个都渲染」这种状态存在,
+        前者在类型层面就只能二选一(与 App 的 View 判别联合同一思路)。
+      */}
+      {locked && lockUntil !== null ? (
+        <LockExtendPanel lockUntil={lockUntil} now={now} onExtend={onExtendLock} />
+      ) : (
+        <LockTimerEntry onStartLock={onStartLock} disabled={disabled} />
+      )}
 
       {/*
         📌 这里**没有** previewChannel、没有规则列表、没有任何规则编辑控件 ——

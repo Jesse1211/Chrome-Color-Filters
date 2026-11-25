@@ -1,5 +1,5 @@
 {
-  "clause": "T7【新增】锁定端到端(INV-11/12/13/14 + ADR-053/057)",
+  "clause": "T7【新增】锁定端到端(INV-11/12/13/14 + ADR-053 + ADR-076)",
   "assertions": [
     {
       "name": "阶段 0:主开关已由 UI 关闭,且存在 1 条规则,未锁定",
@@ -10,7 +10,7 @@
         "rules": [
           "example.com@100"
         ],
-        "now": 1795579233700,
+        "now": 1795581595883,
         "remainingMs": null,
         "keys": [
           "lockUntil",
@@ -88,7 +88,7 @@
               "intensity": 50
             }
           ],
-          "lockUntil": 1795582833745
+          "lockUntil": 1795585195933
         }
       }
     },
@@ -101,7 +101,125 @@
         "rules": [
           "example.com@100"
         ],
-        "now": 1795579233776,
+        "now": 1795581595944,
+        "remainingMs": null,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      }
+    },
+    {
+      "name": "🔴🔴 ADR-076:主开关 OFF → 「+ 添加规则」与「🔒 时间锁定」**两个入口都禁用**",
+      "ok": true,
+      "detail": {
+        "addRuleDisabled": true,
+        "addRuleTitle": "已全局关闭,请先开启主开关",
+        "lockOpenDisabled": true,
+        "lockOpenTitle": "已全局关闭,请先开启主开关",
+        "masterDisabled": false,
+        "masterChecked": "false",
+        "hasMasterOffNotice": false,
+        "masterOffText": false
+      }
+    },
+    {
+      "name": "🔴 ADR-076:主开关**自己仍可用**(唯一的回头路),且两个入口都说得出原因",
+      "ok": true,
+      "detail": {
+        "addRuleDisabled": true,
+        "addRuleTitle": "已全局关闭,请先开启主开关",
+        "lockOpenDisabled": true,
+        "lockOpenTitle": "已全局关闭,请先开启主开关",
+        "masterDisabled": false,
+        "masterChecked": "false",
+        "hasMasterOffNotice": false,
+        "masterOffText": false
+      }
+    },
+    {
+      "name": "🔴🔴 ADR-076 连带:「已全局关闭,所有规则暂不生效」提示条**已整条删除**",
+      "ok": true,
+      "detail": {
+        "addRuleDisabled": true,
+        "addRuleTitle": "已全局关闭,请先开启主开关",
+        "lockOpenDisabled": true,
+        "lockOpenTitle": "已全局关闭,请先开启主开关",
+        "masterDisabled": false,
+        "masterChecked": "false",
+        "hasMasterOffNotice": false,
+        "masterOffText": false
+      }
+    },
+    {
+      "name": "🔴🔴 ADR-076:点这两个禁用入口 → **视图不变 + 磁盘零写入**(锁定路径确实不可达)",
+      "ok": true,
+      "detail": {
+        "offAfter": {
+          "view": "list",
+          "hasStart": false,
+          "hasPattern": false
+        },
+        "beforeOffClicks": {
+          "lockUntil": null,
+          "masterEnabled": false,
+          "rules": [
+            "example.com@100"
+          ],
+          "now": 1795581596390,
+          "remainingMs": null,
+          "keys": [
+            "lockUntil",
+            "masterEnabled",
+            "rules",
+            "version"
+          ]
+        },
+        "afterOffClicks": {
+          "lockUntil": null,
+          "masterEnabled": false,
+          "rules": [
+            "example.com@100"
+          ],
+          "now": 1795581597018,
+          "remainingMs": null,
+          "keys": [
+            "lockUntil",
+            "masterEnabled",
+            "rules",
+            "version"
+          ]
+        }
+      }
+    },
+    {
+      "name": "🔴 ADR-076 探针有效性:把「时间锁定」的 disabled 去掉 → 同一组读数**当场翻转**",
+      "ok": true,
+      "detail": {
+        "lockOpenDisabled": false,
+        "addRuleDisabled": true
+      }
+    },
+    {
+      "name": "🔴🔴 ADR-076:主开关 ON → 两个入口**一起恢复可用**(禁用是可逆的)",
+      "ok": true,
+      "detail": {
+        "addRuleDisabled": false,
+        "lockOpenDisabled": false
+      }
+    },
+    {
+      "name": "阶段 0b 收尾:主开关 ON、1 条规则、仍未锁定(后续阶段的前置)",
+      "ok": true,
+      "detail": {
+        "lockUntil": null,
+        "masterEnabled": true,
+        "rules": [
+          "example.com@100"
+        ],
+        "now": 1795581597065,
         "remainingMs": null,
         "keys": [
           "lockUntil",
@@ -165,23 +283,33 @@
       }
     },
     {
-      "name": "🔴 ADR-057:主开关 OFF 时确认框告知「启动锁定会一并开启滤镜」",
+      "name": "🔴🔴 ADR-076:确认框里**没有**「将同时开启滤镜」那段告知(ADR-057 已废止)",
       "ok": true,
       "detail": {
-        "present": true
+        "present": false,
+        "confirmBody": "确认启动锁定?将锁定 1 分钟无法修改任何设置无法关闭滤镜无法提前结束(只能延长)取消确认锁定"
       }
+    },
+    {
+      "name": "对照 / ADR-056:三条后果照旧逐条在场(删除是精准的,没有误伤确认框)",
+      "ok": true,
+      "detail": [
+        "无法修改任何设置",
+        "无法关闭滤镜",
+        "无法提前结束(只能延长)"
+      ]
     },
     {
       "name": "🔴 阶段 1:UI 启动锁定后磁盘上 lockUntil 为未来时间戳(ADR-053 绝对时间)",
       "ok": true,
       "detail": {
-        "lockUntil": 1795579294320,
+        "lockUntil": 1795581657231,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795579234382,
-        "remainingMs": 59938,
+        "now": 1795581597294,
+        "remainingMs": 59937,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -191,10 +319,11 @@
       }
     },
     {
-      "name": "🔴🔴 ADR-057:主开关 OFF 状态下启动锁定 → 主开关**自动变 ON**",
+      "name": "🔴🔴 ADR-076:启动锁定**不连带改动** masterEnabled(ADR-057 的副作用已删除)",
       "ok": true,
       "detail": {
-        "masterEnabled": true
+        "masterBeforeStart": true,
+        "masterAfterStart": true
       }
     },
     {
@@ -210,6 +339,7 @@
           "lock-extend-duration",
           "lock-extend-amount",
           "lock-extend-unit",
+          "lock-view-foot",
           "lock-extend"
         ],
         "view": "lock",
@@ -233,8 +363,8 @@
       "name": "📍 列表页倒计时条与子页面回显同源(同一个 lockUntil)",
       "ok": true,
       "detail": {
-        "listLockUntilAttr": "1795579294320",
-        "subPageLockUntilAttr": "1795579294320"
+        "listLockUntilAttr": "1795581657231",
+        "subPageLockUntilAttr": "1795581657231"
       }
     },
     {
@@ -457,14 +587,14 @@
           "r": [
             "example.com@100"
           ],
-          "l": 1795579294320
+          "l": 1795581657231
         },
         "after": {
           "m": true,
           "r": [
             "example.com@100"
           ],
-          "l": 1795579294320
+          "l": 1795581657231
         }
       }
     },
@@ -479,8 +609,8 @@
       "name": "🔴 N2 / INV-12:锁定中**延长**成功(UI 路径),lockUntil 严格变大",
       "ok": true,
       "detail": {
-        "beforeExtend": 1795579294320,
-        "afterLockUntil": 1795579354320,
+        "beforeExtend": 1795581657231,
+        "afterLockUntil": 1795581717231,
         "deltaMs": 60000
       }
     },
@@ -500,18 +630,18 @@
       "name": "🔴 INV-13:完全退出并重启浏览器后,锁定仍然有效(lockUntil 原值不变)",
       "ok": true,
       "detail": {
-        "preLockUntil": 1795579354320,
-        "postLockUntil": 1795579354320,
-        "postRemainingMs": 115588
+        "preLockUntil": 1795581717231,
+        "postLockUntil": 1795581717231,
+        "postRemainingMs": 115549
       }
     },
     {
       "name": "🔴 N4 / ADR-053:重启后剩余时间**小于**重启前(存的是绝对时间,不是时长)",
       "ok": true,
       "detail": {
-        "pre": 118858,
-        "post": 115588,
-        "elapsedMs": 3270
+        "pre": 118834,
+        "post": 115549,
+        "elapsedMs": 3285
       }
     },
     {
@@ -529,7 +659,7 @@
       "detail": {
         "postCountdown": "🔒 锁定中 00:01:55",
         "shownMs": 115000,
-        "diskRemainingMs": 115588
+        "diskRemainingMs": 115549
       }
     },
     {
@@ -548,13 +678,13 @@
       "name": "锁定已自然到期(remainingMs <= 0)",
       "ok": true,
       "detail": {
-        "lockUntil": 1795579354320,
+        "lockUntil": 1795581717231,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795579358401,
-        "remainingMs": -4081,
+        "now": 1795581721302,
+        "remainingMs": -4071,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -583,7 +713,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795579354320
+          "lockUntil": 1795581717231
         }
       }
     },
@@ -607,7 +737,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795579354320
+          "lockUntil": 1795581717231
         }
       }
     },
@@ -626,7 +756,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795579354320
+          "lockUntil": 1795581717231
         }
       }
     },
@@ -645,7 +775,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795579354320
+          "lockUntil": 1795581717231
         }
       }
     },
@@ -694,7 +824,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795579419680
+          "lockUntil": 1795581782612
         }
       }
     },
@@ -759,7 +889,7 @@
       "rules": [
         "example.com@100"
       ],
-      "now": 1795579233700,
+      "now": 1795581595883,
       "remainingMs": null,
       "keys": [
         "lockUntil",
@@ -826,7 +956,7 @@
               "intensity": 50
             }
           ],
-          "lockUntil": 1795582833745
+          "lockUntil": 1795585195933
         }
       },
       "n1d": {
@@ -837,6 +967,61 @@
           "message": "锁定期间不可清除锁定。锁定一旦生效没有任何途径提前结束(ADR-052/INV-12)。"
         }
       }
+    },
+    "adr076_off": {
+      "addRuleDisabled": true,
+      "addRuleTitle": "已全局关闭,请先开启主开关",
+      "lockOpenDisabled": true,
+      "lockOpenTitle": "已全局关闭,请先开启主开关",
+      "masterDisabled": false,
+      "masterChecked": "false",
+      "hasMasterOffNotice": false,
+      "masterOffText": false
+    },
+    "adr076_clicks": {
+      "beforeOffClicks": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": [
+          "example.com@100"
+        ],
+        "now": 1795581596390,
+        "remainingMs": null,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "afterOffClicks": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": [
+          "example.com@100"
+        ],
+        "now": 1795581597018,
+        "remainingMs": null,
+        "keys": [
+          "lockUntil",
+          "masterEnabled",
+          "rules",
+          "version"
+        ]
+      },
+      "offAfter": {
+        "view": "list",
+        "hasStart": false,
+        "hasPattern": false
+      }
+    },
+    "adr076_probe": {
+      "lockOpenDisabled": false,
+      "addRuleDisabled": true
+    },
+    "adr076_on": {
+      "addRuleDisabled": false,
+      "lockOpenDisabled": false
     },
     "listCollapsed": {
       "hasEntryRow": true,
@@ -860,13 +1045,13 @@
       "ranges": 0
     },
     "phase1": {
-      "lockUntil": 1795579294320,
+      "lockUntil": 1795581657231,
       "masterEnabled": true,
       "rules": [
         "example.com@100"
       ],
-      "now": 1795579234382,
-      "remainingMs": 59938,
+      "now": 1795581597294,
+      "remainingMs": 59937,
       "keys": [
         "lockUntil",
         "masterEnabled",
@@ -875,7 +1060,7 @@
       ],
       "countdown0": "🔒 锁定中 00:01:00",
       "confirmText": "将锁定 1 分钟",
-      "lockUntilAttr": "1795579294320"
+      "lockUntilAttr": "1795581657231"
     },
     "lockedSubUi": {
       "ids": [
@@ -887,6 +1072,7 @@
         "lock-extend-duration",
         "lock-extend-amount",
         "lock-extend-unit",
+        "lock-view-foot",
         "lock-extend"
       ],
       "view": "lock",
@@ -937,13 +1123,13 @@
     },
     "phase2": {
       "before": {
-        "lockUntil": 1795579294320,
+        "lockUntil": 1795581657231,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795579234997,
-        "remainingMs": 59323,
+        "now": 1795581597910,
+        "remainingMs": 59321,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1035,13 +1221,13 @@
       }
     },
     "phase2After": {
-      "lockUntil": 1795579294320,
+      "lockUntil": 1795581657231,
       "masterEnabled": true,
       "rules": [
         "example.com@100"
       ],
-      "now": 1795579235005,
-      "remainingMs": 59315,
+      "now": 1795581597917,
+      "remainingMs": 59314,
       "keys": [
         "lockUntil",
         "masterEnabled",
@@ -1050,15 +1236,15 @@
       ]
     },
     "phase3": {
-      "beforeExtend": 1795579294320,
+      "beforeExtend": 1795581657231,
       "afterExtend": {
-        "lockUntil": 1795579354320,
+        "lockUntil": 1795581717231,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795579235454,
-        "remainingMs": 118866,
+        "now": 1795581598390,
+        "remainingMs": 118841,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1069,13 +1255,13 @@
     },
     "phase4": {
       "preRestart": {
-        "lockUntil": 1795579354320,
+        "lockUntil": 1795581717231,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795579235462,
-        "remainingMs": 118858,
+        "now": 1795581598397,
+        "remainingMs": 118834,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1084,13 +1270,13 @@
         ]
       },
       "postRestart": {
-        "lockUntil": 1795579354320,
+        "lockUntil": 1795581717231,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795579238732,
-        "remainingMs": 115588,
+        "now": 1795581601682,
+        "remainingMs": 115549,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1101,13 +1287,13 @@
     },
     "phase5": {
       "expired": {
-        "lockUntil": 1795579354320,
+        "lockUntil": 1795581717231,
         "masterEnabled": true,
         "rules": [
           "example.com@100"
         ],
-        "now": 1795579358401,
-        "remainingMs": -4081,
+        "now": 1795581721302,
+        "remainingMs": -4071,
         "keys": [
           "lockUntil",
           "masterEnabled",
@@ -1134,7 +1320,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795579354320
+          "lockUntil": 1795581717231
         }
       },
       "masterOff": {
@@ -1154,7 +1340,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795579354320
+          "lockUntil": 1795581717231
         }
       },
       "removeRule": {
@@ -1169,7 +1355,7 @@
               "intensity": 40
             }
           ],
-          "lockUntil": 1795579354320
+          "lockUntil": 1795581717231
         }
       }
     },

@@ -336,7 +336,24 @@ describe('INV-8 · 主开关 OFF 时规则完整保留', () => {
       expect(persisted(area).masterEnabled).toBe(false);
     });
     expect(persisted(area).rules.map((r) => r.pattern)).toEqual(['a.com', 'b.com']);
-    expect(screen.getByTestId('master-off-notice')).toBeDefined();
+    /*
+      🔴 **ADR-076:原先这里断言 `master-off-notice` 在场。那条提示条已被
+         整条删除,故断言**替换**为「它不在场」+ ADR-076 的新真相:
+         「添加规则」入口被禁用。**
+
+         INV-8 本来要验的是「规则完整保留」—— 那部分一字未动(下面的
+         rule-count 与 rules 断言)。改掉的只是「OFF 状态如何被表达」:
+         从一条横幅,改为两个入口被禁用。
+    */
+    expect(screen.queryByTestId('master-off-notice')).toBeNull();
+    expect(
+      (screen.getByTestId('add-rule') as HTMLButtonElement).disabled,
+      'ADR-076:主开关 OFF → 添加规则禁用',
+    ).toBe(true);
+    // 主开关自己仍可用 —— 否则关掉就再也打不开了(ADR-076 明确保留)。
+    expect(
+      (screen.getByTestId('master-switch') as HTMLButtonElement).disabled,
+    ).toBe(false);
     expect(screen.getByTestId('rule-count').textContent).toBe('2/20');
   });
 });

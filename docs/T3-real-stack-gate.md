@@ -66,7 +66,8 @@ npm run build          # 产物在 build/chrome-mv3/(ADR-038:验收一律在 bui
 
 ## GATE-2 · 🔴 锁定跨重启存活(INV-13 / ADR-053)
 
-1. 启动一个 **10 分钟**的锁定(用仓储层 API,走 ADR-057 的原子写入):
+1. 启动一个 **10 分钟**的锁定(这里直接写底层存储,是**手工门禁的 fixture 搭建**,
+   非产品路径):
 
    ```js
    const until = Date.now() + 10 * 60 * 1000;
@@ -75,7 +76,13 @@ npm run build          # 产物在 build/chrome-mv3/(ADR-038:验收一律在 bui
      filterSettings: {
        ...(await chrome.storage.local.get('filterSettings')).filterSettings,
        lockUntil: until,
-       masterEnabled: true,          // ADR-057:启动锁定时原子置 true
+       // 本门禁要验的是「锁定跨重启存活」,故主开关设为 ON 以构造一个
+      // 正常可用的前置状态。
+      //
+      // 🔴 ADR-076 之后,产品的 `setLockUntil` **不再碰 `masterEnabled`**
+      //    (ADR-057 已废止:主开关 OFF 时锁定入口禁用,那条路径不可达)。
+      //    所以这一行是**本 fixture 自己设的**,不是产品会替你做的事。
+      masterEnabled: true,
      },
    });
    ```

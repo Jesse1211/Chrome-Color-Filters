@@ -11,6 +11,83 @@
       }
     },
     {
+      "name": "🔴🔴 C0 ADR-076:主开关 OFF → 「+ 添加规则」与「🔒 时间锁定」**两个入口都真的 disabled**",
+      "ok": true,
+      "detail": {
+        "addRuleDisabled": true,
+        "entryDisabled": true
+      }
+    },
+    {
+      "name": "🔴 C0b ADR-076:主开关**自己仍可用**(否则关掉就再也打不开了)",
+      "ok": true,
+      "detail": {
+        "masterDisabled": false,
+        "masterChecked": "false"
+      }
+    },
+    {
+      "name": "🔴 C0c ADR-076:两个入口都说得出**为什么**被禁用,且用的是同一句话",
+      "ok": true,
+      "detail": {
+        "addRuleTitle": "已全局关闭,请先开启主开关",
+        "entryTitle": "已全局关闭,请先开启主开关"
+      }
+    },
+    {
+      "name": "🔴🔴 C0d ADR-076:「已全局关闭,所有规则暂不生效」提示条**已整条删除**",
+      "ok": true,
+      "detail": {
+        "hasMasterOffNotice": false,
+        "textPresent": false,
+        "hasPriorityHint": true
+      }
+    },
+    {
+      "name": "🔴🔴 C0e ADR-076:点这两个禁用入口 → **视图不变 + 磁盘零写入**",
+      "ok": true,
+      "detail": {
+        "view": "list",
+        "beforeClicks": {
+          "lockUntil": null,
+          "masterEnabled": false,
+          "rules": 1
+        },
+        "afterClicks": {
+          "lockUntil": null,
+          "masterEnabled": false,
+          "rules": 1
+        }
+      }
+    },
+    {
+      "name": "🔴 C0f 探针有效性:把「时间锁定」的 disabled 去掉后,同一组读数**当场翻转**",
+      "ok": true,
+      "detail": {
+        "entryDisabled": false,
+        "addRuleDisabled": true
+      }
+    },
+    {
+      "name": "🔴🔴 C0g ADR-076:主开关 ON → 「添加规则」与「时间锁定」**两个一起恢复可用**,且不再挂原因",
+      "ok": true,
+      "detail": {
+        "addRuleDisabled": false,
+        "entryDisabled": false,
+        "addRuleTitle": null,
+        "entryTitle": null
+      }
+    },
+    {
+      "name": "C0h 复位后状态:主开关 ON、1 条规则、仍未锁定(后续条款的前置)",
+      "ok": true,
+      "detail": {
+        "lockUntil": null,
+        "masterEnabled": true,
+        "rules": 1
+      }
+    },
+    {
       "name": "🔴 C1 列表页**只有一行**锁定入口,内联时长选择器/预设/启动按钮全部不在场",
       "ok": true,
       "detail": {
@@ -18,12 +95,13 @@
           "popup",
           "brand-dot",
           "master-switch",
-          "master-off-notice",
+          "priority-hint",
           "rule-list",
           "rule-row-0",
           "rule-grip-0",
           "rule-open-0",
           "rule-pattern-0",
+          "rule-live-0",
           "swatch-pair",
           "swatch",
           "swatch-name",
@@ -41,6 +119,15 @@
         "entryText": "🔒 时间锁定›",
         "entryAria": "时间锁定,打开设置页",
         "addRuleClass": "add-button",
+        "entryDisabled": false,
+        "entryTitle": null,
+        "addRuleDisabled": false,
+        "addRuleTitle": null,
+        "masterDisabled": false,
+        "masterChecked": "true",
+        "hasMasterOffNotice": false,
+        "masterOffNoticeText": false,
+        "hasPriorityHint": true,
         "buttons": [
           "master-switch",
           "rule-grip-0",
@@ -52,6 +139,7 @@
         "numberInputs": 0,
         "selects": 0,
         "ranges": 0,
+        "foot": null,
         "forbiddenInText": [],
         "forbiddenInNames": []
       }
@@ -105,6 +193,7 @@
           "lock-start-preset-1-day",
           "lock-start-amount",
           "lock-start-unit",
+          "lock-view-foot",
           "lock-start"
         ],
         "view": "lock",
@@ -115,6 +204,15 @@
         "entryText": null,
         "entryAria": null,
         "addRuleClass": null,
+        "entryDisabled": null,
+        "entryTitle": null,
+        "addRuleDisabled": null,
+        "addRuleTitle": null,
+        "masterDisabled": null,
+        "masterChecked": null,
+        "hasMasterOffNotice": false,
+        "masterOffNoticeText": false,
+        "hasPriorityHint": false,
         "buttons": [
           "lock-back",
           "lock-start-preset-30-minute",
@@ -127,6 +225,17 @@
         "numberInputs": 1,
         "selects": 1,
         "ranges": 0,
+        "foot": {
+          "tag": "FOOTER",
+          "parentIsPopup": true,
+          "gapToPopupBottom": 0,
+          "height": 58,
+          "popupHeight": 452,
+          "actionTestId": "lock-start",
+          "actionCount": 1,
+          "inputCount": 0,
+          "actionWidthRatio": 92
+        },
         "forbiddenInText": [
           "提前结束"
         ],
@@ -188,6 +297,7 @@
           "lock-start-preset-1-day",
           "lock-start-amount",
           "lock-start-unit",
+          "lock-view-foot",
           "lock-start"
         ],
         "view": "lock",
@@ -198,6 +308,15 @@
         "entryText": null,
         "entryAria": null,
         "addRuleClass": null,
+        "entryDisabled": null,
+        "entryTitle": null,
+        "addRuleDisabled": null,
+        "addRuleTitle": null,
+        "masterDisabled": null,
+        "masterChecked": null,
+        "hasMasterOffNotice": false,
+        "masterOffNoticeText": false,
+        "hasPriorityHint": false,
         "buttons": [
           "lock-back",
           "lock-start-preset-30-minute",
@@ -210,6 +329,17 @@
         "numberInputs": 1,
         "selects": 1,
         "ranges": 0,
+        "foot": {
+          "tag": "FOOTER",
+          "parentIsPopup": true,
+          "gapToPopupBottom": 0,
+          "height": 58,
+          "popupHeight": 452,
+          "actionTestId": "lock-start",
+          "actionCount": 1,
+          "inputCount": 0,
+          "actionWidthRatio": 92
+        },
         "forbiddenInText": [
           "提前结束"
         ],
@@ -223,12 +353,12 @@
         "view": "list",
         "beforeBack": {
           "lockUntil": null,
-          "masterEnabled": false,
+          "masterEnabled": true,
           "rules": 1
         },
         "afterBack": {
           "lockUntil": null,
-          "masterEnabled": false,
+          "masterEnabled": true,
           "rules": 1
         }
       }
@@ -239,12 +369,12 @@
       "detail": {
         "beforeConfirm": {
           "lockUntil": null,
-          "masterEnabled": false,
+          "masterEnabled": true,
           "rules": 1
         },
         "afterConfirmShown": {
           "lockUntil": null,
-          "masterEnabled": false,
+          "masterEnabled": true,
           "rules": 1
         }
       }
@@ -259,10 +389,11 @@
       ]
     },
     {
-      "name": "🔴 C4c ADR-057:主开关 OFF 时确认框告知「启动锁定将同时开启滤镜」",
+      "name": "🔴🔴 C4c' ADR-076:确认框里**没有**「将同时开启滤镜」那段告知(ADR-057 已废止)",
       "ok": true,
       "detail": {
-        "willEnableMaster": true
+        "willEnableMaster": false,
+        "text": "确认启动锁定?将锁定 2 分钟无法修改任何设置无法关闭滤镜无法提前结束(只能延长)取消确认锁定"
       }
     },
     {
@@ -278,7 +409,7 @@
       "detail": {
         "afterCancel": {
           "lockUntil": null,
-          "masterEnabled": false,
+          "masterEnabled": true,
           "rules": 1
         },
         "view": "lock"
@@ -288,16 +419,17 @@
       "name": "🔴🔴 C4f 从子页面启动锁定端到端成功:磁盘上 lockUntil 为未来时间戳(ADR-053)",
       "ok": true,
       "detail": {
-        "lockUntil": 1795579939692,
+        "lockUntil": 1795581707258,
         "masterEnabled": true,
         "rules": 1
       }
     },
     {
-      "name": "🔴🔴 C4g ADR-057:主开关 OFF 状态下启动锁定 → 主开关**自动变 ON**",
+      "name": "🔴🔴 C4g' ADR-076:启动锁定**不连带改动** masterEnabled(ADR-057 的副作用已删除)",
       "ok": true,
       "detail": {
-        "masterEnabled": true
+        "masterBeforeStart": true,
+        "masterAfterStart": true
       }
     },
     {
@@ -313,6 +445,7 @@
           "lock-extend-duration",
           "lock-extend-amount",
           "lock-extend-unit",
+          "lock-view-foot",
           "lock-extend"
         ],
         "view": "lock",
@@ -323,6 +456,15 @@
         "entryText": null,
         "entryAria": null,
         "addRuleClass": null,
+        "entryDisabled": null,
+        "entryTitle": null,
+        "addRuleDisabled": null,
+        "addRuleTitle": null,
+        "masterDisabled": null,
+        "masterChecked": null,
+        "hasMasterOffNotice": false,
+        "masterOffNoticeText": false,
+        "hasPriorityHint": false,
         "buttons": [
           "lock-back",
           "lock-extend"
@@ -330,6 +472,17 @@
         "numberInputs": 1,
         "selects": 1,
         "ranges": 0,
+        "foot": {
+          "tag": "FOOTER",
+          "parentIsPopup": true,
+          "gapToPopupBottom": 0,
+          "height": 54,
+          "popupHeight": 452,
+          "actionTestId": "lock-extend",
+          "actionCount": 1,
+          "inputCount": 0,
+          "actionWidthRatio": 92
+        },
         "forbiddenInText": [],
         "forbiddenInNames": [],
         "title": "延长锁定"
@@ -375,6 +528,15 @@
         "entryText": "🔒 锁定中 00:02:00›锁定期间设置不可修改",
         "entryAria": "锁定中,打开延长页",
         "addRuleClass": "add-button",
+        "entryDisabled": false,
+        "entryTitle": null,
+        "addRuleDisabled": true,
+        "addRuleTitle": "锁定期间设置不可修改",
+        "masterDisabled": true,
+        "masterChecked": "true",
+        "hasMasterOffNotice": false,
+        "masterOffNoticeText": false,
+        "hasPriorityHint": true,
         "buttons": [
           "master-switch",
           "lock-open",
@@ -386,6 +548,7 @@
         "numberInputs": 0,
         "selects": 0,
         "ranges": 0,
+        "foot": null,
         "forbiddenInText": [],
         "forbiddenInNames": []
       }
@@ -402,8 +565,8 @@
       "name": "🔴🔴 C5d 点倒计时条进子页面 → **延长成功**,lockUntil 严格变大(加了 3 分钟)",
       "ok": true,
       "detail": {
-        "beforeExtend": 1795579939692,
-        "afterExtend": 1795580119692,
+        "beforeExtend": 1795581707258,
+        "afterExtend": 1795581887258,
         "deltaMs": 180000
       }
     },
@@ -411,8 +574,8 @@
       "name": "C5e 列表页倒计时条与子页面回显同源(同一个 lockUntil)",
       "ok": true,
       "detail": {
-        "listAttr": 1795580119692,
-        "afterExtend": 1795580119692
+        "listAttr": 1795581887258,
+        "afterExtend": 1795581887258
       }
     },
     {
@@ -446,7 +609,7 @@
       "ok": true,
       "detail": {
         "afterBackLocked": {
-          "lockUntil": 1795580119692,
+          "lockUntil": 1795581887258,
           "masterEnabled": true,
           "rules": 1
         },
@@ -464,6 +627,77 @@
           "解除"
         ]
       }
+    },
+    {
+      "name": "📌 C7a 锁定中子页面:「延长」住在**钉底的底栏**里,底边贴着 popup 下沿",
+      "ok": true,
+      "detail": {
+        "tag": "FOOTER",
+        "parentIsPopup": true,
+        "gapToPopupBottom": 0,
+        "height": 54,
+        "popupHeight": 452,
+        "actionTestId": "lock-extend",
+        "actionCount": 1,
+        "inputCount": 0,
+        "actionWidthRatio": 92
+      }
+    },
+    {
+      "name": "📌 C7b 🔴 锁定中底栏里**只有「延长」一个按钮**、零输入控件(ADR-052/INV-12)",
+      "ok": true,
+      "detail": {
+        "actionCount": 1,
+        "inputCount": 0
+      }
+    },
+    {
+      "name": "📌 C7c 未锁定子页面:「启动锁定」住在**钉底的底栏**里,底边贴着 popup 下沿",
+      "ok": true,
+      "detail": {
+        "tag": "FOOTER",
+        "parentIsPopup": true,
+        "gapToPopupBottom": 0,
+        "height": 58,
+        "popupHeight": 452,
+        "actionTestId": "lock-start",
+        "actionCount": 1,
+        "inputCount": 0,
+        "actionWidthRatio": 92
+      }
+    },
+    {
+      "name": "📌 C7d 未锁定底栏里只有主操作:预设 / 数字 / 下拉全留在可滚动主体里",
+      "ok": true,
+      "detail": {
+        "foot": {
+          "tag": "FOOTER",
+          "parentIsPopup": true,
+          "gapToPopupBottom": 0,
+          "height": 58,
+          "popupHeight": 452,
+          "actionTestId": "lock-start",
+          "actionCount": 1,
+          "inputCount": 0,
+          "actionWidthRatio": 92
+        },
+        "numberInputs": 1,
+        "selects": 1
+      }
+    },
+    {
+      "name": "📌 C7e 主操作撑满底栏一行(与「+ 添加规则」同一语气,≥90% 宽)",
+      "ok": true,
+      "detail": {
+        "actionWidthRatio": 92
+      }
+    },
+    {
+      "name": "📌 C7f 探针有效性:把底栏推离下沿 120px 后,同一组几何**当场报出非零 gap**",
+      "ok": true,
+      "detail": {
+        "gapToPopupBottom": 120
+      }
     }
   ],
   "data": {
@@ -472,12 +706,12 @@
       "masterEnabled": false,
       "rules": 1
     },
-    "c1_list": {
+    "c0_master_off": {
       "ids": [
         "popup",
         "brand-dot",
         "master-switch",
-        "master-off-notice",
+        "priority-hint",
         "rule-list",
         "rule-row-0",
         "rule-grip-0",
@@ -500,6 +734,15 @@
       "entryText": "🔒 时间锁定›",
       "entryAria": "时间锁定,打开设置页",
       "addRuleClass": "add-button",
+      "entryDisabled": true,
+      "entryTitle": "已全局关闭,请先开启主开关",
+      "addRuleDisabled": true,
+      "addRuleTitle": "已全局关闭,请先开启主开关",
+      "masterDisabled": false,
+      "masterChecked": "false",
+      "hasMasterOffNotice": false,
+      "masterOffNoticeText": false,
+      "hasPriorityHint": true,
       "buttons": [
         "master-switch",
         "rule-grip-0",
@@ -511,6 +754,130 @@
       "numberInputs": 0,
       "selects": 0,
       "ranges": 0,
+      "foot": null,
+      "forbiddenInText": [],
+      "forbiddenInNames": []
+    },
+    "c0_clicks": {
+      "beforeClicks": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": 1
+      },
+      "afterClicks": {
+        "lockUntil": null,
+        "masterEnabled": false,
+        "rules": 1
+      },
+      "view": "list"
+    },
+    "c0_probe": {
+      "entryDisabled": false,
+      "addRuleDisabled": true
+    },
+    "c0_master_on": {
+      "ids": [
+        "popup",
+        "brand-dot",
+        "master-switch",
+        "priority-hint",
+        "rule-list",
+        "rule-row-0",
+        "rule-grip-0",
+        "rule-open-0",
+        "rule-pattern-0",
+        "rule-live-0",
+        "swatch-pair",
+        "swatch",
+        "swatch-name",
+        "rule-delete-0",
+        "lock-entry",
+        "lock-open",
+        "add-rule",
+        "rule-count"
+      ],
+      "view": "list",
+      "locked": "false",
+      "skeleton": "false",
+      "entryTag": "BUTTON",
+      "entryClass": "add-button lock-entry-row__button",
+      "entryText": "🔒 时间锁定›",
+      "entryAria": "时间锁定,打开设置页",
+      "addRuleClass": "add-button",
+      "entryDisabled": false,
+      "entryTitle": null,
+      "addRuleDisabled": false,
+      "addRuleTitle": null,
+      "masterDisabled": false,
+      "masterChecked": "true",
+      "hasMasterOffNotice": false,
+      "masterOffNoticeText": false,
+      "hasPriorityHint": true,
+      "buttons": [
+        "master-switch",
+        "rule-grip-0",
+        "rule-open-0",
+        "rule-delete-0",
+        "lock-open",
+        "add-rule"
+      ],
+      "numberInputs": 0,
+      "selects": 0,
+      "ranges": 0,
+      "foot": null,
+      "forbiddenInText": [],
+      "forbiddenInNames": []
+    },
+    "c1_list": {
+      "ids": [
+        "popup",
+        "brand-dot",
+        "master-switch",
+        "priority-hint",
+        "rule-list",
+        "rule-row-0",
+        "rule-grip-0",
+        "rule-open-0",
+        "rule-pattern-0",
+        "rule-live-0",
+        "swatch-pair",
+        "swatch",
+        "swatch-name",
+        "rule-delete-0",
+        "lock-entry",
+        "lock-open",
+        "add-rule",
+        "rule-count"
+      ],
+      "view": "list",
+      "locked": "false",
+      "skeleton": "false",
+      "entryTag": "BUTTON",
+      "entryClass": "add-button lock-entry-row__button",
+      "entryText": "🔒 时间锁定›",
+      "entryAria": "时间锁定,打开设置页",
+      "addRuleClass": "add-button",
+      "entryDisabled": false,
+      "entryTitle": null,
+      "addRuleDisabled": false,
+      "addRuleTitle": null,
+      "masterDisabled": false,
+      "masterChecked": "true",
+      "hasMasterOffNotice": false,
+      "masterOffNoticeText": false,
+      "hasPriorityHint": true,
+      "buttons": [
+        "master-switch",
+        "rule-grip-0",
+        "rule-open-0",
+        "rule-delete-0",
+        "lock-open",
+        "add-rule"
+      ],
+      "numberInputs": 0,
+      "selects": 0,
+      "ranges": 0,
+      "foot": null,
       "forbiddenInText": [],
       "forbiddenInNames": []
     },
@@ -528,6 +895,7 @@
         "lock-start-preset-1-day",
         "lock-start-amount",
         "lock-start-unit",
+        "lock-view-foot",
         "lock-start"
       ],
       "view": "lock",
@@ -538,6 +906,15 @@
       "entryText": null,
       "entryAria": null,
       "addRuleClass": null,
+      "entryDisabled": null,
+      "entryTitle": null,
+      "addRuleDisabled": null,
+      "addRuleTitle": null,
+      "masterDisabled": null,
+      "masterChecked": null,
+      "hasMasterOffNotice": false,
+      "masterOffNoticeText": false,
+      "hasPriorityHint": false,
       "buttons": [
         "lock-back",
         "lock-start-preset-30-minute",
@@ -550,6 +927,17 @@
       "numberInputs": 1,
       "selects": 1,
       "ranges": 0,
+      "foot": {
+        "tag": "FOOTER",
+        "parentIsPopup": true,
+        "gapToPopupBottom": 0,
+        "height": 58,
+        "popupHeight": 452,
+        "actionTestId": "lock-start",
+        "actionCount": 1,
+        "inputCount": 0,
+        "actionWidthRatio": 92
+      },
       "forbiddenInText": [
         "提前结束"
       ],
@@ -559,49 +947,49 @@
     "c3_back": {
       "beforeBack": {
         "lockUntil": null,
-        "masterEnabled": false,
+        "masterEnabled": true,
         "rules": 1
       },
       "afterBack": {
         "lockUntil": null,
-        "masterEnabled": false,
+        "masterEnabled": true,
         "rules": 1
       },
       "view": "list"
     },
     "c4_dialog": {
       "dialog": {
-        "text": "确认启动锁定?将锁定 2 分钟无法修改任何设置无法关闭滤镜无法提前结束(只能延长)滤镜当前已关闭,启动锁定将同时开启滤镜取消确认锁定",
+        "text": "确认启动锁定?将锁定 2 分钟无法修改任何设置无法关闭滤镜无法提前结束(只能延长)取消确认锁定",
         "consequences": [
           "无法修改任何设置",
           "无法关闭滤镜",
           "无法提前结束(只能延长)"
         ],
-        "willEnableMaster": true,
+        "willEnableMaster": false,
         "duration": "将锁定 2 分钟",
         "focusedTestId": "lock-confirm-cancel"
       },
       "beforeConfirm": {
         "lockUntil": null,
-        "masterEnabled": false,
+        "masterEnabled": true,
         "rules": 1
       },
       "afterConfirmShown": {
         "lockUntil": null,
-        "masterEnabled": false,
+        "masterEnabled": true,
         "rules": 1
       }
     },
     "c4_cancel": {
       "afterCancel": {
         "lockUntil": null,
-        "masterEnabled": false,
+        "masterEnabled": true,
         "rules": 1
       },
       "view": "lock"
     },
     "c4_started": {
-      "lockUntil": 1795579939692,
+      "lockUntil": 1795581707258,
       "masterEnabled": true,
       "rules": 1
     },
@@ -615,6 +1003,7 @@
         "lock-extend-duration",
         "lock-extend-amount",
         "lock-extend-unit",
+        "lock-view-foot",
         "lock-extend"
       ],
       "view": "lock",
@@ -625,6 +1014,15 @@
       "entryText": null,
       "entryAria": null,
       "addRuleClass": null,
+      "entryDisabled": null,
+      "entryTitle": null,
+      "addRuleDisabled": null,
+      "addRuleTitle": null,
+      "masterDisabled": null,
+      "masterChecked": null,
+      "hasMasterOffNotice": false,
+      "masterOffNoticeText": false,
+      "hasPriorityHint": false,
       "buttons": [
         "lock-back",
         "lock-extend"
@@ -632,6 +1030,17 @@
       "numberInputs": 1,
       "selects": 1,
       "ranges": 0,
+      "foot": {
+        "tag": "FOOTER",
+        "parentIsPopup": true,
+        "gapToPopupBottom": 0,
+        "height": 54,
+        "popupHeight": 452,
+        "actionTestId": "lock-extend",
+        "actionCount": 1,
+        "inputCount": 0,
+        "actionWidthRatio": 92
+      },
       "forbiddenInText": [],
       "forbiddenInNames": [],
       "title": "延长锁定"
@@ -666,6 +1075,15 @@
       "entryText": "🔒 锁定中 00:02:00›锁定期间设置不可修改",
       "entryAria": "锁定中,打开延长页",
       "addRuleClass": "add-button",
+      "entryDisabled": false,
+      "entryTitle": null,
+      "addRuleDisabled": true,
+      "addRuleTitle": "锁定期间设置不可修改",
+      "masterDisabled": true,
+      "masterChecked": "true",
+      "hasMasterOffNotice": false,
+      "masterOffNoticeText": false,
+      "hasPriorityHint": true,
       "buttons": [
         "master-switch",
         "lock-open",
@@ -677,13 +1095,14 @@
       "numberInputs": 0,
       "selects": 0,
       "ranges": 0,
+      "foot": null,
       "forbiddenInText": [],
       "forbiddenInNames": [],
       "countdown": "🔒 锁定中 00:02:00"
     },
     "c5_extend": {
-      "beforeExtend": 1795579939692,
-      "afterExtend": 1795580119692,
+      "beforeExtend": 1795581707258,
+      "afterExtend": 1795581887258,
       "deltaMs": 180000
     },
     "c6_sub_locked": {
@@ -696,6 +1115,7 @@
         "lock-extend-duration",
         "lock-extend-amount",
         "lock-extend-unit",
+        "lock-view-foot",
         "lock-extend"
       ],
       "view": "lock",
@@ -706,6 +1126,15 @@
       "entryText": null,
       "entryAria": null,
       "addRuleClass": null,
+      "entryDisabled": null,
+      "entryTitle": null,
+      "addRuleDisabled": null,
+      "addRuleTitle": null,
+      "masterDisabled": null,
+      "masterChecked": null,
+      "hasMasterOffNotice": false,
+      "masterOffNoticeText": false,
+      "hasPriorityHint": false,
       "buttons": [
         "lock-back",
         "lock-extend"
@@ -713,12 +1142,23 @@
       "numberInputs": 1,
       "selects": 1,
       "ranges": 0,
+      "foot": {
+        "tag": "FOOTER",
+        "parentIsPopup": true,
+        "gapToPopupBottom": 0,
+        "height": 54,
+        "popupHeight": 452,
+        "actionTestId": "lock-extend",
+        "actionCount": 1,
+        "inputCount": 0,
+        "actionWidthRatio": 92
+      },
       "forbiddenInText": [],
       "forbiddenInNames": []
     },
     "c6_back_not_release": {
       "afterBackLocked": {
-        "lockUntil": 1795580119692,
+        "lockUntil": 1795581887258,
         "masterEnabled": true,
         "rules": 1
       },
@@ -731,6 +1171,31 @@
       "inNames": [
         "解除"
       ]
+    },
+    "c7_foot_locked": {
+      "tag": "FOOTER",
+      "parentIsPopup": true,
+      "gapToPopupBottom": 0,
+      "height": 54,
+      "popupHeight": 452,
+      "actionTestId": "lock-extend",
+      "actionCount": 1,
+      "inputCount": 0,
+      "actionWidthRatio": 92
+    },
+    "c7_foot_unlocked": {
+      "tag": "FOOTER",
+      "parentIsPopup": true,
+      "gapToPopupBottom": 0,
+      "height": 58,
+      "popupHeight": 452,
+      "actionTestId": "lock-start",
+      "actionCount": 1,
+      "inputCount": 0,
+      "actionWidthRatio": 92
+    },
+    "c7_probe": {
+      "gapToPopupBottom": 120
     }
   },
   "pass": true

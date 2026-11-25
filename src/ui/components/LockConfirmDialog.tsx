@@ -16,9 +16,21 @@
  * ADR-056 要求文案**明确列出三条后果**:
  * 无法修改设置 / 无法关闭滤镜 / 无法提前结束(可延长)。
  * 三条由 `LOCK_CONSEQUENCES` 单一来源驱动渲染,门禁逐条断言同一份常量。
+
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * 🔴 **ADR-076 废止了 ADR-057,本框因此少了一段告知。**
  *
- * 🔴 ADR-057 的告知:主开关处于关闭状态时,这里**额外**说明
- * 「启动锁定将同时开启滤镜」—— 不可逆操作之前必须说清所有后果。
+ * 原先这里有第四段:主开关处于关闭状态时额外说明「滤镜当前已关闭,
+ * 启动锁定将同时开启滤镜」—— 因为那时**可以**在主开关 OFF 时启动锁定,
+ * 而仓储层会悄悄替用户把主开关打开(ADR-057)。
+ *
+ * ADR-076 之后,主开关 OFF 时「🔒 时间锁定」入口**本身就是禁用的**,
+ * 用户根本到不了这个确认框。于是:
+ * - 那段告知**永远不会被渲染** —— 一段不可达的 UI;
+ * - 它描述的那个行为(自动开启主开关)也已从仓储层删除。
+ *
+ * 留着它就是留一条产品不再支持的路径。**从源头禁用,比事后告知更直白。**
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
 
 import { useEffect, useRef } from 'react';
@@ -28,25 +40,25 @@ import {
   LOCK_CONFIRM_OK,
   LOCK_CONFIRM_TITLE,
   LOCK_CONSEQUENCES,
-  LOCK_WILL_ENABLE_MASTER,
   lockConfirmDurationText,
 } from '../lock-strings.js';
 
 export interface LockConfirmDialogProps {
   /** 本次将锁定的时长,已格式化(如「4 小时」)。 */
   readonly durationText: string;
-  /**
-   * 🔴 ADR-057:当前主开关是否处于**关闭**状态。
-   * 为 true 时追加告知 —— 确认后主开关会被**原子地**一并打开。
-   */
-  readonly willEnableMaster: boolean;
+  /*
+    🔴 ADR-076:原先这里还有一个 `willEnableMaster: boolean`(ADR-057
+       的告知开关)。整个 prop 已删除 —— 不是默认 false,是不存在。
+
+       留一个恒为 false 的 prop 等于留一条死分支:将来有人把它接上
+       就能复活一条产品已经废止的路径,而门禁不会察觉。
+  */
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
 }
 
 export function LockConfirmDialog({
   durationText,
-  willEnableMaster,
   onConfirm,
   onCancel,
 }: LockConfirmDialogProps) {
@@ -97,12 +109,10 @@ export function LockConfirmDialog({
             ))}
           </ul>
 
-          {/* 🔴 ADR-057:主开关关闭时,告知它会被一并打开。 */}
-          {willEnableMaster && (
-            <p className="lock-modal__note" data-testid="lock-will-enable-master">
-              {LOCK_WILL_ENABLE_MASTER}
-            </p>
-          )}
+          {/*
+            🔴 ADR-076:ADR-057 的那段「启动锁定将同时开启滤镜」告知
+               已删除 —— 主开关 OFF 时入口本身禁用,到不了这里。
+          */}
         </div>
 
         <div className="lock-modal__actions">
