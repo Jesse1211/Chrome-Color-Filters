@@ -1,69 +1,83 @@
 # Chrome Color Filters
 
-给用户指定的网站套用**灰阶滤镜**。点击扩展图标弹出 popup 控制。
+Applies a **grayscale filter** to websites you choose. Click the extension icon for the popup controls.
 
-规则按顺序匹配、首个命中生效(最多 20 条),强度 0–100 无级可调,
-另有「专注锁定」:锁定时段内任何设置都不可更改,**只能延长**,到期自动关闭滤镜。
+Rules match in order and the first hit wins (up to 20 rules). Intensity is continuously
+adjustable from 0–100. There is also **Focus Lock**: while a lock is active no setting can be
+changed — it can only be **extended** — and the filter switches off automatically when the lock expires.
 
-## 滤镜是怎么生效的
+Why grayscale helps in the first place is covered in a separate research report:
+**[Why Grayscale Works](https://jesseliu.me/Chrome-Gray-Scaller/)** (bilingual, EN / 中文).
 
-滤镜的生效分两条**互不重叠**的路径:一条管「新打开的页面」,一条管「已经打开的页面」。
-两者的边界是理解这个扩展架构的关键。
+## How the filter actually applies
 
-### 一、新页面上色(首帧)
+Filtering runs along two **non-overlapping** paths: one handles **newly opened pages**, the other
+handles **pages already open**. The boundary between them is the key to understanding this
+extension's architecture.
 
-**要达到的效果** —— 打开一个已配置的网站,**第一帧渲染出来就是灰的**,全程看不到原色闪烁。
+### 1. Colouring new pages (the first frame)
 
-**用的机制** —— 声明式 content script 注册(`chrome.scripting.registerContentScripts`)。
+**The goal** — open a configured site and **the very first rendered frame is already gray**, with
+no flash of original colour at any point.
 
-添加规则时,后台立即把「匹配哪些网址 → 用哪个强度的 CSS 文件」这条映射写进浏览器的
-磁盘注册表,并标记 `persistAcrossSessions` 跨会话存活。此后每次导航:
+**The mechanism** — declarative content script registration
+(`chrome.scripting.registerContentScripts`).
+
+When you add a rule, the background immediately writes the mapping "which URLs match → which
+intensity's CSS file" into the browser's on-disk registry, flagged `persistAcrossSessions` so it
+survives across sessions. From then on, on every navigation:
 
 ```
-Chrome 开始加载页面
+Chrome starts loading the page
   ↓
-Chrome 查自己磁盘上的注册表:这个网址要注入什么?
+Chrome consults its own on-disk registry: what should be injected for this URL?
   ↓
-Chrome 注入那张 CSS 文件              ← 此时还没有任何 DOM
+Chrome injects that CSS file                ← no DOM exists yet at this point
   ↓
-Chrome 构建 DOM、计算样式、渲染第一帧   ← 已经带着滤镜
+Chrome builds the DOM, computes styles, renders the first frame   ← already filtered
 ```
 
-全程**没有**「扩展去查、Chrome 等结果」这一步 —— 注册表是 Chrome 自己的数据,
-读自己的东西不需要问任何人。不经过扩展的 JS,不读存储,service worker 也无需被唤醒
-(它在 MV3 下随时会被回收,但注册记录在磁盘上)。
+At no point is there a step where "the extension looks something up and Chrome waits for the
+answer" — the registry is Chrome's own data, and reading your own data requires asking no one.
+It never goes through the extension's JS, never reads storage, and the service worker does not
+need to be woken (under MV3 it can be reclaimed at any time, but the registration lives on disk).
 
-> **🔴 为什么非这样不可。** `chrome.storage` 没有同步版本,而渲染不会等待异步查询:
-> 任何「读了存储才知道要不要上色」的方案,都必然先画出一帧原色。这不是实现不够快,
-> 是架构的必然结果
+> **🔴 Why it has to be done this way.** `chrome.storage` has no synchronous variant, and
+> rendering does not wait for asynchronous queries: any design where "we read storage to find out
+> whether to apply colour" will necessarily paint one frame of original colour first. This is not
+> an implementation that isn't fast enough — it is an unavoidable consequence of the architecture.
 >
-> 解法不是把查询变快,而是**把查询取消**:异步工作被挪到「添加规则」的那一刻。
-> 那时没有任何一帧在等它,几毫秒淹没在交互延迟里,代价为零;
-> 而页面加载路径上,一次查询都不剩。
+> The fix is not to make the query faster but to **eliminate the query**: the async work is moved
+> to the moment the rule is added. At that moment no frame is waiting on it, a few milliseconds
+> vanish into interaction latency, and the cost is zero — while on the page-load path, not a
+> single query remains.
 
-滤镜 CSS 共 **101 个预生成文件**(强度 0–100 每档一个),每个只有一行
-`html { filter: grayscale(0.3) !important; }` —— 因为 `registerContentScripts` 的
-`css` 参数只接受**文件路径**,不接受内联字符串。
+The filter CSS consists of **101 pre-generated files** (one per intensity step, 0–100), each a
+single line of `html { filter: grayscale(0.3) !important; }` — because `registerContentScripts`'s
+`css` parameter accepts only **file paths**, not inline strings.
 
-### 二、已打开页面的实时更新
+### 2. Live updates to pages already open
 
-**要达到的效果** —— 改任何设置,所有已打开的标签页**立刻变色,无需刷新**;
-滚动位置、表单内容、页面状态全部保留。
+**The goal** — change any setting and every already-open tab **recolours immediately, with no
+reload**. Scroll position, form contents and page state are all preserved.
 
-**用的机制** —— `chrome.storage` 的变更广播(`onChanged`)。
+**The mechanism** — `chrome.storage` change broadcasts (`onChanged`).
 
-每个页面的 content script 启动时订阅该事件。设置写入后,浏览器把变更同时推给所有页面,
-各自修改自己的根元素样式。扩展**不需要**查询标签页列表、逐个发消息,也不需要处理
-已关闭的标签页 —— 单一事件源,天然满足多 tab 一致。
+Each page's content script subscribes to that event when it starts. Once a setting is written, the
+browser pushes the change to every page simultaneously and each one updates the style on its own
+root element. The extension does **not** need to enumerate tabs, message them one by one, or deal
+with tabs that have since closed — a single event source satisfies multi-tab consistency naturally.
 
-覆盖全部五种触发:强度滑块、增删改规则、拖拽排序、主开关、锁定到期自动关闭。
+This covers all five triggers: the intensity slider, adding/editing/removing rules, drag-reordering,
+the main toggle, and the automatic switch-off when a lock expires.
 
-### 两条路径的分工
+### How the two paths divide the work
 
-|                | 作用对象           | 为什么必须独立存在                            |
-| -------------- | ------------------ | --------------------------------------------- |
-| **声明式注册** | **下次导航**的首帧 | 广播赶不上首帧 —— 存储是异步的,渲染不等它     |
-| **变更广播**   | **已打开**的页面   | 注册对已打开的页面无效,这是 Chrome 的既定行为 |
+|                             | Applies to                        | Why it must exist independently                                                      |
+| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------ |
+| **Declarative registration** | The first frame of the **next navigation** | A broadcast cannot beat the first frame — storage is async, and rendering won't wait |
+| **Change broadcast**         | Pages **already open**            | Registration has no effect on already-open pages; that is Chrome's defined behaviour |
 
-缺任何一条都会留下可见缺陷:没有广播,拖强度滑块当前页面不变色,得手动刷新;
-没有注册,每打开一个新页面都会闪一下原色。
+Dropping either one leaves a visible defect: without the broadcast, dragging the intensity slider
+leaves the current page unchanged until a manual reload; without the registration, every newly
+opened page flashes its original colours first.
