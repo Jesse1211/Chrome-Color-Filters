@@ -1,6 +1,6 @@
 {
   "name": "chrome-color-filters",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "给用户指定的网站套用色觉滤镜",
   "type": "module",

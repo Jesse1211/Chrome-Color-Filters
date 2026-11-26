@@ -9,6 +9,16 @@ changed — it can only be **extended** — and the filter switches off automati
 Why grayscale helps in the first place is covered in a separate research report:
 **[Why Grayscale Works](https://jesseliu.me/Chrome-Gray-Scaller/)** (bilingual, EN / 中文).
 
+## Install
+
+1. Download `chrome-color-filters-<version>-chrome.zip` from the [Releases](../../releases) page.
+2. Extract the zip file to a folder of your choice.
+3. Open `chrome://extensions` in your browser.
+4. Enable **Developer mode** using the toggle in the top right corner.
+5. Click **Load unpacked** and select the extracted folder.
+
+You may see a warning that says "Disable developer mode extensions" when Chrome starts. This is normal for extensions loaded in developer mode and does not indicate a problem with the extension.
+
 ## How the filter actually applies
 
 Filtering runs along two **non-overlapping** paths: one handles **newly opened pages**, the other
