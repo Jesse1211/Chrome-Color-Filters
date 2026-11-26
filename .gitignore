@@ -45,3 +45,7 @@ docs/T7-gate/out/profile-*/
 
 # T6c 门禁(锁定 UI 折叠改造)同理 —— 证据是 *.json / *.png,profile 不入库。
 docs/T6c-gate/out/udd-*/
+
+# Superpowers SDD 的运行期脚本目录(ledger/brief/review package)。
+# 这些是执行过程的临时产物,不是交付物,不入库。
+.superpowers/
