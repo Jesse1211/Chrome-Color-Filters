@@ -1,0 +1,1434 @@
+<title>灰阶为什么有用</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#F7F6F3;
+  --paper-2:#FFFFFF;
+  --paper-3:#EFEDE8;
+  --ink:#17161A;
+  --ink-2:#44424A;
+  --ink-3:#77747E;
+  --rule:#DAD6CE;
+  --rule-2:#C6C1B6;
+  --chroma:#C8452A;
+  --chroma-soft:#F2DED8;
+  --achro:#75737A;
+  --achro-soft:#E4E2DF;
+  --teal:#2F5D62;
+  --teal-soft:#D8E4E3;
+  --amber:#9A6B14;
+  --amber-soft:#F2E6CC;
+  --shadow:rgba(23,22,26,.07);
+  --display:"Newsreader",Georgia,"Songti SC","Noto Serif SC",serif;
+  --body:"IBM Plex Sans","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#131316; --paper-2:#1B1B1F; --paper-3:#232327;
+    --ink:#F0EFEC; --ink-2:#C3C1BC; --ink-3:#8F8D89;
+    --rule:#32323A; --rule-2:#44444E;
+    --chroma:#F2725A; --chroma-soft:#3A2520;
+    --achro:#9A989F; --achro-soft:#2A2A2E;
+    --teal:#79B3B0; --teal-soft:#1D2E2F;
+    --amber:#D9A648; --amber-soft:#2E2514;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#131316; --paper-2:#1B1B1F; --paper-3:#232327;
+  --ink:#F0EFEC; --ink-2:#C3C1BC; --ink-3:#8F8D89;
+  --rule:#32323A; --rule-2:#44444E;
+  --chroma:#F2725A; --chroma-soft:#3A2520;
+  --achro:#9A989F; --achro-soft:#2A2A2E;
+  --teal:#79B3B0; --teal-soft:#1D2E2F;
+  --amber:#D9A648; --amber-soft:#2E2514;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--body);font-size:15px;line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:860px;margin:0 auto;padding-inline:20px;padding-block:0}
+@media(max-width:560px){.wrap{padding-inline:16px}}
+
+h1,h2,h3{font-family:var(--display);font-weight:500;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.1rem,6.4vw,3.5rem);line-height:1.1;letter-spacing:-.015em}
+h2{font-size:clamp(1.5rem,3.6vw,2.05rem);line-height:1.2;letter-spacing:-.01em}
+h3{font-size:1.09rem;line-height:1.35;font-weight:600}
+p{margin:0}
+.lede{font-family:var(--display);font-size:clamp(1.09rem,2.3vw,1.3rem);line-height:1.6;color:var(--ink-2)}
+.eyebrow{font-family:var(--mono);font-size:.68rem;font-weight:500;letter-spacing:.17em;text-transform:uppercase;color:var(--ink-3)}
+.note{font-size:.845rem;line-height:1.62;color:var(--ink-3)}
+.cap{font-size:.8rem;line-height:1.55;color:var(--ink-3);font-family:var(--mono)}
+strong{font-weight:600;color:var(--ink)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:500}
+a{color:var(--chroma)}
+
+/* hero */
+header.hero{padding-block:clamp(46px,9vw,88px) clamp(30px,5vw,46px)}
+.hero-kicker{display:flex;align-items:center;gap:12px;margin-bottom:26px;flex-wrap:wrap}
+.swatch-row{display:flex;height:13px;border-radius:2px;overflow:hidden;width:132px;flex:none}
+.swatch-row i{flex:1}
+.langsw{display:inline-flex;border:1px solid var(--rule-2);border-radius:999px;overflow:hidden;background:var(--paper-2)}
+.langsw button{
+  font:inherit;font-family:var(--mono);font-size:.72rem;letter-spacing:.03em;
+  padding:4px 11px;border:0;background:none;color:var(--ink-3);cursor:pointer;
+}
+.langsw button.on{background:var(--ink);color:var(--paper)}
+.langsw button:not(.on):hover{color:var(--ink-2)}
+.langsw button:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
+.ghlink{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.02em;
+  color:var(--ink-2);text-decoration:none;
+  padding:4px 10px;border:1px solid var(--rule-2);border-radius:999px;
+  background:var(--paper-2);transition:color .15s,border-color .15s;
+}
+.ghlink:hover{color:var(--chroma);border-color:var(--chroma)}
+.ghlink:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.ghlink svg{flex:none}
+.hero h1{margin-bottom:22px}
+.hero .lede{max-width:60ch}
+
+/* reading path */
+.path{margin-top:36px;border:1px solid var(--rule);border-radius:9px;background:var(--paper-2);overflow:hidden}
+.path-head{padding:15px 20px 12px;border-bottom:1px solid var(--rule)}
+.path-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--rule)}
+@media(max-width:700px){.path-steps{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:420px){.path-steps{grid-template-columns:1fr}}
+.pstep{background:var(--paper-2);padding:14px 15px;display:flex;flex-direction:column;gap:5px}
+.pstep .pn{font-family:var(--mono);font-size:.63rem;letter-spacing:.1em;color:var(--chroma);font-weight:600}
+.pstep .pt{font-family:var(--display);font-size:.98rem;font-weight:600;line-height:1.35}
+.pstep .pd{font-size:.78rem;line-height:1.45;color:var(--ink-3)}
+
+/* sections */
+section{padding-block:clamp(38px,6vw,62px);border-top:1px solid var(--rule)}
+.sec-head{display:grid;grid-template-columns:auto 1fr;gap:4px 18px;margin-bottom:30px;align-items:baseline}
+.sec-num{font-family:var(--mono);font-size:.72rem;font-weight:600;color:var(--chroma);letter-spacing:.08em;padding-top:.5em}
+.sec-head .lede{grid-column:2;margin-top:9px;max-width:58ch}
+@media(max-width:560px){.sec-head{grid-template-columns:1fr;gap:6px}.sec-head .lede{grid-column:1}}
+.stack{display:flex;flex-direction:column;gap:26px}
+
+/* figures */
+figure{margin:0;background:var(--paper-2);border:1px solid var(--rule);border-radius:9px;overflow:hidden}
+figure.plain{background:none;border:none;border-radius:0}
+.fig-head{padding:17px 20px 0}
+.fig-head h3{margin-bottom:5px}
+.fig-body{padding:18px 20px 20px}
+figcaption{padding:13px 20px;border-top:1px solid var(--rule);background:var(--paper-3);font-size:.825rem;line-height:1.6;color:var(--ink-3)}
+figcaption .src{font-family:var(--mono);font-size:.74rem;color:var(--ink-3)}
+.scroller{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+/* tiles */
+.tiles{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:9px;overflow:hidden}
+.tiles.c3{grid-template-columns:repeat(3,1fr)}
+.tiles.c2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:620px){.tiles.c3,.tiles.c2{grid-template-columns:1fr}}
+.tile{background:var(--paper-2);padding:18px 19px;display:flex;flex-direction:column;gap:6px}
+.tile .k{font-family:var(--mono);font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.tile .v{font-family:var(--mono);font-size:1.85rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.tile .d{font-size:.825rem;line-height:1.5;color:var(--ink-3)}
+.v.chroma{color:var(--chroma)} .v.teal{color:var(--teal)} .v.achro{color:var(--achro)} .v.amber{color:var(--amber)}
+
+/* bars */
+.bars{display:flex;flex-direction:column;gap:13px}
+.bar-row{display:grid;grid-template-columns:132px 1fr auto;gap:13px;align-items:center}
+@media(max-width:560px){.bar-row{grid-template-columns:1fr;gap:4px}.bar-row .bl{font-size:.8rem}}
+.bl{font-size:.855rem;line-height:1.35}
+.bl small{display:block;color:var(--ink-3);font-size:.76rem;font-family:var(--mono)}
+.track{height:19px;background:var(--paper-3);border-radius:3px;position:relative;overflow:hidden;min-width:60px}
+.fill{height:100%;border-radius:3px}
+.bv{font-family:var(--mono);font-size:.84rem;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.f-chroma{background:var(--chroma)} .f-achro{background:var(--achro)}
+.f-teal{background:var(--teal)} .f-amber{background:var(--amber)}
+.f-null{background:repeating-linear-gradient(45deg,var(--rule-2),var(--rule-2) 4px,transparent 4px,transparent 8px)}
+
+/* tables */
+table{border-collapse:collapse;width:100%;font-size:.855rem;min-width:540px}
+th,td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--paper-3);white-space:nowrap}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr.hl td{background:var(--teal-soft)}
+tr.phone td{background:var(--chroma-soft)}
+
+/* badges */
+.badge{display:inline-block;font-family:var(--mono);font-size:.655rem;font-weight:500;letter-spacing:.07em;padding:2px 7px;border-radius:3px;white-space:nowrap;text-transform:uppercase;line-height:1.5}
+.b-pri{background:var(--teal-soft);color:var(--teal)}
+.b-sec{background:var(--amber-soft);color:var(--amber)}
+.b-un{background:var(--achro-soft);color:var(--achro)}
+
+/* callouts */
+.callout{padding:18px 20px;border-radius:8px;font-size:.9rem;line-height:1.68}
+.callout .ct{
+  display:block;margin-bottom:8px;
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;font-weight:600;
+}
+.callout>span:not(.ct){display:block}
+.callout>span:not(.ct)+span:not(.ct){margin-top:9px}
+.callout p{margin:0}
+.callout p+p{margin-top:9px}
+.co-key{background:var(--chroma-soft);color:var(--ink)}
+.co-key .ct{color:var(--chroma)}
+.co-info{background:var(--teal-soft);color:var(--ink)}
+.co-info .ct{color:var(--teal)}
+.co-flat{background:var(--paper-3);color:var(--ink);border:1px solid var(--rule)}
+.co-flat .ct{color:var(--ink-3)}
+
+/* pipeline */
+.pipe{display:flex;flex-direction:column;gap:0}
+.pipe-step{display:grid;grid-template-columns:30px 1fr;gap:16px}
+.pipe-rail{display:flex;flex-direction:column;align-items:center}
+.pipe-dot{width:11px;height:11px;border-radius:50%;flex:none;margin-top:7px;border:2px solid var(--paper-2);box-shadow:0 0 0 1.5px currentColor}
+.pipe-line{width:1.5px;flex:1;background:var(--rule-2);min-height:16px}
+.pipe-step:last-child .pipe-line{display:none}
+.pipe-txt{padding-bottom:20px;display:flex;flex-direction:column;gap:5px}
+.pipe-step:last-child .pipe-txt{padding-bottom:0}
+.pipe-t{font-weight:600;font-size:.94rem}
+
+/* dimension blocks */
+.dim-tag{
+  display:inline-block;font-family:var(--mono);font-size:.64rem;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--chroma);
+  background:var(--chroma-soft);padding:3px 9px;border-radius:3px;margin-bottom:9px;
+}
+.essence{
+  font-size:.93rem;line-height:1.68;color:var(--ink-2);
+  max-width:68ch;
+}
+.essence em{font-style:italic;color:var(--ink)}
+.eg{
+  margin-top:18px;padding:15px 17px;background:var(--paper-3);
+  border-radius:7px;border-left:2.5px solid var(--teal);
+  font-size:.875rem;line-height:1.66;
+}
+.eg-k{
+  display:block;margin-bottom:7px;
+  font-family:var(--mono);font-size:.65rem;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--teal);
+}
+.eg>span:not(.eg-k){display:block}
+
+/* two-account axes */
+.axes{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:9px;overflow:hidden;margin-top:18px}
+@media(max-width:640px){.axes{grid-template-columns:1fr}}
+.axes>.axis{background:var(--paper-2);padding:17px 18px;display:flex;flex-direction:column;gap:12px}
+.axes>.axis.a1{border-top:3px solid var(--achro)}
+.axes>.axis.a2{border-top:3px solid var(--teal)}
+.axhead{display:flex;flex-direction:column;gap:3px}
+.axtag{font-family:var(--mono);font-size:.63rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.axname{font-family:var(--display);font-size:1.16rem;font-weight:600;line-height:1.25}
+.axis.a1 .axname{color:var(--achro)}
+.axis.a2 .axname{color:var(--teal)}
+.axis dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:baseline}
+.axis dt{font-family:var(--mono);font-size:.68rem;color:var(--ink-3);white-space:nowrap;letter-spacing:.03em}
+.axis dd{margin:0;font-size:.86rem;line-height:1.52}
+
+/* section sub-heading */
+h4.subh{
+  font-family:var(--display);font-size:1.2rem;font-weight:600;margin:26px 0 10px;
+  padding-top:16px;border-top:1px solid var(--rule);line-height:1.3;
+}
+
+/* rgb mixer */
+.mixer{
+  margin-top:14px;display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:9px;overflow:hidden;
+}
+@media(max-width:620px){.mixer{grid-template-columns:1fr}}
+.mx-ctl,.mx-view{background:var(--paper-2);padding:16px 17px}
+.mx-row{display:grid;grid-template-columns:1.3em 1fr 2.6em;gap:10px;align-items:center;margin-bottom:11px}
+.mx-lab{font-family:var(--mono);font-size:.84rem;font-weight:600}
+.mx-val{font-family:var(--mono);font-size:.8rem;text-align:right;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.mx-sl{-webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:3px;outline:none;background:var(--rule-2)}
+.mx-sl.r{background:linear-gradient(90deg,#000,#F00)}
+.mx-sl.g{background:linear-gradient(90deg,#000,#0F0)}
+.mx-sl.b{background:linear-gradient(90deg,#000,#00F)}
+.mx-sl::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--paper-2);border:2px solid var(--ink-2);cursor:pointer}
+.mx-sl::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--paper-2);border:2px solid var(--ink-2);cursor:pointer}
+.mx-sl:focus-visible{box-shadow:0 0 0 3px var(--teal-soft)}
+.mx-presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.mx-presets button{
+  font:inherit;font-size:.74rem;padding:4px 9px;border-radius:4px;cursor:pointer;
+  background:var(--paper-3);color:var(--ink-2);border:1px solid var(--rule-2);
+}
+.mx-presets button:hover{background:var(--teal-soft);color:var(--teal);border-color:var(--teal)}
+.mx-hint{margin:13px 0 0;font-size:.78rem;line-height:1.55;color:var(--ink-3)}
+.mx-swatches{display:flex;align-items:center;gap:14px}
+.mx-sw{display:flex;flex-direction:column;gap:4px;align-items:center;flex:none}
+.mx-chip{width:78px;height:48px;border-radius:5px;border:1px solid rgba(0,0,0,.14)}
+.mx-cap{font-family:var(--mono);font-size:.76rem;font-weight:600}
+.mx-sub{font-size:.72rem;color:var(--ink-3)}
+.mx-arrow{font-size:1.1rem;color:var(--ink-3)}
+.mx-math{margin-top:15px;display:flex;flex-direction:column;gap:3px;font-family:var(--mono);font-size:.79rem;font-variant-numeric:tabular-nums}
+.mx-mrow{display:flex;justify-content:space-between;gap:12px}
+.mx-mrow.mx-sum{border-top:1px solid var(--rule);margin-top:4px;padding-top:5px;font-weight:600;color:var(--ink)}
+.mx-bar{display:flex;height:17px;border-radius:3px;overflow:hidden;margin-top:13px;border:1px solid var(--rule-2)}
+.mx-bar i{display:block;height:100%}
+.mx-pct{margin:7px 0 0;display:flex;gap:14px;font-family:var(--mono);font-size:.74rem}
+.mx-avg{margin:13px 0 0;font-size:.78rem;color:var(--ink-3);padding-top:11px;border-top:1px dashed var(--rule)}
+.mx-avg b{font-family:var(--mono);color:var(--ink-2)}
+.mx-avg span{margin-left:7px;color:var(--chroma)}
+
+/* mixer: channel rows */
+.mx-ch{display:inline-block;width:1.1em;font-weight:600}
+.mx-raw{display:inline-block;width:2.4em;text-align:right;color:var(--ink-2)}
+.mx-oar{display:inline-block;margin:0 .5em;color:var(--ink-3)}
+.mx-olin{display:inline-block;width:3.8em;color:var(--ink)}
+.mx-wt{margin-left:.6em;color:var(--ink-3);font-size:.95em}
+.mx-out{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}
+.mx-outk{
+  display:block;font-family:var(--mono);font-size:.67rem;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3);margin-bottom:7px;
+}
+.mx-orow{font-family:var(--mono);font-size:.79rem;font-variant-numeric:tabular-nums;line-height:1.72}
+.mx-och{display:inline-block;width:1.1em;font-weight:600;color:var(--achro)}
+.mx-ost{display:inline-block;width:2.4em;font-weight:600;color:var(--ink)}
+.mx-onote{margin:8px 0 0;font-size:.76rem;line-height:1.5;color:var(--teal)}
+
+/* three resource steps */
+.steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:9px;overflow:hidden;margin-top:12px}
+@media(max-width:560px){.steps3{grid-template-columns:1fr}}
+.s3{background:var(--paper-2);padding:14px 15px;display:grid;grid-template-columns:auto 1fr;gap:3px 11px;align-items:baseline}
+.s3n{
+  grid-row:span 2;font-family:var(--mono);font-size:.78rem;font-weight:600;color:var(--chroma);
+  width:1.7em;height:1.7em;display:flex;align-items:center;justify-content:center;
+  background:var(--chroma-soft);border-radius:50%;align-self:start;
+}
+.s3t{font-weight:600;font-size:.94rem;line-height:1.3}
+.s3d{font-size:.8rem;line-height:1.45;color:var(--ink-3)}
+
+/* verdict pro/con */
+.verdict{margin-top:16px;display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:9px;overflow:hidden}
+.vrow{background:var(--paper-2);padding:14px 16px;display:grid;grid-template-columns:auto 1fr;gap:13px;align-items:start}
+.vrow.pro{border-left:3px solid var(--teal)}
+.vrow.con{border-left:3px solid var(--amber)}
+.vlabel{
+  font-family:var(--display);font-size:1.02rem;font-weight:600;line-height:1.5;
+  width:1.9em;height:1.9em;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;flex:none;
+}
+.vrow.pro .vlabel{background:var(--teal-soft);color:var(--teal)}
+.vrow.con .vlabel{background:var(--amber-soft);color:var(--amber)}
+.vtext{font-size:.89rem;line-height:1.62}
+
+/* saturation chips */
+.satdemo{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:520px){.satdemo{grid-template-columns:repeat(2,1fr)}}
+.satcol{display:flex;flex-direction:column;gap:9px;align-items:center;text-align:center}
+.satchip{
+  width:100%;aspect-ratio:1.45;max-width:100%;border-radius:6px;
+  border:1px solid rgba(0,0,0,.12);
+}
+.satchip.hot{box-shadow:0 0 24px rgba(255,0,0,.5)}
+.satlab{font-size:.8rem;line-height:1.4;display:flex;flex-direction:column;gap:1px}
+.satlab .cap{font-size:.7rem}
+
+/* svg */
+.svg-hold{width:100%}
+.svg-hold svg{width:100%;height:auto;display:block;max-width:100%}
+
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px}
+.lg{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--ink-3)}
+.lg i{width:13px;height:13px;border-radius:2.5px;flex:none}
+
+/* finding grid */
+.leaks{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:700px){.leaks{grid-template-columns:1fr}}
+.leak{background:var(--paper-2);border:1px solid var(--rule);border-radius:9px;padding:18px 19px;display:flex;flex-direction:column;gap:9px}
+.leak .lv{font-family:var(--mono);font-size:1.5rem;font-weight:600;color:var(--chroma);line-height:1.1}
+.leak .ln{font-size:.86rem;line-height:1.55;color:var(--ink-2)}
+.leak .lf{font-size:.78rem;font-family:var(--mono);color:var(--ink-3);margin-top:auto}
+
+/* conflict figure */
+.conflict{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center}
+@media(max-width:620px){.conflict{grid-template-columns:1fr;gap:10px}}
+.cbox{background:var(--paper-3);border:1px solid var(--rule);border-radius:8px;padding:16px 17px;display:flex;flex-direction:column;gap:6px;text-align:center}
+.cbox .cv{font-family:var(--mono);font-size:1.7rem;font-weight:600;line-height:1.05}
+.cbox .cl{font-size:.82rem;line-height:1.45;color:var(--ink-3)}
+.cvs{font-family:var(--mono);font-size:.72rem;color:var(--ink-3);letter-spacing:.1em;text-align:center}
+
+footer{padding-block:40px 60px;border-top:1px solid var(--rule)}
+.refs{font-size:.8rem;line-height:1.75;color:var(--ink-3);display:flex;flex-direction:column;gap:7px}
+.refs b{color:var(--ink-2);font-weight:600}
+ul.clean{margin:0;padding-left:1.15em;display:flex;flex-direction:column;gap:7px}
+ul.clean li{padding-left:.15em}
+ul.clean li::marker{color:var(--ink-3)}
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="hero-kicker">
+    <div class="swatch-row" aria-hidden="true">
+      <i style="background:#C8452A"></i><i style="background:#B4683A"></i>
+      <i style="background:#9E8148"></i><i style="background:#86895A"></i>
+      <i style="background:#7C8070"></i><i style="background:#79797C"></i>
+      <i style="background:#757578"></i>
+    </div>
+    <span class="eyebrow">研究报告 · 2026-11</span>
+    <div class="langsw" role="group" aria-label="Language / 语言">
+      <button type="button" id="lzh" class="on" aria-pressed="true">中文</button>
+      <button type="button" id="len" aria-pressed="false">EN</button>
+    </div>
+    <a class="ghlink" href="https://github.com/Jesse1211/Chrome-Gray-Scaller" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.05-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.13 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A7.995 7.995 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+      </svg>
+      <span>Chrome-Gray-Scaller</span>
+    </a>
+  </div>
+
+  <h1>颜色是一条<br>显著性通道</h1>
+
+  <p class="lede">
+    手机屏幕不是「更亮的纸」。它在四个物理维度上都不属于你眼睛适应的那个世界，
+    而其中一个维度——颜色——正好落在人类视觉少数几个「自动引导注意力」的特征上。
+    这是去饱和能起作用的原因，也框定了它能起作用的范围。
+  </p>
+
+  <div class="path">
+    <div class="path-head"><span class="eyebrow">这份报告的推进路线</span></div>
+    <div class="path-steps">
+      <div class="pstep">
+        <span class="pn">01</span>
+        <span class="pt">屏幕是什么</span>
+        <span class="pd">它和你眼睛看惯的世界，在物理上是两种东西</span>
+      </div>
+      <div class="pstep">
+        <span class="pn">02</span>
+        <span class="pt">颜色为何特殊</span>
+        <span class="pd">它是第一档注意力引导特征，且能吸附习得关联</span>
+      </div>
+      <div class="pstep">
+        <span class="pn">03</span>
+        <span class="pt">怎么办</span>
+        <span class="pd">拿掉粗尺度的色彩，留下细节</span>
+      </div>
+      <div class="pstep">
+        <span class="pn">04</span>
+        <span class="pt">有多有效</span>
+        <span class="pd">实测数据，以及它的边界</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout co-key" style="margin-top:28px">
+    <span class="ct">先说结论：这件事能做到什么程度</span>
+    <span>
+      去饱和在<strong>学生样本</strong>中、<strong>1–2 周</strong>内，通过<strong>缩短单次会话而非减少拿起次数</strong>，
+      带来 <span class="num">20–40 分钟/天</span>（约基线 <strong>6–10%</strong>）的<strong>手机</strong>屏幕时间下降。
+      它作用的是<strong>参与度</strong>这一条路径。
+    </span>
+    <span>
+      <strong>以及它做不到什么：</strong>在睡眠、生产力与主观幸福感上<strong>无已证实的直接改善</strong>；
+      焦虑类结果在研究间不一致；<strong>不支持</strong>关于长期持久性、非学生人群或桌面端的任何推论。
+    </span>
+  </div>
+</header>
+
+<!-- ============ 01 ============ -->
+<section>
+  <div class="sec-head">
+    <span class="sec-num">01</span>
+    <h2>屏幕是什么</h2>
+    <p class="lede">
+      你的视觉系统有几亿年时间适应<strong>反射光下的世界</strong>。
+      屏幕在四个维度上都不属于那个世界——下面每一条都在这块屏幕上直接演示给你看。
+    </p>
+  </div>
+
+  <div class="stack">
+
+    <!-- D1 光谱 -->
+    <figure>
+      <div class="fig-head">
+        <span class="dim-tag">维度 1 · 光谱</span>
+        <h3>现实用「一整条光谱」给你颜色，屏幕用「三根针」骗过你</h3>
+      </div>
+      <div class="fig-body">
+        <p class="essence">
+          本质：<strong>你的眼睛只有三种视锥，所以只需要三个数字就能被完全欺骗。</strong>
+          一片真实的树叶把整个可见光谱连续地反射给你；屏幕只发射红、绿、蓝三道极窄的光，
+          却能让你的三种视锥产生<em>一模一样</em>的读数。这叫同色异谱（metamerism）——
+          物理上毫无关系的两样东西，在你眼里完全相同。
+        </p>
+        <div class="svg-hold" style="margin-top:16px">
+          <svg viewBox="0 0 700 200" role="img" aria-label="光谱对比：真实树叶的反射光谱为一条平滑连续的宽带曲线；屏幕的发射光谱为红绿蓝三根极窄尖峰">
+            <defs>
+              <linearGradient id="specbar" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#6A00B8"/><stop offset=".14" stop-color="#1F3BD8"/>
+                <stop offset=".32" stop-color="#00A6C4"/><stop offset=".47" stop-color="#2FBF33"/>
+                <stop offset=".62" stop-color="#D4D423"/><stop offset=".78" stop-color="#E8781E"/>
+                <stop offset="1" stop-color="#C41818"/>
+              </linearGradient>
+            </defs>
+            <text x="14" y="16" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--teal)">真实树叶 · 反射光谱</text>
+            <line x1="22" y1="86" x2="330" y2="86" stroke="var(--rule-2)" stroke-width="1"/>
+            <path d="M22,80 C60,76 90,62 120,48 C150,34 175,30 205,36 C240,43 275,60 330,74"
+                  fill="none" stroke="var(--teal)" stroke-width="2.6" stroke-linecap="round"/>
+            <rect x="22" y="90" width="308" height="9" fill="url(#specbar)" opacity=".75" rx="1.5"/>
+            <text x="22" y="117" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--ink-3)">连续、宽带 · 每个波长都带信息</text>
+            <text x="22" y="134" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--ink-3)">5–7 个基函数即可描述</text>
+            <line x1="350" y1="20" x2="350" y2="160" stroke="var(--rule)" stroke-width="1" stroke-dasharray="3 3"/>
+            <text x="372" y="16" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--chroma)">屏幕 · 发射光谱</text>
+            <line x1="380" y1="86" x2="688" y2="86" stroke="var(--rule-2)" stroke-width="1"/>
+            <path d="M380,86 L430,86 L434,34 L438,86 L510,86 L514,30 L518,86 L600,86 L604,38 L608,86 L688,86"
+                  fill="none" stroke="var(--chroma)" stroke-width="2.4" stroke-linejoin="round"/>
+            <rect x="380" y="90" width="308" height="9" fill="url(#specbar)" opacity=".26" rx="1.5"/>
+            <rect x="430" y="90" width="8" height="9" fill="#1F3BD8" rx="1"/>
+            <rect x="510" y="90" width="8" height="9" fill="#2FBF33" rx="1"/>
+            <rect x="600" y="90" width="8" height="9" fill="#C41818" rx="1"/>
+            <text x="380" y="117" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--ink-3)">三根窄峰 · 半高宽仅 20–40 nm</text>
+            <text x="380" y="134" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--ink-3)">波长之间是空的</text>
+            <text x="355" y="180" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--ink)">→ 但你的眼睛报告：「同一个绿色」</text>
+          </svg>
+        </div>
+        <div class="eg">
+          <span class="eg-k">例子</span>
+          <span>照片里的草地和真实的草地，你的眼睛说一样绿；换一台光谱仪去看，它们是两种毫无关系的东西。<br>
+          <strong>那为什么同一张照片在不同手机上会偏色？</strong>这<em>不是</em>同色异谱「失效」——
+          恰恰相反，同色异谱正是三原色能工作的原理。偏色的真实原因是<strong>色彩管理</strong>：
+          ICC 配置文件被忽略或丢弃，像素值于是被按错误的原色去解释；再叠加不同机型的原色坐标、色域、白点与厂商显示模式的差异。
+          这是<strong>色度学</strong>层面的不匹配，与视锥被骗这件事无关。</span>
+        </div>
+      </div>
+      <figcaption><span class="src">量子点发光半高宽 20–40 nm；QD-OLED 峰 20–30 nm，OLED 约 50 nm</span></figcaption>
+    </figure>
+
+    <!-- D2 饱和度 -->
+    <figure>
+      <div class="fig-head">
+        <span class="dim-tag">维度 2 · 饱和度</span>
+        <h3>屏幕能做出真实物体表面做不出的颜色</h3>
+      </div>
+      <div class="fig-body">
+        <p class="essence">
+          本质：<strong>真实物体的颜色来自「吸收掉一部分光」，所以必然有损耗、必然不纯。</strong>
+          一颗再红的草莓也反射着不少其他波长。而屏幕的红是<em>直接发射</em>的，
+          可以纯到任何真实表面都达不到的程度。你每天看的饱和度，在自然界属于稀有事件。
+        </p>
+        <div class="satdemo" style="margin-top:18px">
+          <div class="satcol">
+            <div class="satchip" style="background:#8C4A3F"></div>
+            <span class="satlab">真实草莓<span class="cap">反射</span></span>
+          </div>
+          <div class="satcol">
+            <div class="satchip" style="background:#B03A2A"></div>
+            <span class="satlab">印刷油墨<span class="cap">反射</span></span>
+          </div>
+          <div class="satcol">
+            <div class="satchip" style="background:#E01B0C"></div>
+            <span class="satlab">sRGB 屏幕<span class="cap">自发光</span></span>
+          </div>
+          <div class="satcol">
+            <div class="satchip hot" style="background:#FF0000"></div>
+            <span class="satlab">P3 屏幕<span class="cap">自发光</span></span>
+          </div>
+        </div>
+        <p class="note" style="margin-top:14px">
+          ↑ 同一个「红」在四种介质上能达到的极限。越往右，越脱离「反射」这个物理约束。
+        </p>
+        <div class="bars" style="margin-top:20px">
+          <div class="bar-row">
+            <span class="bl">sRGB<small>老标准</small></span>
+            <div class="track"><div class="fill f-achro" style="width:69.4%"></div></div>
+            <span class="bv">69.4%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bl">DCI-P3<small>当前手机</small></span>
+            <div class="track"><div class="fill f-amber" style="width:86.9%"></div></div>
+            <span class="bv">86.9%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bl">Rec.2020<small>下一代</small></span>
+            <div class="track"><div class="fill f-chroma" style="width:99.9%"></div></div>
+            <span class="bv">99.9%</span>
+          </div>
+        </div>
+        <p class="note" style="margin-top:12px">
+          ↑ 对 Pointer 色域的覆盖率。Pointer 色域是 <span class="num">4089</span> 个<strong>真实反射表面</strong>的颜色集合；
+          覆盖率越高，说明屏幕越能把「真实物体的全部颜色」装进去。
+          而落在这个集合<em>之外</em>的颜色，具体来说都是<strong>自发光</strong>的。
+        </p>
+        <div class="eg">
+          <span class="eg-k">例子</span>
+          <span>霓虹灯、LED 刹车灯，以及你手机上那个<strong>红色角标</strong>（App 图标右上角显示未读数的小红点）——这些颜色在「物体表面」的世界里不存在。<br>
+          <strong>分寸</strong>：屏幕超越的是<em>反射性物体色</em>，不是「自然界」。
+          彩虹、火焰、晚霞本身也是高纯度的——但它们不会出现在你口袋里，一天几百次。</span>
+        </div>
+      </div>
+      <figcaption><span class="src">Pointer (1980)，4089 个样本 · TFTCentral 色域覆盖率测算</span></figcaption>
+    </figure>
+
+    <!-- D3 自发光 -->
+    <figure>
+      <div class="fig-head">
+        <span class="dim-tag">维度 3 · 发光方式</span>
+        <h3>屏幕的光，身体是按波长收的</h3>
+      </div>
+      <div class="fig-body">
+        <p class="essence">
+          本质：<strong>屏幕对身体的影响，不取决于它看起来有多亮。</strong>
+          你眼睛里除了负责成像的视锥视杆，还有一类细胞<em>不参与看东西</em>，
+          只向大脑报告一件事——<strong>现在是白天还是晚上</strong>。
+          它们<strong>挑波长</strong>，不看亮度。
+          要讲清这件事，得先有两个单位。
+        </p>
+
+        <div class="callout co-key" style="margin-top:18px">
+          <span class="ct">melanopic EDI：就是「按报时细胞的口味重新称过」的 lux</span>
+          <span>
+            光的量用 <strong>lux</strong> 计——落到你眼睛上的光有多少。
+            但 lux 本身是按<strong>人眼看亮度</strong>的敏感曲线加权算出来的（峰值在 555 nm 绿光附近）。<br>
+            报时细胞的口味不一样：它的敏感峰在约 <strong>480 nm</strong>（蓝青色），对红光几乎没反应。
+            所以把同一束光<strong>按它的曲线重新加权</strong>，就得到 <strong>melanopic EDI</strong>——
+            <strong>单位仍然是 lux</strong>，只是换了一把秤。
+          </span>
+        </div>
+
+        <div class="svg-hold" style="margin-top:18px">
+          <svg viewBox="0 0 700 368" role="img" aria-label="上图：人眼看亮度的敏感峰在555纳米，报时细胞的敏感峰在480纳米蓝青色。下图：按报时细胞那把秤称出的剂量刻度，常见夜间屏幕落在5到150 lux，群体半数褪黑素抑制点24.6 lux，个体差异6到350 lux">
+            <defs>
+              <linearGradient id="spec2" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#6A00B8"/><stop offset=".18" stop-color="#1F3BD8"/>
+                <stop offset=".34" stop-color="#00A6C4"/><stop offset=".52" stop-color="#2FBF33"/>
+                <stop offset=".68" stop-color="#D4D423"/><stop offset=".84" stop-color="#E8781E"/>
+                <stop offset="1" stop-color="#C41818"/>
+              </linearGradient>
+            </defs>
+
+            <!-- ============ PANEL 1 : spectral sensitivity ============ -->
+            <text x="14" y="15" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-3)">① 两把秤：同一束光，按不同曲线加权</text>
+            <line x1="52" y1="116" x2="664" y2="116" stroke="var(--rule-2)" stroke-width="1.2"/>
+            <rect x="52" y="120" width="612" height="9" fill="url(#spec2)" opacity=".8" rx="1.5"/>
+            <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-3)" text-anchor="middle">
+              <text x="52" y="145">400</text><text x="256" y="145">500</text>
+              <text x="460" y="145">600</text><text x="664" y="145">700 nm</text>
+            </g>
+            <path d="M52,108 C110,100 150,70 215,42 C240,32 268,34 300,50 C340,70 390,98 440,110 C500,114 580,116 664,116"
+                  fill="none" stroke="var(--teal)" stroke-width="2.6" stroke-linecap="round"/>
+            <circle cx="215.2" cy="42" r="4.5" fill="var(--teal)"/>
+            <text x="215" y="31" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="11.5" font-weight="600" fill="var(--teal)">报时细胞 · 峰 480</text>
+            <path d="M52,114 C140,112 230,102 300,80 C340,66 360,56 368,54 C390,58 420,74 470,94 C530,110 600,115 664,116"
+                  fill="none" stroke="var(--achro)" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="5 4"/>
+            <circle cx="368.2" cy="54" r="4.5" fill="var(--achro)"/>
+            <text x="412" y="46" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="11.5" font-weight="600" fill="var(--achro)">看亮度 · 峰 555</text>
+            <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-3)">
+              <text x="16" y="46">高</text><text x="16" y="114">低</text>
+            </g>
+
+            <!-- bridge -->
+            <line x1="52" y1="172" x2="664" y2="172" stroke="var(--rule)" stroke-width="1" stroke-dasharray="3 4"/>
+            <text x="358" y="166" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--chroma)">用蓝青那把秤称 → melanopic EDI（单位仍是 lux）</text>
+
+            <!-- ============ PANEL 2 : dose scale ============ -->
+            <text x="14" y="200" font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-3)">② 称出来的剂量落在哪（角膜处，对数轴）</text>
+            <line x1="46" y1="290" x2="664" y2="290" stroke="var(--rule-2)" stroke-width="1.4"/>
+            <g stroke="var(--rule-2)" stroke-width="1">
+              <line x1="46" y1="290" x2="46" y2="296"/><line x1="252" y1="290" x2="252" y2="296"/>
+              <line x1="458" y1="290" x2="458" y2="296"/><line x1="664" y1="290" x2="664" y2="296"/>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--ink-3)" text-anchor="middle">
+              <text x="46" y="311">1</text><text x="252" y="311">10</text>
+              <text x="458" y="311">100</text><text x="664" y="311">1,000 lux</text>
+            </g>
+            <rect x="190" y="262" width="304.3" height="22" rx="3" fill="var(--chroma)" opacity=".2"/>
+            <rect x="190" y="262" width="304.3" height="22" rx="3" fill="none" stroke="var(--chroma)" stroke-width="1.4" stroke-dasharray="4 3"/>
+            <text x="342" y="256" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="var(--chroma)">常见夜间屏幕：5 – 150</text>
+            <text x="342" y="277" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-3)">（显示亮度 27–284 cd/m² 实测对应区间）</text>
+            <line x1="332.5" y1="222" x2="332.5" y2="290" stroke="var(--teal)" stroke-width="2"/>
+            <circle cx="332.5" cy="290" r="5.5" fill="var(--teal)"/>
+            <text x="332.5" y="216" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="var(--teal)">24.6</text>
+            <text x="332.5" y="204" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--teal)">褪黑素被压掉一半（群体 ED50）</text>
+            <g stroke="var(--achro)" stroke-width="1.6">
+              <line x1="206.3" y1="334" x2="570.1" y2="334"/>
+              <line x1="206.3" y1="328" x2="206.3" y2="340"/><line x1="570.1" y1="328" x2="570.1" y2="340"/>
+            </g>
+            <text x="206.3" y="352" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--achro)">6</text>
+            <text x="570.1" y="352" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--achro)">350</text>
+            <text x="388" y="352" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--achro)">个体 ED50 差异约 58 倍</text>
+            <text x="358" y="366" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--ink-3)">所以「我刷手机照样睡得着」和「我一刷就失眠」可能都是真的</text>
+          </svg>
+        </div>
+
+        <div class="tiles c3" style="margin-top:18px">
+          <div class="tile">
+            <span class="k">对身体的影响 · 剂量关系</span>
+            <span class="v teal">22／77／109</span>
+            <span class="d">生物钟收到 <span class="num">10／30／50</span> lux，褪黑素起始分别<strong>推迟 22／77／109 分钟</strong>。
+            剂量越高推得越晚。</span>
+          </div>
+          <div class="tile">
+            <span class="k">夜间屏幕落在哪</span>
+            <span class="v chroma">在线上</span>
+            <span class="d">实测显示亮度 27–284 cd/m² 对应 mEDI 约 <span class="num">5–150</span> lux——
+            <strong>正常夜间亮度就落在半数抑制点上下</strong>。「屏幕太小、光量不够」站不住。</span>
+          </div>
+          <div class="tile">
+            <span class="k">关键机制</span>
+            <span class="v achro">看光谱</span>
+            <span class="d">在<strong>亮度相同</strong>的条件下，结果跟随 <strong>melanopic 辐照度</strong>而非亮度。
+            决定影响的是<strong>光谱成分</strong>，不是屏幕多亮、也不是屏幕比房间亮几倍。</span>
+          </div>
+        </div>
+
+        <div class="callout co-flat" style="margin-top:18px">
+          <span class="ct">于是这两个流行说法是错的</span>
+          <span>
+            <strong>① 「开夜间模式／滤蓝光就能护住睡眠」</strong>——
+            盲化对照 RCT（n=55）<strong>零效应</strong>，客观与自报睡眠均无优势；
+            常引的「减少 93% 褪黑素抑制」是<strong>建模推算，不是实测褪黑素</strong>。
+            <span class="cap">附带一个对「改外观」类工具的警示：该研究中实验组觉得它更干扰，<strong>更常主动关掉</strong>。</span><br>
+            <strong>② 「深色模式夜里更护眼」</strong>——方向可能是<strong>反</strong>的：负极性在昏暗环境下
+            对年轻成年人产生<em>更高</em>的认知负荷（瞳孔直径、搜索时间增加），作者把人们的偏好归因于<strong>美学</strong>而非视觉舒适。
+          </span>
+        </div>
+
+        <div class="eg">
+          <span class="eg-k">那该怎么做</span>
+          <span>
+            <strong>把环境调亮，而不是把屏幕调暗。</strong><span class="badge b-pri">有直接证据</span><br>
+            放射科是唯一一个几十年来系统面对「暗房里看亮屏幕」的职业，其规范解法是把阅片室环境照明定在
+            <strong>75–150 lux</strong>。另有研究发现人<strong>自己偏好</strong>的环境亮度会随屏幕亮度近乎等比上升
+            （儿童斜率 <span class="num">0.97</span>, R²=0.98；成人 0.38, R²=1.00）。
+            <strong>而关灯刷手机把这两条都反着做。</strong>
+          </span>
+        </div>
+
+      </div>
+      <figcaption>
+        <span class="src">亮度与公式：Cornell DEA 3500 讲义 · CCS Inc. · Pointer (1980) · Apple 公布规格｜melanopic：Schöllhorn &amp; Cajochen (2023) Commun Biol 6:228 (n=72，亮度与 melanopic 解耦) · Phillips et al. (2019) PNAS (n=55) · CIE S 026/E:2018｜环境照明：Chawla &amp; Samei (2007) Med Phys · Shen (2014) Chin Med J｜夜间模式 RCT：Smidt (2022)｜深色模式：Sethi &amp; Ziat (2023) Ergonomics</span>
+        · <strong>两点诚实说明</strong>：mEDI 的 5–150 lux 为该研究四档亮度条件的<strong>整体区间</strong>，
+        各介质逐档数值未能逐行核对，故本页不按介质分列 melanopic 值；
+        个体 ED50 差异原文表述为「超过一个数量级」（6→350 lux，约 58 倍，变异系数 26%）。
+      </figcaption>
+    </figure>
+
+    <!-- D4 时间结构 -->
+    <figure>
+      <div class="fig-head">
+        <span class="dim-tag">维度 4 · 时间结构</span>
+        <h3>自然界没有「剪辑」这种东西——而这件事利大于弊</h3>
+      </div>
+      <div class="fig-body">
+        <p class="essence">
+          本质：<strong>剪辑是一项顺着视觉系统的纹理工作的发明。</strong>
+          人的知觉本来就会把连续经验切分成离散「事件」，并在事件边界处重置模型、摄入新信息。
+          一个放对位置的剪辑，正落在这个本来就要断开的地方——
+          所以它<em>满足</em>你已经形成的预期，而不是打断它。
+        </p>
+
+        <div class="verdict">
+          <div class="vrow pro">
+            <span class="vlabel">利</span>
+            <span class="vtext"><strong>剪辑让几小时的事在几分钟里讲完，而代价几乎为零。</strong>
+            因为它落在知觉本来就要断开的地方——这是<strong>普遍成立</strong>的。</span>
+          </div>
+          <div class="vrow con">
+            <span class="vlabel">弊</span>
+            <span class="vtext"><strong>只在特定组合下出现：高剪辑率 × 高唤醒内容</strong>，
+            或片段互不相关时，处理容量被超出，<strong>记忆与理解下降</strong>——这是<strong>有条件</strong>的。</span>
+          </div>
+        </div>
+
+        <div class="callout co-flat" style="margin-top:16px">
+          <span class="ct">「高唤醒」是什么，以及为什么会记不住</span>
+          <span>
+            <strong>高唤醒</strong>＝让你心跳加快、注意力绷紧的内容（惊险、冲突、强烈情绪），
+            不等于「有趣」或「负面」。
+          </span>
+          <span>
+            看视频时，你的处理资源要同时供给三件事，而<strong>总量是固定的</strong>：
+          </span>
+        </div>
+
+        <div class="steps3">
+          <div class="s3">
+            <span class="s3n">1</span>
+            <span class="s3t">编码</span>
+            <span class="s3d">把看到的东西录进去</span>
+          </div>
+          <div class="s3">
+            <span class="s3n">2</span>
+            <span class="s3t">存储</span>
+            <span class="s3d">和已有知识建立联系</span>
+          </div>
+          <div class="s3">
+            <span class="s3n">3</span>
+            <span class="s3t">提取</span>
+            <span class="s3d">之后能调出来</span>
+          </div>
+        </div>
+
+        <div class="callout co-flat" style="margin-top:12px">
+          <span class="ct">为什么这两样会「自动」抢走资源</span>
+          <span>
+            关键在于<strong>①编码是不由你控制的</strong>，而②③才是你能支配的那部分。<br>
+            <strong>剪辑：</strong>画面整体换掉，构成一次「场景变了」的信号，
+            视觉系统<strong>必须</strong>重新采集一遍——这笔编码开销是强制的，你没法选择「忽略这次剪辑」。<br>
+            <strong>高唤醒内容：</strong>心跳加速意味着身体判定「这件事重要」，
+            于是优先保证把它<strong>录下来</strong>——同样绕过你的意志。
+          </span>
+          <span>
+            于是两者叠加时，<strong>①编码吃掉了大部分资源，留给②存储的就不够了</strong>。
+            录是录进去了，但<strong>没有和任何已有知识挂上钩</strong>——而③提取靠的正是这些钩子。
+            所以结果是：<strong>当时看得很投入，事后想不起来讲了什么。</strong>
+          </span>
+          <span>
+            这也解释了为什么<strong>单独提高剪辑率反而帮助记忆</strong>：
+            剪辑把资源<em>调动</em>起来（①升高），而内容本身不抢，<strong>②仍有余量</strong>——
+            于是录得清楚、也挂上了钩。<strong>所以速率不是问题，速率 × 高唤醒才是。</strong>
+          </span>
+        </div>
+
+        <div class="svg-hold" style="margin-top:16px">
+          <svg viewBox="0 0 700 120" role="img" aria-label="示意图：连续经验被知觉切分为离散事件，剪辑落在事件边界处">
+            <text x="14" y="15" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--teal)">连续的真实经验</text>
+            <path d="M18,42 C90,34 150,52 220,44 C300,35 380,50 460,42 C550,33 620,46 686,40"
+                  fill="none" stroke="var(--teal)" stroke-width="2.6" stroke-linecap="round"/>
+            <text x="14" y="76" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-3)">知觉自动切分出的「事件边界」</text>
+            <g stroke="var(--rule-2)" stroke-width="1.4" stroke-dasharray="3 3">
+              <line x1="152" y1="84" x2="152" y2="106"/><line x1="298" y1="84" x2="298" y2="106"/>
+              <line x1="452" y1="84" x2="452" y2="106"/><line x1="580" y1="84" x2="580" y2="106"/>
+            </g>
+            <g>
+              <rect x="18" y="88" width="130" height="15" rx="2" fill="var(--teal)" opacity=".6"/>
+              <rect x="156" y="88" width="138" height="15" rx="2" fill="var(--teal)" opacity=".6"/>
+              <rect x="302" y="88" width="146" height="15" rx="2" fill="var(--teal)" opacity=".6"/>
+              <rect x="456" y="88" width="120" height="15" rx="2" fill="var(--teal)" opacity=".6"/>
+              <rect x="584" y="88" width="102" height="15" rx="2" fill="var(--teal)" opacity=".6"/>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--chroma)" text-anchor="middle">
+              <text x="152" y="118">剪辑</text><text x="298" y="118">剪辑</text>
+              <text x="452" y="118">剪辑</text><text x="580" y="118">剪辑</text>
+            </g>
+          </svg>
+        </div>
+
+      </div>
+      <figcaption>
+        <span class="src">Zacks &amp; Magliano（事件分割）· Smith，电影连续性注意理论（AToCC）· Lang，有限容量模型 LC4MP（编码／存储／提取三分资源，剪辑率与唤醒的交互）</span>
+        · <strong>诚实说明</strong>：本节引文经 Smith 的综述转引，直接引用前应核对原文；
+        Lang 的剪辑率具体数值两轮检索均未取得，故本页<strong>不给出任何数值最优点</strong>，也不使用「倒 U 型」这一暗示特定曲线的说法。
+        上图的事件边界与剪辑位置为示意。
+      </figcaption>
+    </figure>
+
+    <div class="callout co-key">
+      <span class="ct">把四条合起来</span>
+      <strong>这四条不是四项罪状，各自的性质完全不同：</strong><br>
+      <strong>光谱合成</strong>是中性的工程事实；
+      <strong>时间切分</strong>顺着知觉的纹理，主要是收益；
+      <strong>夜间光照</strong>有真实的生理后果，但解法是调环境、调亮度、调时间——<em>与颜色无关</em>；
+      只有<strong>饱和度</strong>这一条，既是问题、又恰好是去饱和唯一能动的那一条。<br>
+      <strong>所以下一节要问的是：饱和度凭什么值得单独拿出来处理？</strong>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section>
+  <div class="sec-head">
+    <span class="sec-num">02</span>
+    <h2>颜色为什么特殊</h2>
+    <p class="lede">
+      颜色<strong>不是</strong>承载空间细节的主通道——那是亮度信号的工作。
+      颜色是一条<strong>显著性</strong>通道：它是少数几个能自动引导注意力的特征之一，并且很容易吸附关于奖赏的习得性关联。
+    </p>
+  </div>
+
+  <div class="stack">
+    <figure>
+      <div class="fig-head">
+        <h3>红绿通道对「成熟度」特别敏感</h3>
+        <p class="note">乌干达 Kibale 森林野外光谱辐射测量：红绿通道相对亮度通道的信噪比优势</p>
+      </div>
+      <div class="fig-body">
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bl">检测成熟果实<small>L/(L+M) vs 亮度</small></span>
+            <div class="track"><div class="fill f-chroma" style="width:100%"></div></div>
+            <span class="bv" style="color:var(--chroma)">≈14×</span>
+          </div>
+          <div class="bar-row">
+            <span class="bl">检测可食嫩叶<small>L/(L+M) vs 亮度</small></span>
+            <div class="track"><div class="fill f-chroma" style="width:50%"></div></div>
+            <span class="bv" style="color:var(--chroma)">≈7×</span>
+          </div>
+          <div class="bar-row">
+            <span class="bl">亮度通道基准<small>luminance</small></span>
+            <div class="track"><div class="fill f-achro" style="width:7.1%"></div></div>
+            <span class="bv" style="color:var(--achro)">1×</span>
+          </div>
+        </div>
+        <div class="callout co-key" style="margin-top:18px">
+          <span class="ct">关键</span>
+          研究者用<strong>穿刺力</strong>作为成熟度的物理测量，发现穿刺力与 L/(L+M) <strong>成反比</strong>——
+          越红，字面意义上就是越成熟。
+          也就是说，红绿通道对<strong>与食物价值相关的物理信号</strong>特别敏感。
+        </div>
+        <div class="callout co-info" style="margin-top:12px">
+          <span class="ct">这在野外被直接检验过</span>
+          72 只野生白脸卷尾猴、约 <span class="num">20,000</span> 次摄食事件、27 个植物物种，色觉类型由基因判定：
+          <strong>三色视个体对显著着色果实的摄食率高于同群的双色视个体</strong>。
+          这填补了此前的空缺——圈养实验早有差异，但野外研究一度报告两者相近。
+          <span class="cap">Melin et al., PNAS (2017)。分寸：效应限于显著着色的果实；食叶假说未被排除；卷尾猴为多态三色视，外推到人类需谨慎。</span>
+        </div>
+      </div>
+      <figcaption>
+        <span class="src">Sumner &amp; Mollon, in Normal and Defective Colour Vision (OUP), Ch.3 · Melin et al., PNAS (2017)</span>
+        · <strong>注意这是生态学证据，不是神经解剖学证据</strong>：它说明颜色与食物价值信号相关，
+        <em>不</em>说明色度信号在脑内进入价值计算回路（见本节末）。
+      </figcaption>
+    </figure>
+
+    <div class="tiles c2">
+      <div class="tile">
+        <span class="k">注意力：颜色是第一档</span>
+        <span class="v chroma">第 1 档</span>
+        <span class="d">在权威分类中，<strong>颜色</strong>是仅四个「无疑」的注意力引导特征之一（另三个：运动、朝向、大小）；
+        <strong>亮度对比只属第 2 档</strong>「可能」。颜色的优先级高于明暗。<br>
+        <span class="cap">Wolfe &amp; Horowitz, Nat Hum Behav (2017)</span></span>
+      </div>
+      <div class="tile">
+        <span class="k">生理唤醒：饱和度驱动</span>
+        <span class="v teal">饱和度 &gt; 色相</span>
+        <span class="d">N=62，<strong>设亮度匹配的无彩色对照</strong>：饱和色→更高唤醒、更强皮电反应；
+        彩色刺激使心率<strong>加速</strong>，无彩色使心率<strong>减速</strong>。<br>
+        <span class="cap">Wilms &amp; Oberfeld, Psychological Research (2018)</span></span>
+      </div>
+    </div>
+
+    <figure>
+      <div class="fig-head">
+        <h3>界面厂商自己就把颜色当作注意力装置</h3>
+        <p class="note">以下为厂商设计文档原文</p>
+      </div>
+      <div class="fig-body">
+        <div class="pipe">
+          <div class="pipe-step">
+            <div class="pipe-rail" style="color:var(--chroma)"><span class="pipe-dot" style="background:var(--chroma)"></span><span class="pipe-line"></span></div>
+            <div class="pipe-txt">
+              <span class="pipe-t">Material Design · 颜色用法</span>
+              <span class="note">「当一个元素的颜色与周围形成对比，它就会突出，用户因此知道它重要。」
+              「要引起对重要事件的注意，就在元素间使用更强的颜色对比。」
+              其整个颜色系统按<strong>高／中／低强调</strong>分层。</span>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-rail" style="color:var(--chroma)"><span class="pipe-dot" style="background:var(--chroma)"></span><span class="pipe-line"></span></div>
+            <div class="pipe-txt">
+              <span class="pipe-t">Apple HIG · 关于角标</span>
+              <span class="note">「一个红色椭圆内含白色文字……用以指示有新的或更新的信息……<strong>值得一个人的注意</strong>。」
+              颜色被指定，用途被明说。</span>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-rail" style="color:var(--teal)"><span class="pipe-dot" style="background:var(--teal)"></span></div>
+            <div class="pipe-txt">
+              <span class="pipe-t">dark patterns 分类法</span>
+              <span class="note">「视觉干预」是一个被命名的类别——「用样式与视觉呈现把用户导向或导离特定选项」，
+              判定为<strong>不对称且隐蔽</strong>（「用户可能意识不到视觉呈现对其选择的影响」）。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption>所以本页的说法是：<strong>颜色被设计用来引导注意力</strong>（有文档），而不是「屏幕被精确校准来攻击你的奖赏系统」（无证据）。</figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section>
+  <div class="sec-head">
+    <span class="sec-num">03</span>
+    <h2>解决方式：拿掉粗尺度的色彩，留下细节</h2>
+    <p class="lede">视觉系统把「空间细节」和「色彩」分在两条通道上，而且两者的优势分处不同的尺度。这个分工让去饱和成为一次代价极低的干预。</p>
+  </div>
+
+  <div class="stack">
+    <figure>
+      <div class="fig-head">
+        <h3>为什么去掉颜色几乎不影响可用性</h3>
+        <p class="note">对比敏感度函数：横轴为空间频率（对数轴），纵轴为对比敏感度</p>
+      </div>
+      <div class="fig-body">
+        <div class="svg-hold">
+          <svg viewBox="0 0 700 290" role="img" aria-label="对比敏感度函数：亮度通道为带通，峰值在2到8 cycles per degree，上限约30；彩色通道为低通，上限约11到12；约0.5 cycles per degree以下彩色敏感度超过亮度">
+            <line x1="62" y1="238" x2="668" y2="238" stroke="var(--rule-2)" stroke-width="1.2"/>
+            <line x1="62" y1="30" x2="62" y2="238" stroke="var(--rule-2)" stroke-width="1.2"/>
+            <g stroke="var(--rule-2)" stroke-width="1">
+              <line x1="62" y1="238" x2="62" y2="243"/>
+              <line x1="228.5" y1="238" x2="228.5" y2="243"/>
+              <line x1="371.9" y1="238" x2="371.9" y2="243"/>
+              <line x1="515.3" y1="238" x2="515.3" y2="243"/>
+              <line x1="557.2" y1="238" x2="557.2" y2="243"/>
+              <line x1="652" y1="238" x2="652" y2="243"/>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-3)" text-anchor="middle">
+              <text x="62" y="257">0.1</text>
+              <text x="228.5" y="257">0.5</text>
+              <text x="371.9" y="257">2</text>
+              <text x="515.3" y="257">8</text>
+              <text x="566" y="272">12</text>
+              <text x="652" y="257">30</text>
+              <text x="357" y="286" font-size="11.5">空间频率 (cycles/deg) — 对数轴</text>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-3)">
+              <text x="14" y="38">高</text><text x="14" y="236">低</text>
+              <text transform="rotate(-90 26 150)" x="26" y="150" text-anchor="middle" font-size="11.5">对比敏感度</text>
+            </g>
+            <line x1="228.5" y1="30" x2="228.5" y2="238" stroke="var(--rule)" stroke-width="1" stroke-dasharray="3 3"/>
+            <path d="M62,80 C120,78 180,82 228.5,92 C300,110 380,140 460,172 C500,190 535,204 557.2,212"
+                  fill="none" stroke="var(--chroma)" stroke-width="2.6" stroke-linecap="round"/>
+            <circle cx="557.2" cy="212" r="4.2" fill="var(--chroma)"/>
+            <path d="M62,156 C120,140 180,118 228.5,104 C290,86 330,78 371.9,77 C430,76 480,84 515.3,96 C560,114 605,158 652,224"
+                  fill="none" stroke="var(--achro)" stroke-width="2.6" stroke-linecap="round"/>
+            <circle cx="652" cy="224" r="4.2" fill="var(--achro)"/>
+            <g stroke="var(--achro)" stroke-width="1" stroke-dasharray="2 3" opacity=".5">
+              <line x1="371.9" y1="77" x2="371.9" y2="238"/>
+              <line x1="515.3" y1="96" x2="515.3" y2="238"/>
+            </g>
+            <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="500">
+              <text x="68" y="66" fill="var(--chroma)">彩色通道 · 低通</text>
+              <text x="398" y="62" fill="var(--achro)">亮度通道 · 带通</text>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="10.5">
+              <text x="474" y="206" fill="var(--chroma)">上限 11–12</text>
+              <text x="596" y="200" fill="var(--achro)">上限 ~30</text>
+              <text x="400" y="92" fill="var(--achro)">峰 2–8</text>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--chroma)">
+              <text x="70" y="120">&lt; 0.5 c/deg：</text>
+              <text x="70" y="134">彩色 &gt; 亮度</text>
+            </g>
+          </svg>
+        </div>
+        <div class="legend">
+          <span class="lg"><i style="background:var(--chroma)"></i>彩色通道（L−M、S−(L+M)）</span>
+          <span class="lg"><i style="background:var(--achro)"></i>亮度通道（L+M）</span>
+        </div>
+        <div class="scroller" style="margin-top:14px">
+          <table>
+            <thead><tr><th>界面元素</th><th>实际尺寸</th><th>视角</th><th>空间频率</th><th>哪条通道更灵敏</th></tr></thead>
+            <tbody>
+              <tr><td>文字笔画</td><td class="n">0.25 mm</td><td class="n">0.041°</td><td class="n">12.3 c/deg</td><td>亮度</td></tr>
+              <tr><td>正文 x-height</td><td class="n">1.41 mm</td><td class="n">0.230°</td><td class="n">2.17</td><td>亮度</td></tr>
+              <tr><td>通知角标（红点）</td><td class="n">3.31 mm</td><td class="n">0.542°</td><td class="n">0.92</td><td>亮度</td></tr>
+              <tr><td>工具栏图标</td><td class="n">3.98 mm</td><td class="n">0.651°</td><td class="n">0.77</td><td>亮度</td></tr>
+              <tr><td>信息流头像</td><td class="n">6.63 mm</td><td class="n">1.085°</td><td class="n">0.46</td><td>临界</td></tr>
+              <tr class="hl"><td><strong>App 图标</strong></td><td class="n">9.94 mm</td><td class="n">1.627°</td><td class="n">0.31</td><td><strong>颜色</strong></td></tr>
+              <tr class="hl"><td><strong>全宽照片 / 视频帧</strong></td><td class="n">65 mm</td><td class="n">10.63°</td><td class="n">0.047</td><td><strong>颜色</strong></td></tr>
+              <tr class="hl"><td><strong>整屏色调</strong></td><td class="n">65×141 mm</td><td class="n">10.6×22.3°</td><td class="n">≈0.02–0.05</td><td><strong>颜色</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <figcaption>
+        <strong>表格的读法</strong>：真正落在「颜色更灵敏」那一侧的是<strong>大面积色块</strong>——
+        全宽照片、视频画面、整屏色调；而角标、图标、文字都太小，靠的是亮度对比而非颜色。
+        <strong>所以去饱和拿掉的不是红点，是整片画面的色彩。</strong><br>
+        <span class="src">Mullen, J Physiol 359:381–400 (1985) · 换算基于 460 ppi 机型与 35 cm 视距</span>
+        · 彩色 CSF 为低通、亮度 CSF 为带通，属视觉科学共识；曲线为示意，刻度按真实对数轴绘制。
+        <strong>两点必须注明</strong>：Mullen 1985 被后续研究批评「不足以代表平均观察者」；
+        且<strong>亮度峰值随屏幕变暗而左移</strong>（150→2 cd/m² 时由约 2.8 移至约 0.7 c/deg），
+        故 0.5 c/deg 这个交叉点<strong>不是与亮度无关的常数</strong>，夜间低亮度下会移动。
+        另需注意：角标的显著性严格来说应由「对局部周围的颜色对立特征对比」描述，用 CSF 位置解释小元素并不恰当。
+      </figcaption>
+    </figure>
+
+
+
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section>
+  <div class="sec-head">
+    <span class="sec-num">04</span>
+    <h2>它有多有效，以及它的边界</h2>
+    <p class="lede">机制预测「会话变短、拿起次数不变」。三项独立数据正是这个模式——这既是它的证据，也是它的限制。</p>
+  </div>
+
+  <div class="stack">
+    <figure>
+      <div class="fig-head">
+        <h3>实测效应：三项有量化结果的研究</h3>
+        <p class="note">对照条件基线约 339–355 分钟/天</p>
+      </div>
+      <div class="fig-body">
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bl">Holte &amp; Ferraro<small>8–10 天 · 样本量不明</small></span>
+            <div class="track"><div class="fill f-amber" style="width:95%"></div></div>
+            <span class="bv" style="color:var(--amber)">约 −40 分</span>
+          </div>
+          <div class="bar-row">
+            <span class="bl">Hagerty et al. 2026<small>交叉 · 准随机 · 自报</small></span>
+            <div class="track"><div class="fill f-teal" style="width:71%"></div></div>
+            <span class="bv" style="color:var(--teal)">−28.4 分</span>
+          </div>
+          <div class="bar-row">
+            <span class="bl">Dekker &amp; Baumgartner<small>被试内 · 无对照组 · 客观</small></span>
+            <div class="track"><div class="fill f-amber" style="width:50%"></div></div>
+            <span class="bv" style="color:var(--amber)">−20 分</span>
+          </div>
+        </div>
+        <p class="note" style="margin-top:16px">
+          折合为约 <span class="num">340–355</span> 分钟/天基线的 <strong>6–10%</strong>。
+          Hagerty 的合并检验 <span class="num">t=2.3236, p=0.0243</span>，两个序列臂各自独立显著
+          （<span class="num">p=0.0143</span>、<span class="num">p=0.0045</span>）；Dekker 的效应量 <span class="num">d=0.51</span>。
+        </p>
+        <div class="legend">
+          <span class="lg"><i style="background:var(--teal)"></i><span class="badge b-pri">V-primary</span> 已核对原文</span>
+          <span class="lg"><i style="background:var(--amber)"></i><span class="badge b-sec">V-secondary</span> 出版社付费墙，二手佐证</span>
+        </div>
+      </div>
+      <figcaption>
+        <strong>Holte &amp; Ferraro 这一条最弱</strong>：原文始终未能取得（出版社与各镜像均 403），
+        样本量在可得来源间冲突（73 与约 220），而那个常被引用的「37.9 分钟」只能追溯到商业 App 博客——
+        故此处只给约数、不附精确统计量。<br>
+        整个文献的共同限制：<strong>无 RCT、无预注册研究、全为学生样本、最长两周</strong>；
+        且因灰阶可见，<strong>盲法在结构上不可行</strong>，期望效应无法排除。
+      </figcaption>
+    </figure>
+
+    <figure class="plain">
+      <div class="fig-head" style="padding-inline:0">
+        <h3>效应落在哪里：会话时长，而非拿起频率</h3>
+        <p class="note">三项独立发现指向同一个模式</p>
+      </div>
+      <div class="fig-body" style="padding-inline:0">
+        <div class="leaks">
+          <div class="leak">
+            <span class="lv">d = 0.04</span>
+            <span class="ln"><strong>解锁次数：零效应。</strong>手机被拿起的频率没有变化；变化的是每次进入之后停留多久。</span>
+            <span class="lf">Dekker &amp; Baumgartner 2024</span>
+          </div>
+          <div class="leak">
+            <span class="lv">视频 = 0</span>
+            <span class="ln"><strong>视频时长未减少</strong>，降幅集中于网页浏览与社交媒体。
+            <strong>但同一团队 2023 年的后续研究未能复现这一点</strong>，两者被描述为「相互冲突」——此条须按存疑对待。</span>
+            <span class="lf">Holte &amp; Ferraro（经 Dekker 文献综述佐证）</span>
+          </div>
+          <div class="leak">
+            <span class="lv">6%</span>
+            <span class="ln"><strong>提到转用其他设备。</strong>三周捆绑干预中，6% 的开放回答提及换用别的设备——
+            这是<strong>定性主题频次，不是测得的替代率</strong>。
+            反向证据：Dekker 发现被试<em>并未</em>增加其他设备使用（均值 3.76/7）。</span>
+            <span class="lf">Myers, Drees &amp; Cain 2022</span>
+          </div>
+        </div>
+        <div class="callout co-flat" style="margin-top:16px">
+          <span class="ct">这是事后解读，不是被验证的预测</span>
+          <span>
+            Dekker 的<strong>预注册假设原本预测解锁次数会下降</strong>，结果没有支持——
+            作者原话是「与我们的预期相反」。「会话变短而拿起不变」是他们事后的解读。
+            所以它<strong>不构成机制区分证据</strong>，下面那段因果解释是<strong>本页自己的推论</strong>。
+          </span>
+        </div>
+        <div class="callout co-info" style="margin-top:12px">
+          <span class="ct">本页的推论</span>
+          去饱和改变的是<strong>内容的视觉吸引力</strong>，这可以解释会话为何提前结束；
+          而它<strong>不改变强化时间表</strong>——「这次刷新会不会有好东西」这一不确定性结构完整存活，
+          这可以解释拿起手机的频率为何不变。<br>
+          <span class="cap">
+            关于强化时间表的一点分寸：动物实验确实显示多巴胺神经元的<strong>上升期预期活动</strong>在奖赏概率
+            P=0.5 时最大（Fiorillo, Tobler &amp; Schultz 2003）——但同一篇论文也报告该活动<strong>随奖赏量级上升</strong>，
+            且 CS 的相位反应是<strong>单调</strong>而非峰形。原文完全没有涉及人类、赌博或社交媒体，
+            把它套到信息流上<strong>是类比，不是证据</strong>；也没有找到任何同行评审研究把社交信息流实测为变量比率时间表。
+          </span>
+        </div>
+        <div class="callout co-key" style="margin-top:12px">
+          <span class="ct">可以确定的那部分</span>
+          无论机制如何解释，<strong>测得的事实是：时长降了，拿起频率没降。</strong>
+          所以去饱和<strong>收窄了使用，而不是消除使用。</strong>
+        </div>
+      </div>
+    </figure>
+
+    <figure>
+      <div class="fig-head"><h3>在什么内容上最有效</h3></div>
+      <div class="fig-body">
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bl">浏览器信息流<small>缩略图 / 图片 / 社交</small></span>
+            <div class="track"><div class="fill f-chroma" style="width:92%"></div></div>
+            <span class="bv" style="color:var(--chroma)">最强</span>
+          </div>
+          <div class="bar-row">
+            <span class="bl">电商 / 视频列表<small>彩色缩略图主导</small></span>
+            <div class="track"><div class="fill f-chroma" style="width:72%"></div></div>
+            <span class="bv" style="color:var(--chroma)">强</span>
+          </div>
+          <div class="bar-row">
+            <span class="bl">文档 / 邮件<small>以文字为主</small></span>
+            <div class="track"><div class="fill f-amber" style="width:38%"></div></div>
+            <span class="bv" style="color:var(--amber)">弱</span>
+          </div>
+          <div class="bar-row">
+            <span class="bl">代码 / 表格<small>颜色承载语义</small></span>
+            <div class="track"><div class="fill f-null" style="width:16%"></div></div>
+            <span class="bv" style="color:var(--ink-3)">最弱 · 有代价</span>
+          </div>
+        </div>
+        <p class="note" style="margin-top:16px">
+          绿与蓝的权重差约 <strong>9.9:1</strong>（<span class="num">0.7152 / 0.0722</span>），
+          所以<strong>纯靠色相编码的信息会失效</strong>——WCAG 的 SC 1.4.1 正是要求颜色不得作为传递信息的唯一手段。
+        </p>
+        <div class="callout co-key" style="margin-top:14px">
+          <span class="ct">灰阶到底做了什么：以微信绿为例</span>
+          <span>
+            去饱和不是「把三个数平均一下」，而是<strong>先算出这个颜色有多亮，再把三个通道都设成这个亮度</strong>。
+          </span>
+        </div>
+
+        <div class="mixer" id="mx">
+          <div class="mx-ctl">
+            <div class="mx-row">
+              <label class="mx-lab" for="mxR" style="color:#D4453A">R</label>
+              <input class="mx-sl r" type="range" id="mxR" min="0" max="255" value="7" aria-label="红通道值">
+              <output class="mx-val" id="mxRv">7</output>
+            </div>
+            <div class="mx-row">
+              <label class="mx-lab" for="mxG" style="color:#2FA84F">G</label>
+              <input class="mx-sl g" type="range" id="mxG" min="0" max="255" value="193" aria-label="绿通道值">
+              <output class="mx-val" id="mxGv">193</output>
+            </div>
+            <div class="mx-row">
+              <label class="mx-lab" for="mxB" style="color:#3A74C4">B</label>
+              <input class="mx-sl b" type="range" id="mxB" min="0" max="255" value="96" aria-label="蓝通道值">
+              <output class="mx-val" id="mxBv">96</output>
+            </div>
+            <div class="mx-presets">
+              <button type="button" data-c="07C160">微信绿</button>
+              <button type="button" data-c="E53935">警示红</button>
+              <button type="button" data-c="4A90D9">天空蓝</button>
+              <button type="button" data-c="FF6A00">品牌橙</button>
+            </div>
+            <p class="mx-hint">拖绿色滑块，右边的灰变化很大；拖红色，几乎不动。<strong>这就是「绿占七成」。</strong></p>
+          </div>
+
+          <div class="mx-view">
+            <div class="mx-swatches">
+              <div class="mx-sw">
+                <div class="mx-chip" id="mxIn"></div>
+                <span class="mx-cap" id="mxInHex">#07C160</span>
+                <span class="mx-sub">原色</span>
+              </div>
+              <div class="mx-arrow" aria-hidden="true">→</div>
+              <div class="mx-sw">
+                <div class="mx-chip" id="mxOut"></div>
+                <span class="mx-cap" id="mxOutHex">#A8A8A8</span>
+                <span class="mx-sub">灰阶</span>
+              </div>
+            </div>
+
+            <span class="mx-outk" style="margin-top:15px">换算成真实光强，再按人眼权重加权</span>
+            <div class="mx-math">
+              <div class="mx-mrow"><span><span class="mx-ch" style="color:#D4453A">R</span><span class="mx-raw" id="mxRaw1">7</span><span class="mx-oar">→</span><span class="mx-olin" id="mxLr">0.0021</span><span class="mx-wt">× 0.2126</span></span><span id="mxCr">0.0005</span></div>
+              <div class="mx-mrow"><span><span class="mx-ch" style="color:#2FA84F">G</span><span class="mx-raw" id="mxRaw2">193</span><span class="mx-oar">→</span><span class="mx-olin" id="mxLg">0.5333</span><span class="mx-wt">× 0.7152</span></span><span id="mxCg">0.3814</span></div>
+              <div class="mx-mrow"><span><span class="mx-ch" style="color:#3A74C4">B</span><span class="mx-raw" id="mxRaw3">96</span><span class="mx-oar">→</span><span class="mx-olin" id="mxLb">0.1170</span><span class="mx-wt">× 0.0722</span></span><span id="mxCb">0.0084</span></div>
+              <div class="mx-mrow mx-sum"><span>亮度</span><span id="mxY">0.3903</span></div>
+            </div>
+
+            <div class="mx-out">
+              <span class="mx-outk">三通道都设成这个亮度，再编回存储值</span>
+              <div class="mx-orow"><span class="mx-och">R</span><span class="mx-olin" id="mxOr">0.3903</span><span class="mx-oar">→</span><span class="mx-ost" id="mxOrv">168</span></div>
+              <div class="mx-orow"><span class="mx-och">G</span><span class="mx-olin" id="mxOg">0.3903</span><span class="mx-oar">→</span><span class="mx-ost" id="mxOgv">168</span></div>
+              <div class="mx-orow"><span class="mx-och">B</span><span class="mx-olin" id="mxOb">0.3903</span><span class="mx-oar">→</span><span class="mx-ost" id="mxObv">168</span></div>
+              <p class="mx-onote">三者相等 ＝ 没有色相；而这个亮度正是原色的亮度。</p>
+            </div>
+
+            <div class="mx-bar" role="img" aria-label="各通道对亮度的贡献比例">
+              <i id="mxBr" style="background:#D4453A"></i><i id="mxBg" style="background:#2FA84F"></i><i id="mxBb" style="background:#3A74C4"></i>
+            </div>
+            <p class="mx-pct"><span style="color:#D4453A">红 <b id="mxPr">0.1%</b></span><span style="color:#2FA84F">绿 <b id="mxPg">97.7%</b></span><span style="color:#3A74C4">蓝 <b id="mxPb">2.2%</b></span></p>
+
+            <p class="mx-avg">若改成简单取平均 → <b id="mxAvgHex">#636363</b>
+              <span id="mxAvgNote">暗了 69 级</span></p>
+          </div>
+        </div>
+
+        <div class="eg">
+          <span class="eg-k">所以灰阶的本质</span>
+          <span>
+            颜色有三个维度：<strong>亮度、色相、饱和度</strong>。
+            那个公式把三个数压成一个数，<strong>丢掉的是色相与饱和度，留下的正是亮度</strong>。<br>
+            所以去饱和是一次<strong>精准的降维</strong>——不是把画面调暗，也不是把颜色调淡，
+            而是<strong>只抽掉「是什么颜色」，保留「有多亮」</strong>。
+          </span>
+        </div>
+
+        <div class="callout co-key" style="margin-top:16px">
+          <span class="ct">那字还看得清吗——用 WCAG 来验</span>
+          <span>
+            「看得清」需要<strong>客观判据</strong>，而不是观感。
+            <strong>WCAG</strong>（W3C 无障碍标准）用<strong>对比度</strong>衡量文字与底色的亮度差，
+            正文须达 <span class="num">4.5:1</span>——这是各国政府采购普遍引用的硬性门槛。
+          </span>
+          <span>
+            而它算这个亮度，用的<strong>正是上面那个公式</strong>。<br>
+            既然灰阶<strong>不改变任何像素的亮度</strong>，由亮度算出的对比度自然也不该变——
+            <strong>「灰阶不损害可读性」于是从观感变成了可验证的命题。</strong>
+            前提是：两边必须在<strong>同一个数域</strong>里运算。
+          </span>
+        </div>
+
+      </div>
+      <figcaption>
+        <strong>不存在桌面／浏览器端的灰阶研究。</strong>
+        可支持的表述是：<em>手机端有适度、可复现的证据；桌面端属机制上合理的外推，无直接证据</em>。
+      </figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<footer>
+  <p class="eyebrow" style="margin-bottom:16px">主要来源</p>
+  <div class="refs">
+    <p><b>色觉与注意</b> Sumner &amp; Mollon, <em>Normal and Defective Colour Vision</em> (OUP) Ch.3 · Mullen, <em>J Physiol</em> 359:381–400 (1985) · Wolfe &amp; Horowitz, <em>Nat Hum Behav</em> 1:0058 (2017) · Wilms &amp; Oberfeld, <em>Psychological Research</em> (2018) · Maunsell et al., <em>Visual Neuroscience</em> (1999) · Dacey, <em>Annu Rev Neurosci</em> 23:743–775 (2000) · Curcio et al., <em>J Comp Neurol</em> 292:497–523 (1990)</p>
+    <p><b>灰阶干预</b> Holte &amp; Ferraro, <em>Social Science Journal</em> 60(2):274–290, DOI 10.1080/03623319.2020.1737461 · Holte, Giesen &amp; Ferraro, <em>Current Psychology</em> 42:6778–6790, DOI 10.1007/s12144-021-02020-y · Dekker &amp; Baumgartner, <em>Mobile Media &amp; Communication</em> (2024), DOI 10.1177/20501579231212062 · Hagerty et al., <em>Frontiers in Digital Health</em> 8:1816095 (2026) · Myers, Drees &amp; Cain, <em>Am J Pharm Educ</em> 86(4):8717 (2022)</p>
+    <p><b>显示技术</b> ITU-R BT.709 · Pointer (1980) · CIE S 026/E:2018 · Field (1987) · Juricevic &amp; Webster (2010)</p>
+    <p style="margin-top:8px;color:var(--ink-3)">
+      来源标签：<span class="badge b-pri">V-primary</span> 已核对原文 ·
+      <span class="badge b-sec">V-secondary</span> 出版社付费墙，经独立二手来源佐证 ·
+      <span class="badge b-un">unverified</span> 未能核实，未作为证据使用。
+      本报告仅收录可追溯至同行评审来源的统计数字；无法溯源的流传数据已单独列出并排除。
+    </p>
+  </div>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var W=[0.2126,0.7152,0.0722];
+  function dec(v){v/=255;return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4);}
+  function enc(y){var v=y<=0.0031308?y*12.92:1.055*Math.pow(y,1/2.4)-0.055;return Math.round(v*255);}
+  function hx(n){n=Math.max(0,Math.min(255,Math.round(n)));return n.toString(16).toUpperCase().padStart(2,'0');}
+  var $=function(id){return document.getElementById(id);};
+  var R=$('mxR'),G=$('mxG'),B=$('mxB');
+  if(!R) return;
+  function draw(){
+    var r=+R.value,g=+G.value,b=+B.value;
+    $('mxRv').textContent=r;$('mxGv').textContent=g;$('mxBv').textContent=b;
+    var lr=dec(r),lg=dec(g),lb=dec(b);
+    var cr=W[0]*lr,cg=W[1]*lg,cb=W[2]*lb,Y=cr+cg+cb;
+    var out=enc(Y);
+    $('mxIn').style.background='rgb('+r+','+g+','+b+')';
+    $('mxOut').style.background='rgb('+out+','+out+','+out+')';
+    $('mxInHex').textContent='#'+hx(r)+hx(g)+hx(b);
+    $('mxOutHex').textContent='#'+hx(out)+hx(out)+hx(out);
+    $('mxLr').textContent=lr.toFixed(4);$('mxLg').textContent=lg.toFixed(4);$('mxLb').textContent=lb.toFixed(4);
+    $('mxRaw1').textContent=r;$('mxRaw2').textContent=g;$('mxRaw3').textContent=b;
+    var ys=Y.toFixed(4);
+    $('mxOr').textContent=ys;$('mxOg').textContent=ys;$('mxOb').textContent=ys;
+    $('mxOrv').textContent=out;$('mxOgv').textContent=out;$('mxObv').textContent=out;
+    $('mxCr').textContent=cr.toFixed(4);$('mxCg').textContent=cg.toFixed(4);$('mxCb').textContent=cb.toFixed(4);
+    $('mxY').textContent=Y.toFixed(4);
+    var tot=Y||1e-9;
+    $('mxBr').style.width=(cr/tot*100)+'%';
+    $('mxBg').style.width=(cg/tot*100)+'%';
+    $('mxBb').style.width=(cb/tot*100)+'%';
+    $('mxPr').textContent=(cr/tot*100).toFixed(1)+'%';
+    $('mxPg').textContent=(cg/tot*100).toFixed(1)+'%';
+    $('mxPb').textContent=(cb/tot*100).toFixed(1)+'%';
+    var avg=Math.round((r+g+b)/3);
+    $('mxAvgHex').textContent='#'+hx(avg)+hx(avg)+hx(avg);
+    var d=out-avg;
+    var EN = document.documentElement.lang === 'en';
+    $('mxAvgNote').textContent = d>0
+      ? (EN ? (d+' levels darker') : ('暗了 '+d+' 级'))
+      : (d<0 ? (EN ? ((-d)+' levels lighter') : ('亮了 '+(-d)+' 级'))
+             : (EN ? 'exactly the same' : '恰好相同'));
+  }
+  window.__mxDraw = draw;
+  [R,G,B].forEach(function(el){el.addEventListener('input',draw);});
+  Array.prototype.forEach.call(document.querySelectorAll('.mx-presets button'),function(btn){
+    btn.addEventListener('click',function(){
+      var c=btn.getAttribute('data-c');
+      R.value=parseInt(c.slice(0,2),16);
+      G.value=parseInt(c.slice(2,4),16);
+      B.value=parseInt(c.slice(4,6),16);
+      draw();
+    });
+  });
+  draw();
+})();
+</script>
+
+<script>
+(function(){
+  // \u6c49\u5b57 + CJK/\u5168\u89d2\u6807\u70b9\uff08U+3000\u2013303F\u3001U+FF00\u2013FFEF\uff09+ \u4e2d\u6587\u7834\u6298\u53f7 U+2014\u3002
+  // \u53ea\u5339\u914d\u6c49\u5b57\u4f1a\u6f0f\u6389\u7eaf\u6807\u70b9\u8282\u70b9\uff08\u5982\u72ec\u7acb\u7684\u300c\u3002\u300d\u300c\uff1a\u300d\u300c\u2014\u2014\u300d\uff09\uff0c\u5b83\u4eec\u5728\u82f1\u6587\u6a21\u5f0f\u4e0b\u4f1a\u6f0f\u51fa\u4e2d\u6587\u3002
+  var HAN=/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef\u2014]/;
+  var __I18N__={"灰阶为什么有用":"Why Grayscale Works","研究报告 · 2026-11":"RESEARCH REPORT · 2026-11","中文":"中文","Language / 语言":"Language / 语言","颜色是一条":"Colour Is a","显著性通道":"Salience Channel","手机屏幕不是「更亮的纸」。它在四个物理维度上都不属于你眼睛适应的那个世界， 而其中一个维度——颜色——正好落在人类视觉少数几个「自动引导注意力」的特征上。 这是去饱和能起作用的原因，也框定了它能起作用的范围。":"A phone screen is not \"brighter paper\". On four physical dimensions it does not belong to the world your eyes adapted to — and one of those dimensions, colour, happens to land on one of the handful of features that automatically guide human attention. That is why desaturation works, and it is also what bounds how far it can work.","这份报告的推进路线":"HOW THIS REPORT PROCEEDS","屏幕是什么":"What a Screen Actually Is","它和你眼睛看惯的世界，在物理上是两种东西":"Physically, it and the world your eyes are used to are two different things","颜色为何特殊":"Why Colour Is Special","它是第一档注意力引导特征，且能吸附习得关联":"It is a first-tier attention-guiding feature, and it readily picks up learned associations","怎么办":"What to Do","拿掉粗尺度的色彩，留下细节":"Strip the coarse-scale colour, keep the detail","有多有效":"How Effective It Is","实测数据，以及它的边界":"The measured data, and its limits","先说结论：这件事能做到什么程度":"THE CONCLUSION FIRST: HOW FAR THIS ACTUALLY GOES","去饱和在":"In ","学生样本":"student samples","中、":", over ","1–2 周":"1–2 weeks","内，通过":", desaturation works by ","缩短单次会话而非减少拿起次数":"shortening individual sessions rather than reducing the number of pickups","， 带来":", producing a drop of ","20–40 分钟/天":"20–40 min/day","（约基线":" (about ","）的":" of baseline) in ","手机":"phone","屏幕时间下降。 它作用的是":" screen time. It acts on the ","参与度":"engagement","这一条路径。":" pathway.","以及它做不到什么：":"And what it does not do: ","在睡眠、生产力与主观幸福感上":"for sleep, productivity and subjective well-being there is ","无已证实的直接改善":"no demonstrated direct improvement","； 焦虑类结果在研究间不一致；":"; anxiety outcomes are inconsistent across studies; the evidence ","不支持":"does not support","关于长期持久性、非学生人群或桌面端的任何推论。":" any inference about long-term durability, non-student populations or the desktop.","你的视觉系统有几亿年时间适应":"Your visual system had hundreds of millions of years to adapt to ","反射光下的世界":"a world under reflected light","。 屏幕在四个维度上都不属于那个世界——下面每一条都在这块屏幕上直接演示给你看。":". A screen does not belong to that world on four dimensions — and each one below is demonstrated to you directly, on this very screen.","维度 1 · 光谱":"DIMENSION 1 · SPECTRUM","现实用「一整条光谱」给你颜色，屏幕用「三根针」骗过你":"Reality gives you colour with a whole spectrum; a screen fools you with three needles","本质：":"In essence: ","你的眼睛只有三种视锥，所以只需要三个数字就能被完全欺骗。":"You have only three cone types, so three numbers are enough to deceive you completely.","一片真实的树叶把整个可见光谱连续地反射给你；屏幕只发射红、绿、蓝三道极窄的光， 却能让你的三种视锥产生":"A real leaf reflects the entire visible spectrum back at you continuously; a screen emits only three extremely narrow bands — red, green and blue — yet makes your three cone types produce ","一模一样":"exactly identical","的读数。这叫同色异谱（metamerism）—— 物理上毫无关系的两样东西，在你眼里完全相同。":" readings. This is metamerism — two things physically unrelated, completely identical to your eye.","光谱对比：真实树叶的反射光谱为一条平滑连续的宽带曲线；屏幕的发射光谱为红绿蓝三根极窄尖峰":"Spectrum comparison: the reflectance spectrum of a real leaf is a smooth, continuous broadband curve; a screen’s emission spectrum is three extremely narrow red, green and blue spikes","真实树叶 · 反射光谱":"Real leaf · reflectance spectrum","连续、宽带 · 每个波长都带信息":"Continuous, broadband · every wavelength carries information","5–7 个基函数即可描述":"Describable with 5–7 basis functions","屏幕 · 发射光谱":"Screen · emission spectrum","三根窄峰 · 半高宽仅 20–40 nm":"Three narrow peaks · FWHM only 20–40 nm","波长之间是空的":"Between the wavelengths there is nothing","→ 但你的眼睛报告：「同一个绿色」":"→ But your eye reports: \"the same green\"","例子":"Example","照片里的草地和真实的草地，你的眼睛说一样绿；换一台光谱仪去看，它们是两种毫无关系的东西。":"Grass in a photo and real grass: your eye says they are the same green. Put a spectrometer on them and they are two unrelated things.","那为什么同一张照片在不同手机上会偏色？":"So why does the same photo shift colour on different phones?","这":"That","不是":"is not","同色异谱「失效」—— 恰恰相反，同色异谱正是三原色能工作的原理。偏色的真实原因是":" metamerism \"failing\" — on the contrary, metamerism is exactly why three primaries work at all. The real cause of the colour shift is ","色彩管理":"colour management","： ICC 配置文件被忽略或丢弃，像素值于是被按错误的原色去解释；再叠加不同机型的原色坐标、色域、白点与厂商显示模式的差异。 这是":": the ICC profile is ignored or discarded, so pixel values get interpreted against the wrong primaries; on top of that come differences in primary coordinates, gamut, white point and vendor display modes between models. This is a mismatch at the ","色度学":"colorimetric","层面的不匹配，与视锥被骗这件事无关。":" level, and has nothing to do with the cones being fooled.","量子点发光半高宽 20–40 nm；QD-OLED 峰 20–30 nm，OLED 约 50 nm":"Quantum-dot emission FWHM 20–40 nm; QD-OLED peaks 20–30 nm, OLED about 50 nm","维度 2 · 饱和度":"DIMENSION 2 · SATURATION","屏幕能做出真实物体表面做不出的颜色":"A screen can make colours no real object surface can make","真实物体的颜色来自「吸收掉一部分光」，所以必然有损耗、必然不纯。":"The colour of a real object comes from absorbing away part of the light, so it is necessarily lossy and necessarily impure.","一颗再红的草莓也反射着不少其他波长。而屏幕的红是":"However red a strawberry is, it still reflects plenty of other wavelengths. A screen’s red, by contrast, is ","直接发射":"emitted directly","的， 可以纯到任何真实表面都达不到的程度。你每天看的饱和度，在自然界属于稀有事件。":", and can be purer than any real surface ever reaches. The saturation you look at every day is a rare event in nature.","真实草莓":"Real strawberry","反射":"reflective","印刷油墨":"Printing ink","sRGB 屏幕":"sRGB screen","自发光":"self-emissive","P3 屏幕":"P3 screen","↑ 同一个「红」在四种介质上能达到的极限。越往右，越脱离「反射」这个物理约束。":"↑ The limit the same \"red\" can reach in four media. The further right, the further from the physical constraint of reflection.","老标准":"old standard","当前手机":"current phones","下一代":"next generation","↑ 对 Pointer 色域的覆盖率。Pointer 色域是":"↑ Coverage of the Pointer gamut. The Pointer gamut is the colour set of ","个":" ","真实反射表面":"real reflective surfaces","的颜色集合； 覆盖率越高，说明屏幕越能把「真实物体的全部颜色」装进去。 而落在这个集合":"; the higher the coverage, the more of \"every colour of real objects\" the screen can fit inside. And the colours that fall ","之外":"outside","的颜色，具体来说都是":" that set are, specifically, all ","的。":".","霓虹灯、LED 刹车灯，以及你手机上那个":"Neon signs, LED brake lights, and that ","红色角标":"red badge","（App 图标右上角显示未读数的小红点）——这些颜色在「物体表面」的世界里不存在。":" on your phone (the little red dot at the top right of an app icon showing the unread count) — these colours do not exist in the world of object surfaces.","分寸":"Scope and limits","：屏幕超越的是":": what a screen exceeds is ","反射性物体色":"reflective object colour","，不是「自然界」。 彩虹、火焰、晚霞本身也是高纯度的——但它们不会出现在你口袋里，一天几百次。":", not \"nature\". Rainbows, flames and sunsets are highly pure too — but they do not show up in your pocket a few hundred times a day.","Pointer (1980)，4089 个样本 · TFTCentral 色域覆盖率测算":"Pointer (1980), 4089 samples · TFTCentral gamut-coverage calculations","维度 3 · 发光方式":"DIMENSION 3 · MODE OF EMISSION","屏幕的光，身体是按波长收的":"Your body receives a screen’s light by wavelength","屏幕对身体的影响，不取决于它看起来有多亮。":"A screen’s effect on the body does not depend on how bright it looks.","你眼睛里除了负责成像的视锥视杆，还有一类细胞":"Besides the cones and rods that handle imaging, your eye contains a class of cells that ","不参与看东西":"take no part in seeing","， 只向大脑报告一件事——":" and report just one thing to the brain — ","现在是白天还是晚上":"whether it is day or night","。 它们":". They ","挑波长":"select by wavelength","，不看亮度。 要讲清这件事，得先有两个单位。":", not by brightness. To make this clear, we first need two units.","melanopic EDI：就是「按报时细胞的口味重新称过」的 lux":"MELANOPIC EDI: LUX REWEIGHED TO THE TASTE OF THE CLOCK CELLS","光的量用":"The quantity of light is measured in ","计——落到你眼睛上的光有多少。 但 lux 本身是按":" — how much light falls on your eye. But lux itself is computed by weighting with the sensitivity curve for ","人眼看亮度":"how the human eye sees brightness","的敏感曲线加权算出来的（峰值在 555 nm 绿光附近）。":" (peaking near 555 nm, in the green).","报时细胞的口味不一样：它的敏感峰在约":"The clock cells have a different taste: their sensitivity peaks at about ","（蓝青色），对红光几乎没反应。 所以把同一束光":" (blue-cyan), with almost no response to red. So take the same beam of light, ","按它的曲线重新加权":"reweigh it by their curve","，就得到":", and you get ","单位仍然是 lux":"the unit is still lux","，只是换了一把秤。":" — only the scale has changed.","上图：人眼看亮度的敏感峰在555纳米，报时细胞的敏感峰在480纳米蓝青色。下图：按报时细胞那把秤称出的剂量刻度，常见夜间屏幕落在5到150 lux，群体半数褪黑素抑制点24.6 lux，个体差异6到350 lux":"Top: the sensitivity peak for how the eye sees brightness is at 555 nm; the clock cells peak at 480 nm, in the blue-cyan. Bottom: a dose scale weighed on the clock cells’ scale — common night-time screens fall between 5 and 150 lux, the population half-suppression point for melatonin is 24.6 lux, and individual variation runs from 6 to 350 lux","① 两把秤：同一束光，按不同曲线加权":"① Two scales: the same light, weighted by different curves","报时细胞 · 峰 480":"Clock cells · peak 480","看亮度 · 峰 555":"Seeing brightness · peak 555","高":"High","低":"Low","用蓝青那把秤称 → melanopic EDI（单位仍是 lux）":"Weigh on the blue-cyan scale → melanopic EDI (unit still lux)","② 称出来的剂量落在哪（角膜处，对数轴）":"② Where the weighed dose falls (at the cornea, log axis)","常见夜间屏幕：5 – 150":"Common night-time screens: 5 – 150","（显示亮度 27–284 cd/m² 实测对应区间）":"(measured range corresponding to display luminance 27–284 cd/m²)","褪黑素被压掉一半（群体 ED50）":"Melatonin suppressed by half (population ED50)","个体 ED50 差异约 58 倍":"Individual ED50 varies by about 58×","所以「我刷手机照样睡得着」和「我一刷就失眠」可能都是真的":"So \"I scroll and sleep fine\" and \"one scroll and I’m awake all night\" may both be true","对身体的影响 · 剂量关系":"Effect on the body · dose relation","生物钟收到":"With the circadian clock receiving ","lux，褪黑素起始分别":" lux, melatonin onset is ","推迟 22／77／109 分钟":"delayed by 22/77/109 minutes","。 剂量越高推得越晚。":" respectively. The higher the dose, the later the delay.","夜间屏幕落在哪":"Where night-time screens fall","在线上":"On the line","实测显示亮度 27–284 cd/m² 对应 mEDI 约":"Measured display luminance of 27–284 cd/m² corresponds to an mEDI of about ","正常夜间亮度就落在半数抑制点上下":"normal night-time brightness lands right around the half-suppression point","。「屏幕太小、光量不够」站不住。":". \"The screen is too small, the light too little\" does not hold up.","关键机制":"The key mechanism","看光谱":"Spectrum","在":"Under ","亮度相同":"matched luminance","的条件下，结果跟随":", outcomes follow ","melanopic 辐照度":"melanopic irradiance","而非亮度。 决定影响的是":" rather than luminance. What determines the effect is ","光谱成分":"spectral composition","，不是屏幕多亮、也不是屏幕比房间亮几倍。":", not how bright the screen is, nor how many times brighter it is than the room.","于是这两个流行说法是错的":"SO THESE TWO POPULAR CLAIMS ARE WRONG","① 「开夜间模式／滤蓝光就能护住睡眠」":"① \"Night mode / blue-light filtering protects your sleep\"","—— 盲化对照 RCT（n=55）":" — a blinded controlled RCT (n=55) found ","零效应":"zero effect","，客观与自报睡眠均无优势； 常引的「减少 93% 褪黑素抑制」是":", no advantage on either objective or self-reported sleep; the frequently cited \"93% reduction in melatonin suppression\" is ","建模推算，不是实测褪黑素":"a modelled estimate, not measured melatonin","附带一个对「改外观」类工具的警示：该研究中实验组觉得它更干扰，":"A side warning about tools that change how things look: in that study the experimental group found it more disruptive and ","更常主动关掉":"turned it off themselves more often","② 「深色模式夜里更护眼」":"② \"Dark mode is easier on the eyes at night\"","——方向可能是":" — the direction may be the ","反":"opposite","的：负极性在昏暗环境下 对年轻成年人产生":": in dim surroundings, negative polarity imposes a ","更高":"higher","的认知负荷（瞳孔直径、搜索时间增加），作者把人们的偏好归因于":" cognitive load on young adults (increased pupil diameter and search time), and the authors attribute people’s preference to ","美学":"aesthetics","而非视觉舒适。":" rather than visual comfort.","那该怎么做":"So what to do instead","把环境调亮，而不是把屏幕调暗。":"Turn the room up, not the screen down.","有直接证据":"direct evidence","放射科是唯一一个几十年来系统面对「暗房里看亮屏幕」的职业，其规范解法是把阅片室环境照明定在":"Radiology is the one profession that has systematically faced \"a bright screen in a dark room\" for decades, and its codified solution is to set reading-room ambient lighting at ","。另有研究发现人":". Other research finds that the ambient brightness people ","自己偏好":"choose for themselves","的环境亮度会随屏幕亮度近乎等比上升 （儿童斜率":" rises almost proportionally with screen brightness (slope ",", R²=0.98；成人 0.38, R²=1.00）。":" for children, R²=0.98; 0.38 for adults, R²=1.00).","而关灯刷手机把这两条都反着做。":"Scrolling with the lights off does the opposite of both.","亮度与公式：Cornell DEA 3500 讲义 · CCS Inc. · Pointer (1980) · Apple 公布规格｜melanopic：Schöllhorn &amp; Cajochen (2023) Commun Biol 6:228 (n=72，亮度与 melanopic 解耦) · Phillips et al. (2019) PNAS (n=55) · CIE S 026/E:2018｜环境照明：Chawla &amp; Samei (2007) Med Phys · Shen (2014) Chin Med J｜夜间模式 RCT：Smidt (2022)｜深色模式：Sethi &amp; Ziat (2023) Ergonomics":"Luminance and formulas: Cornell DEA 3500 lecture notes · CCS Inc. · Pointer (1980) · Apple published specifications | melanopic: Schöllhorn & Cajochen (2023) Commun Biol 6:228 (n=72, luminance decoupled from melanopic) · Phillips et al. (2019) PNAS (n=55) · CIE S 026/E:2018 | ambient lighting: Chawla & Samei (2007) Med Phys · Shen (2014) Chin Med J | night mode RCT: Smidt (2022) | dark mode: Sethi & Ziat (2023) Ergonomics","亮度与公式：Cornell DEA 3500 讲义 · CCS Inc. · Pointer (1980) · Apple 公布规格｜melanopic：Schöllhorn & Cajochen (2023) Commun Biol 6:228 (n=72，亮度与 melanopic 解耦) · Phillips et al. (2019) PNAS (n=55) · CIE S 026/E:2018｜环境照明：Chawla & Samei (2007) Med Phys · Shen (2014) Chin Med J｜夜间模式 RCT：Smidt (2022)｜深色模式：Sethi & Ziat (2023) Ergonomics":"Luminance and formulas: Cornell DEA 3500 lecture notes · CCS Inc. · Pointer (1980) · Apple published specifications | melanopic: Schöllhorn & Cajochen (2023) Commun Biol 6:228 (n=72, luminance decoupled from melanopic) · Phillips et al. (2019) PNAS (n=55) · CIE S 026/E:2018 | ambient lighting: Chawla & Samei (2007) Med Phys · Shen (2014) Chin Med J | night mode RCT: Smidt (2022) | dark mode: Sethi & Ziat (2023) Ergonomics","两点诚实说明":"Two points of honest disclosure","：mEDI 的 5–150 lux 为该研究四档亮度条件的":": the 5–150 lux mEDI figure is the ","整体区间":"overall range","， 各介质逐档数值未能逐行核对，故本页不按介质分列 melanopic 值； 个体 ED50 差异原文表述为「超过一个数量级」（6→350 lux，约 58 倍，变异系数 26%）。":" across that study’s four brightness conditions; the per-medium, per-level values could not be checked line by line, so this page does not break melanopic values down by medium. The individual ED50 variation is described in the original as \"more than an order of magnitude\" (6→350 lux, about 58×, coefficient of variation 26%).","维度 4 · 时间结构":"DIMENSION 4 · TEMPORAL STRUCTURE","自然界没有「剪辑」这种东西——而这件事利大于弊":"Nature has no such thing as a cut — and on balance that is a benefit","剪辑是一项顺着视觉系统的纹理工作的发明。":"The cut is an invention that works with the grain of the visual system.","人的知觉本来就会把连续经验切分成离散「事件」，并在事件边界处重置模型、摄入新信息。 一个放对位置的剪辑，正落在这个本来就要断开的地方—— 所以它":"Human perception already segments continuous experience into discrete \"events\", resetting its model and taking in new information at event boundaries. A well-placed cut falls exactly where the break was going to happen anyway — so it ","满足":"satisfies","你已经形成的预期，而不是打断它。":" the expectation you have already formed rather than interrupting it.","利":"Pro","剪辑让几小时的事在几分钟里讲完，而代价几乎为零。":"Cutting lets hours of events be told in minutes at almost no cost.","因为它落在知觉本来就要断开的地方——这是":"Because it falls where perception was going to break anyway — and this holds ","普遍成立":"generally","弊":"Con","只在特定组合下出现：高剪辑率 × 高唤醒内容":"Appears only in a specific combination: high cut rate × high-arousal content","， 或片段互不相关时，处理容量被超出，":", or when the segments are unrelated — processing capacity is exceeded and ","记忆与理解下降":"memory and comprehension decline","——这是":" — and this holds ","有条件":"only conditionally","「高唤醒」是什么，以及为什么会记不住":"WHAT \"HIGH AROUSAL\" IS, AND WHY YOU CANNOT REMEMBER","高唤醒":"High arousal","＝让你心跳加快、注意力绷紧的内容（惊险、冲突、强烈情绪）， 不等于「有趣」或「负面」。":" = content that raises your heart rate and tightens your attention (danger, conflict, strong emotion). It is not the same as \"interesting\" or \"negative\".","看视频时，你的处理资源要同时供给三件事，而":"While watching video, your processing resources must supply three things at once, and ","总量是固定的":"the total is fixed","编码":"Encoding","把看到的东西录进去":"Getting what you see recorded","存储":"Storage","和已有知识建立联系":"Linking it to existing knowledge","提取":"Retrieval","之后能调出来":"Being able to call it up later","为什么这两样会「自动」抢走资源":"WHY THESE TWO TAKE RESOURCES AUTOMATICALLY","关键在于":"The key is that ","①编码是不由你控制的":"① encoding is not under your control","，而②③才是你能支配的那部分。":", while ② and ③ are the part you can allocate.","剪辑：":"Cuts:","画面整体换掉，构成一次「场景变了」的信号， 视觉系统":" the whole image is replaced, which constitutes a \"the scene has changed\" signal, and the visual system ","必须":"must","重新采集一遍——这笔编码开销是强制的，你没法选择「忽略这次剪辑」。":" sample it afresh — that encoding cost is compulsory, and you cannot choose to \"ignore this cut\".","高唤醒内容：":"High-arousal content:","心跳加速意味着身体判定「这件事重要」， 于是优先保证把它":" a quickening heart rate means the body has judged \"this matters\", so it gives priority to getting it ","录下来":"recorded","——同样绕过你的意志。":" — again bypassing your will.","于是两者叠加时，":"So when the two combine, ","①编码吃掉了大部分资源，留给②存储的就不够了":"① encoding eats most of the resources and not enough is left for ② storage","。 录是录进去了，但":". It does get recorded, but ","没有和任何已有知识挂上钩":"it is not hooked onto any existing knowledge","——而③提取靠的正是这些钩子。 所以结果是：":" — and ③ retrieval depends on exactly those hooks. So the result is: ","当时看得很投入，事后想不起来讲了什么。":"you were absorbed at the time, and afterwards cannot recall what it was about.","这也解释了为什么":"This also explains why ","单独提高剪辑率反而帮助记忆":"raising the cut rate on its own actually helps memory","： 剪辑把资源":": cuts ","调动":"mobilise","起来（①升高），而内容本身不抢，":" resources (① rises) while the content itself does not compete, so ","②仍有余量":"② still has headroom","—— 于是录得清楚、也挂上了钩。":" — so it is recorded clearly and hooked onto existing knowledge as well. ","所以速率不是问题，速率 × 高唤醒才是。":"So the rate is not the problem; rate × high arousal is.","示意图：连续经验被知觉切分为离散事件，剪辑落在事件边界处":"Schematic: continuous experience is segmented by perception into discrete events, with cuts falling at the event boundaries","连续的真实经验":"Continuous real experience","知觉自动切分出的「事件边界」":"The \"event boundaries\" perception segments out automatically","剪辑":"Cut","Zacks &amp; Magliano（事件分割）· Smith，电影连续性注意理论（AToCC）· Lang，有限容量模型 LC4MP（编码／存储／提取三分资源，剪辑率与唤醒的交互）":"Zacks & Magliano (event segmentation) · Smith, Attentional Theory of Cinematic Continuity (AToCC) · Lang, limited capacity model LC4MP (resources split across encoding/storage/retrieval; the interaction of cut rate and arousal)","Zacks & Magliano（事件分割）· Smith，电影连续性注意理论（AToCC）· Lang，有限容量模型 LC4MP（编码／存储／提取三分资源，剪辑率与唤醒的交互）":"Zacks & Magliano (event segmentation) · Smith, Attentional Theory of Cinematic Continuity (AToCC) · Lang, limited capacity model LC4MP (resources split across encoding/storage/retrieval; the interaction of cut rate and arousal)","诚实说明":"Honest disclosure","：本节引文经 Smith 的综述转引，直接引用前应核对原文； Lang 的剪辑率具体数值两轮检索均未取得，故本页":": the citations in this section are relayed via Smith’s review and should be checked against the originals before direct quotation. Lang’s specific cut-rate figures could not be obtained in two rounds of searching, so this page ","不给出任何数值最优点":"gives no numerical optimum","，也不使用「倒 U 型」这一暗示特定曲线的说法。 上图的事件边界与剪辑位置为示意。":", and avoids the phrase \"inverted U\", which implies a particular curve. The event boundaries and cut positions in the figure above are schematic.","把四条合起来":"PUTTING THE FOUR TOGETHER","这四条不是四项罪状，各自的性质完全不同：":"These four are not four counts of an indictment; their natures are entirely different:","光谱合成":"Spectral synthesis","是中性的工程事实；":" is a neutral engineering fact. ","时间切分":"Temporal segmentation","顺着知觉的纹理，主要是收益；":" works with the grain of perception and is mostly a benefit. ","夜间光照":"Night-time light exposure","有真实的生理后果，但解法是调环境、调亮度、调时间——":" has real physiological consequences, but the fix is to adjust the environment, the brightness and the timing — ","与颜色无关":"nothing to do with colour","； 只有":". Only ","饱和度":"saturation","这一条，既是问题、又恰好是去饱和唯一能动的那一条。":" is both a problem and precisely the one thing desaturation can act on.","所以下一节要问的是：饱和度凭什么值得单独拿出来处理？":"So the next section asks: what makes saturation worth singling out for treatment?","颜色为什么特殊":"Why Colour Is Special","颜色":"Colour","承载空间细节的主通道——那是亮度信号的工作。 颜色是一条":" the main channel carrying spatial detail — that is the luminance signal’s job. Colour is a ","显著性":"salience","通道：它是少数几个能自动引导注意力的特征之一，并且很容易吸附关于奖赏的习得性关联。":" channel: one of the handful of features that automatically guide attention, and one that readily picks up learned associations with reward.","红绿通道对「成熟度」特别敏感":"The red-green channel is especially sensitive to ripeness","乌干达 Kibale 森林野外光谱辐射测量：红绿通道相对亮度通道的信噪比优势":"Field spectroradiometry in Kibale Forest, Uganda: the signal-to-noise advantage of the red-green channel over the luminance channel","检测成熟果实":"Detecting ripe fruit","L/(L+M) vs 亮度":"L/(L+M) vs luminance","检测可食嫩叶":"Detecting edible young leaves","亮度通道基准":"Luminance channel baseline","关键":"The key point","研究者用":"The researchers used ","穿刺力":"puncture force","作为成熟度的物理测量，发现穿刺力与 L/(L+M)":" as a physical measure of ripeness, and found puncture force to be ","成反比":"inversely related","—— 越红，字面意义上就是越成熟。 也就是说，红绿通道对":" to L/(L+M) — redder is, literally, riper. That is, the red-green channel is especially sensitive to ","与食物价值相关的物理信号":"physical signals related to food value","特别敏感。":".","这在野外被直接检验过":"This has been tested directly in the wild","72 只野生白脸卷尾猴、约":"72 wild white-faced capuchins, about ","次摄食事件、27 个植物物种，色觉类型由基因判定：":" feeding events, 27 plant species, with colour-vision type determined genotypically: ","三色视个体对显著着色果实的摄食率高于同群的双色视个体":"trichromats fed on conspicuously coloured fruit at higher rates than the dichromats in their own groups","。 这填补了此前的空缺——圈养实验早有差异，但野外研究一度报告两者相近。":". This fills a previous gap — captive experiments had long shown a difference, but field studies had at one point reported the two types to be comparable.","Melin et al., PNAS (2017)。分寸：效应限于显著着色的果实；食叶假说未被排除；卷尾猴为多态三色视，外推到人类需谨慎。":"Melin et al., PNAS (2017). Scope and limits: the effect is confined to conspicuously coloured fruit; the folivory hypothesis is not ruled out; capuchins are polymorphic trichromats, so extrapolation to humans requires caution.","注意这是生态学证据，不是神经解剖学证据":"Note that this is ecological evidence, not neuroanatomical evidence","：它说明颜色与食物价值信号相关，":": it shows that colour correlates with food-value signals; it does ","不":"not","说明色度信号在脑内进入价值计算回路（见本节末）。":" show that chromatic signals enter value-computation circuits in the brain (see the end of this section).","注意力：颜色是第一档":"Attention: colour is first-tier","第 1 档":"Tier 1","在权威分类中，":"In the authoritative taxonomy, ","是仅四个「无疑」的注意力引导特征之一（另三个：运动、朝向、大小）；":" is one of only four \"undoubted\" attention-guiding features (the other three: motion, orientation, size); ","亮度对比只属第 2 档":"luminance contrast is only tier 2","「可能」。颜色的优先级高于明暗。":", \"probable\". Colour outranks light and dark.","生理唤醒：饱和度驱动":"Physiological arousal: driven by saturation","饱和度 &gt; 色相":"saturation > hue","饱和度 > 色相":"saturation > hue","设亮度匹配的无彩色对照":"with luminance-matched achromatic controls","：饱和色→更高唤醒、更强皮电反应； 彩色刺激使心率":": saturated colours → higher arousal and stronger electrodermal response; chromatic stimuli ","加速":"accelerate","，无彩色使心率":" heart rate, achromatic ones ","减速":"decelerate","界面厂商自己就把颜色当作注意力装置":"Interface vendors themselves treat colour as an attention device","以下为厂商设计文档原文":"The following is verbatim from vendor design documentation","Material Design · 颜色用法":"Material Design · colour usage","「当一个元素的颜色与周围形成对比，它就会突出，用户因此知道它重要。」 「要引起对重要事件的注意，就在元素间使用更强的颜色对比。」 其整个颜色系统按":"\"When an element’s colour contrasts with its surroundings, it stands out, so users know it is important.\" \"To draw attention to important events, use stronger colour contrast between elements.\" Its entire colour system is layered by ","高／中／低强调":"high/medium/low emphasis","分层。":".","Apple HIG · 关于角标":"Apple HIG · on badges","「一个红色椭圆内含白色文字……用以指示有新的或更新的信息……":"\"A red oval containing white text ... used to indicate that new or updated information is available ... ","值得一个人的注意":"worthy of a person’s attention","。」 颜色被指定，用途被明说。":".\" The colour is specified and the purpose stated outright.","dark patterns 分类法":"dark patterns taxonomy","「视觉干预」是一个被命名的类别——「用样式与视觉呈现把用户导向或导离特定选项」， 判定为":"\"Visual interference\" is a named category — \"using style and visual presentation to steer users toward or away from particular options\" — and is classified as ","不对称且隐蔽":"asymmetric and covert","（「用户可能意识不到视觉呈现对其选择的影响」）。":" (\"users may not be aware of the influence of visual presentation on their choices\").","所以本页的说法是：":"So this page’s claim is: ","颜色被设计用来引导注意力":"colour is designed to guide attention","（有文档），而不是「屏幕被精确校准来攻击你的奖赏系统」（无证据）。":" (documented), not that \"screens are precisely calibrated to attack your reward system\" (no evidence).","解决方式：拿掉粗尺度的色彩，留下细节":"The Fix: Strip the Coarse-Scale Colour, Keep the Detail","视觉系统把「空间细节」和「色彩」分在两条通道上，而且两者的优势分处不同的尺度。这个分工让去饱和成为一次代价极低的干预。":"The visual system splits spatial detail and colour across two channels, and each has its advantage at a different scale. That division of labour is what makes desaturation an extremely low-cost intervention.","为什么去掉颜色几乎不影响可用性":"Why removing colour barely affects usability","对比敏感度函数：横轴为空间频率（对数轴），纵轴为对比敏感度":"Contrast sensitivity functions: spatial frequency on the horizontal axis (log scale), contrast sensitivity on the vertical","对比敏感度函数：亮度通道为带通，峰值在2到8 cycles per degree，上限约30；彩色通道为低通，上限约11到12；约0.5 cycles per degree以下彩色敏感度超过亮度":"Contrast sensitivity functions: the luminance channel is band-pass, peaking at 2 to 8 cycles per degree with a cut-off around 30; the chromatic channel is low-pass with a cut-off around 11 to 12; below about 0.5 cycles per degree chromatic sensitivity exceeds luminance","空间频率 (cycles/deg) — 对数轴":"Spatial frequency (cycles/deg) — log axis","对比敏感度":"Contrast sensitivity","彩色通道 · 低通":"Chromatic channel · low-pass","亮度通道 · 带通":"Luminance channel · band-pass","上限 11–12":"Cut-off 11–12","上限 ~30":"Cut-off ~30","峰 2–8":"Peak 2–8","彩色 &gt; 亮度":"chromatic > luminance","彩色 > 亮度":"chromatic > luminance","彩色通道（L−M、S−(L+M)）":"Chromatic channels (L−M, S−(L+M))","亮度通道（L+M）":"Luminance channel (L+M)","界面元素":"Interface element","实际尺寸":"Physical size","视角":"Visual angle","空间频率":"Spatial frequency","哪条通道更灵敏":"Which channel is more sensitive","文字笔画":"Text stroke","亮度":"Luminance","正文 x-height":"Body-text x-height","通知角标（红点）":"Notification badge (red dot)","工具栏图标":"Toolbar icon","信息流头像":"Feed avatar","临界":"Borderline","App 图标":"App icon","全宽照片 / 视频帧":"Full-width photo / video frame","整屏色调":"Full-screen colour cast","表格的读法":"How to read the table","：真正落在「颜色更灵敏」那一侧的是":": what actually falls on the \"colour is more sensitive\" side is ","大面积色块":"large areas of colour","—— 全宽照片、视频画面、整屏色调；而角标、图标、文字都太小，靠的是亮度对比而非颜色。":" — full-width photos, video frames, full-screen colour casts. Badges, icons and text are all too small, and rely on luminance contrast rather than colour.","所以去饱和拿掉的不是红点，是整片画面的色彩。":"So what desaturation removes is not the red dot, but the colour of the whole image.","Mullen, J Physiol 359:381–400 (1985) · 换算基于 460 ppi 机型与 35 cm 视距":"Mullen, J Physiol 359:381–400 (1985) · conversions based on a 460 ppi device at a 35 cm viewing distance","· 彩色 CSF 为低通、亮度 CSF 为带通，属视觉科学共识；曲线为示意，刻度按真实对数轴绘制。":"· That the chromatic CSF is low-pass and the luminance CSF band-pass is consensus in vision science; the curves are schematic, with the scale drawn on a true log axis.","两点必须注明":"Two points that must be noted","：Mullen 1985 被后续研究批评「不足以代表平均观察者」； 且":": Mullen 1985 has been criticised by later work as \"insufficient to represent the average observer\"; and ","亮度峰值随屏幕变暗而左移":"the luminance peak shifts leftward as the screen dims","（150→2 cd/m² 时由约 2.8 移至约 0.7 c/deg）， 故 0.5 c/deg 这个交叉点":" (from about 2.8 to about 0.7 c/deg as luminance goes 150→2 cd/m²), so the 0.5 c/deg crossover point is ","不是与亮度无关的常数":"not a constant independent of luminance","，夜间低亮度下会移动。 另需注意：角标的显著性严格来说应由「对局部周围的颜色对立特征对比」描述，用 CSF 位置解释小元素并不恰当。":", and will move at low night-time brightness. Note also that the salience of a badge should strictly be described in terms of colour-opponent feature contrast against its local surround; using CSF position to explain small elements is not appropriate.","它有多有效，以及它的边界":"How Effective It Is, and Where Its Limits Are","机制预测「会话变短、拿起次数不变」。三项独立数据正是这个模式——这既是它的证据，也是它的限制。":"The mechanism predicts shorter sessions with no change in pickups. Three independent datasets show exactly that pattern — which is both the evidence for it and its limitation.","实测效应：三项有量化结果的研究":"Measured effects: three studies with quantified results","对照条件基线约 339–355 分钟/天":"Control-condition baseline about 339–355 min/day","8–10 天 · 样本量不明":"8–10 days · sample size unclear","约 −40 分":"about −40 min","交叉 · 准随机 · 自报":"crossover · quasi-random · self-report","−28.4 分":"−28.4 min","被试内 · 无对照组 · 客观":"within-subject · no control group · objective","−20 分":"−20 min","折合为约":"Against a baseline of roughly ","分钟/天基线的":" min/day, that amounts to ","。 Hagerty 的合并检验":". Hagerty’s pooled test gives ","，两个序列臂各自独立显著 （":", with both sequence arms independently significant (","）；Dekker 的效应量":"); Dekker’s effect size is ","已核对原文":"original checked","出版社付费墙，二手佐证":"publisher paywall, corroborated secondhand","Holte &amp; Ferraro 这一条最弱":"The Holte & Ferraro entry is the weakest","Holte & Ferraro 这一条最弱":"The Holte & Ferraro entry is the weakest","：原文始终未能取得（出版社与各镜像均 403）， 样本量在可得来源间冲突（73 与约 220），而那个常被引用的「37.9 分钟」只能追溯到商业 App 博客—— 故此处只给约数、不附精确统计量。":": the original could never be obtained (403 from the publisher and from every mirror), the sample size conflicts between available sources (73 versus about 220), and the frequently cited \"37.9 minutes\" traces back only to a commercial app’s blog — so only an approximate figure is given here, with no precise statistics attached.","整个文献的共同限制：":"Limitations common to the whole literature: ","无 RCT、无预注册研究、全为学生样本、最长两周":"no RCT, no preregistered study, all student samples, two weeks at most","； 且因灰阶可见，":"; and because grayscale is visible, ","盲法在结构上不可行":"blinding is structurally impossible","，期望效应无法排除。":", so expectancy effects cannot be ruled out.","效应落在哪里：会话时长，而非拿起频率":"Where the effect lands: session length, not pickup frequency","三项独立发现指向同一个模式":"Three independent findings point to the same pattern","解锁次数：零效应。":"Unlocks: zero effect.","手机被拿起的频率没有变化；变化的是每次进入之后停留多久。":" How often the phone is picked up does not change; what changes is how long each visit lasts.","视频 = 0":"video = 0","视频时长未减少":"Video time did not decrease","，降幅集中于网页浏览与社交媒体。":"; the reduction was concentrated in web browsing and social media. ","但同一团队 2023 年的后续研究未能复现这一点":"But the same team’s 2023 follow-up failed to replicate this","，两者被描述为「相互冲突」——此条须按存疑对待。":", and the two are described as \"conflicting\" — treat this entry as doubtful.","Holte &amp; Ferraro（经 Dekker 文献综述佐证）":"Holte & Ferraro (corroborated via Dekker’s literature review)","Holte & Ferraro（经 Dekker 文献综述佐证）":"Holte & Ferraro (corroborated via Dekker’s literature review)","提到转用其他设备。":"mentioned switching to another device.","三周捆绑干预中，6% 的开放回答提及换用别的设备—— 这是":" In a three-week bundled intervention, 6% of open-ended responses mentioned switching to a different device — this is a ","定性主题频次，不是测得的替代率":"qualitative theme frequency, not a measured substitution rate","。 反向证据：Dekker 发现被试":". Counter-evidence: Dekker found that participants did ","并未":"not","增加其他设备使用（均值 3.76/7）。":" increase their use of other devices (mean 3.76/7).","这是事后解读，不是被验证的预测":"THIS IS POST-HOC INTERPRETATION, NOT A VALIDATED PREDICTION","Dekker 的":"Dekker’s ","预注册假设原本预测解锁次数会下降":"preregistered hypothesis actually predicted that unlocks would fall","，结果没有支持—— 作者原话是「与我们的预期相反」。「会话变短而拿起不变」是他们事后的解读。 所以它":", and the result did not support it — the authors’ own words are \"contrary to our expectations\". \"Shorter sessions with unchanged pickups\" is their post-hoc interpretation. So it ","不构成机制区分证据":"does not constitute mechanism-discriminating evidence","，下面那段因果解释是":", and the causal account below is ","本页自己的推论":"this page's own inference","本页的推论":"THIS PAGE'S INFERENCE","去饱和改变的是":"What desaturation changes is the ","内容的视觉吸引力":"visual appeal of the content","，这可以解释会话为何提前结束； 而它":", which can explain why sessions end sooner; and it ","不改变强化时间表":"does not change the reinforcement schedule","——「这次刷新会不会有好东西」这一不确定性结构完整存活， 这可以解释拿起手机的频率为何不变。":" — the uncertainty structure of \"will this refresh have something good\" survives intact, which can explain why pickup frequency does not change.","关于强化时间表的一点分寸：动物实验确实显示多巴胺神经元的":"A note on not overstating this: animal experiments do show that the ","上升期预期活动":"ramping anticipatory activity","在奖赏概率 P=0.5 时最大（Fiorillo, Tobler &amp; Schultz 2003）——但同一篇论文也报告该活动":" of dopamine neurons is maximal at reward probability P=0.5 (Fiorillo, Tobler & Schultz 2003) — but the same paper also reports that this activity ","在奖赏概率 P=0.5 时最大（Fiorillo, Tobler & Schultz 2003）——但同一篇论文也报告该活动":" of dopamine neurons is maximal at reward probability P=0.5 (Fiorillo, Tobler & Schultz 2003) — but the same paper also reports that this activity ","随奖赏量级上升":"increases with reward magnitude","， 且 CS 的相位反应是":", and that the phasic response to the CS is ","单调":"monotonic","而非峰形。原文完全没有涉及人类、赌博或社交媒体， 把它套到信息流上":" rather than peaked. The original paper has nothing whatever to do with humans, gambling or social media; applying it to feeds ","是类比，不是证据":"is an analogy, not evidence","；也没有找到任何同行评审研究把社交信息流实测为变量比率时间表。":". Nor was any peer-reviewed study found that measures social feeds as variable-ratio schedules.","可以确定的那部分":"THE PART THAT IS CERTAIN","无论机制如何解释，":"Whatever the mechanistic explanation, ","测得的事实是：时长降了，拿起频率没降。":"the measured fact is: duration fell, pickup frequency did not.","所以去饱和":"So desaturation ","收窄了使用，而不是消除使用。":"narrows use rather than eliminating it.","在什么内容上最有效":"Where it works best","浏览器信息流":"Browser feeds","缩略图 / 图片 / 社交":"thumbnails / images / social","最强":"strongest","电商 / 视频列表":"E-commerce / video lists","彩色缩略图主导":"dominated by colour thumbnails","强":"strong","文档 / 邮件":"Documents / email","以文字为主":"mostly text","弱":"weak","代码 / 表格":"Code / spreadsheets","颜色承载语义":"colour carries meaning","最弱 · 有代价":"weakest · has a cost","绿与蓝的权重差约":"The weights of green and blue differ by about ","）， 所以":"), so ","纯靠色相编码的信息会失效":"information encoded by hue alone will fail","——WCAG 的 SC 1.4.1 正是要求颜色不得作为传递信息的唯一手段。":" — and this is exactly what WCAG SC 1.4.1 requires: that colour not be the only means of conveying information.","灰阶到底做了什么：以微信绿为例":"WHAT GRAYSCALE ACTUALLY DOES: WECHAT GREEN AS AN EXAMPLE","去饱和不是「把三个数平均一下」，而是":"Desaturation is not \"averaging the three numbers\". It ","先算出这个颜色有多亮，再把三个通道都设成这个亮度":"first works out how bright the colour is, then sets all three channels to that luminance","微信绿":"WeChat green","警示红":"alert red","天空蓝":"sky blue","品牌橙":"brand orange","红通道值":"Red channel value","绿通道值":"Green channel value","蓝通道值":"Blue channel value","拖绿色滑块，右边的灰变化很大；拖红色，几乎不动。":"Drag the green slider and the grey on the right moves a lot; drag the red one and it barely budges. ","这就是「绿占七成」。":"This is what \"green is seventy per cent of it\" means.","原色":"Original","灰阶":"Grayscale","换算成真实光强，再按人眼权重加权":"Convert to real light intensity, then weight by human-eye sensitivity","三通道都设成这个亮度，再编回存储值":"Set all three channels to that luminance, then encode back to stored values","三者相等 ＝ 没有色相；而这个亮度正是原色的亮度。":"All three equal = no hue; and that luminance is exactly the luminance of the original colour.","红":"R","绿":"G","蓝":"B","若改成简单取平均 →":"A simple average would instead give →","各通道对亮度的贡献比例":"Each channel’s proportional contribution to luminance","所以灰阶的本质":"So what grayscale really is","颜色有三个维度：":"Colour has three dimensions: ","亮度、色相、饱和度":"luminance, hue and saturation","。 那个公式把三个数压成一个数，":". That formula compresses three numbers into one: ","丢掉的是色相与饱和度，留下的正是亮度":"what it discards is hue and saturation, and what it keeps is exactly luminance","所以去饱和是一次":"So desaturation is a ","精准的降维":"precise dimensionality reduction","——不是把画面调暗，也不是把颜色调淡， 而是":" — not dimming the image, nor fading the colours, but ","只抽掉「是什么颜色」，保留「有多亮」":"removing only \"what colour it is\" while keeping \"how bright it is\"","那字还看得清吗——用 WCAG 来验":"IS THE TEXT STILL LEGIBLE? CHECK IT AGAINST WCAG","「看得清」需要":"\"Legible\" requires an ","客观判据":"objective criterion","，而不是观感。":", not an impression.","（W3C 无障碍标准）用":" (the W3C accessibility standard) uses ","对比度":"contrast ratio","衡量文字与底色的亮度差， 正文须达":" to measure the luminance difference between text and background; body text must reach ","——这是各国政府采购普遍引用的硬性门槛。":" — a hard threshold widely cited in government procurement worldwide.","而它算这个亮度，用的":"And to compute that luminance it uses ","正是上面那个公式":"exactly the formula above","既然灰阶":"Since grayscale ","不改变任何像素的亮度":"changes the luminance of no pixel","，由亮度算出的对比度自然也不该变——":", the contrast ratio computed from luminance should not change either — ","「灰阶不损害可读性」于是从观感变成了可验证的命题。":"so \"grayscale does not harm readability\" turns from an impression into a testable proposition.","前提是：两边必须在":"The precondition is that both sides must be computed in ","同一个数域":"the same number domain","里运算。":".","不存在桌面／浏览器端的灰阶研究。":"There is no grayscale research on desktop or browser.","可支持的表述是：":"The supportable statement is: ","手机端有适度、可复现的证据；桌面端属机制上合理的外推，无直接证据":"on phones there is modest, reproducible evidence; on desktop it is a mechanistically plausible extrapolation with no direct evidence","主要来源":"PRINCIPAL SOURCES","色觉与注意":"Colour vision and attention","灰阶干预":"Grayscale interventions","显示技术":"Display technology","来源标签：":"Source labels: ","已核对原文 ·":"original checked ·","出版社付费墙，经独立二手来源佐证 ·":"publisher paywall, corroborated by independent secondary sources ·","未能核实，未作为证据使用。 本报告仅收录可追溯至同行评审来源的统计数字；无法溯源的流传数据已单独列出并排除。":"could not be verified, not used as evidence. This report includes only statistics traceable to peer-reviewed sources; widely circulated figures that could not be traced have been listed separately and excluded.","。":".","：":":","、":", ","（":" (","&lt; 0.5 c/deg：":"< 0.5 c/deg:","< 0.5 c/deg：":"< 0.5 c/deg:","10／30／50":"10/30/50","22／77／109":"22/77/109","N=62，":"N=62, ","——":" — ","lux——":"lux — ","暗了 69 级":"69 levels darker"};
+  var dict=null, nodes=[], labels=[], titles=[], ready=false, cur='zh';
+
+  // collect every text node that contains Han characters, plus aria-labels and <title>
+  function collect(){
+    var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{
+      acceptNode:function(n){
+        if(!HAN.test(n.nodeValue)) return NodeFilter.FILTER_REJECT;
+        var p=n.parentNode, t=p&&p.nodeName;
+        if(t==='SCRIPT'||t==='STYLE') return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var n; while((n=w.nextNode())) nodes.push({n:n, zh:n.nodeValue});
+    Array.prototype.forEach.call(document.querySelectorAll('[aria-label]'),function(el){
+      var v=el.getAttribute('aria-label');
+      if(HAN.test(v)) labels.push({el:el, zh:v});
+    });
+    var tt=document.querySelector('title');
+    if(tt&&HAN.test(tt.textContent)) titles.push({el:tt, zh:tt.textContent});
+  }
+
+  function apply(lang){
+    if(lang==='en'&&!dict) return;
+    nodes.forEach(function(r){
+      if(lang==='zh'){ r.n.nodeValue=r.zh; return; }
+      var k=r.zh.replace(/\s+/g,' ').trim();
+      var t=dict[k];
+      if(t===undefined) return;                       // untranslated -> leave Chinese
+      var lead=(r.zh.match(/^\s*/)||[''])[0], tail=(r.zh.match(/\s*$/)||[''])[0];
+      r.n.nodeValue=lead+t+tail;                      // preserve surrounding whitespace
+    });
+    [labels,titles].forEach(function(set){
+      set.forEach(function(r){
+        var k=r.zh.replace(/\s+/g,' ').trim(), t=(lang==='en')?dict[k]:undefined;
+        var v=(lang==='zh')?r.zh:(t!==undefined?t:r.zh);
+        if(r.el.nodeName==='TITLE') r.el.textContent=v; else r.el.setAttribute('aria-label',v);
+      });
+    });
+    document.documentElement.lang = (lang==='en')?'en':'zh-Hans';
+    cur=lang;
+    var zh=document.getElementById('lzh'), en=document.getElementById('len');
+    zh.classList.toggle('on',lang==='zh'); en.classList.toggle('on',lang==='en');
+    zh.setAttribute('aria-pressed',String(lang==='zh'));
+    en.setAttribute('aria-pressed',String(lang==='en'));
+    try{ localStorage.setItem('gsLang',lang); }catch(e){}
+    if(typeof window.__mxDraw==='function') window.__mxDraw();
+  }
+
+  collect();
+
+  dict=__I18N__; ready=true;
+  var zhBtn=document.getElementById('lzh'), enBtn=document.getElementById('len');
+  zhBtn.addEventListener('click',function(){ apply('zh'); });
+  enBtn.addEventListener('click',function(){ apply('en'); });
+
+  // restore preference
+  var saved=null; try{ saved=localStorage.getItem('gsLang'); }catch(e){}
+  if(saved==='en') enBtn.click();
+})();
+</script>
