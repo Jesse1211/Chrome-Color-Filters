@@ -23,7 +23,12 @@
 
 ## 目标
 
-- 研究报告可以通过 `https://jesse1211.github.io/Chrome-Gray-Scaller/` 访问。
+- 研究报告可以通过 Pages 站点访问。
+  **(2026-11-26 实测更正)** 规格初稿写的是
+  `https://jesse1211.github.io/Chrome-Gray-Scaller/`,实际地址是
+  `https://jesseliu.me/Chrome-Gray-Scaller/` —— 该账户配了**账户级自定义域名**,
+  `jesse1211.github.io/...` 会 HTTP 301 重定向到它。两个地址都能访问,
+  但**第三阶段做链接时应使用自定义域名那个**。
 - 推送到 `main` 且改动了报告文件时,自动重新发布。
 - 可以手工触发发布(`workflow_dispatch`),不必靠一次假的提交。
 - 中英文切换在线上必须可用。

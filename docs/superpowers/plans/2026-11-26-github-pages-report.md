@@ -22,7 +22,8 @@
 - 权限:`contents: read`、`pages: write`、`id-token: write`。
 - 并发:`group: pages`,`cancel-in-progress: false`(不打断进行中的部署)。
 - 发布目录:`reports/gray/`,整个目录原样上传。
-- 站点地址:`https://jesse1211.github.io/Chrome-Gray-Scaller/`
+- 站点地址:`https://jesseliu.me/Chrome-Gray-Scaller/`(实测;账户级自定义域名。
+  `https://jesse1211.github.io/Chrome-Gray-Scaller/` 会 301 重定向到它)
 - `.nojekyll` 必须在产物里,用来关掉 Pages 默认的 Jekyll 处理。
 
 ## Review Focus
@@ -148,7 +149,7 @@ Expected: `build` 与 `deploy` 两个 job 均成功。
 
 - [ ] **Step 4: 打开站点,逐条核对 Review Focus**
 
-访问 `https://jesse1211.github.io/Chrome-Gray-Scaller/`,确认:
+访问 `https://jesseliu.me/Chrome-Gray-Scaller/`,确认:
 - 报告正常显示(非 404、非空白)
 - **点一次「English」,英文内容确实出现**(Review Focus #4)
 - 衬线标题字体已加载,即 Google Fonts 没被拦(Review Focus #5)
