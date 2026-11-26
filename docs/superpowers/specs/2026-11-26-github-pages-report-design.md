@@ -64,8 +64,13 @@
   这个风险 —— 原来的反目标因此不再是本阶段的风险点,但验收仍然要实际
   点一次英文切换(理由见下)。
 - 仓库此前没有 `.github/` 目录,这是第一个 workflow。
-- Pages 的来源需要在仓库设置里一次性选为 "GitHub Actions"(仓库设置,不是代码,
-  需要用户手动点一次)。
+- Pages 的来源需要一次性设为 "GitHub Actions"。
+  **(2026-11-26 实测更正)** 初稿写的是「需要用户手动点一次」。实际上首跑就全绿、
+  用户没有点任何设置 —— Pages 是被 `deploy-pages` 创建 deployment 时启用的。
+  **注意不要把这归功于 `configure-pages`:** 该 action 的 `enablement` 输入默认
+  `'false'`,本次运行日志明确打印 `enablement: false`(它根本没尝试);而且它
+  **无法**用 `GITHUB_TOKEN` 启用 Pages —— 其文档要求 PAT 或 GitHub App token。
+  第二阶段不要依赖「`configure-pages` 会帮我启用 Pages」这个错误预期。
 
 ## 可选方案
 
