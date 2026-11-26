@@ -8,7 +8,22 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+
+// 从 PNG 中取出所有 IDAT chunk 并解压,得到原始像素字节。
+// PNG = 8 字节签名 + 若干 chunk(4 字节长度 + 4 字节类型 + data + 4 字节 CRC)。
+function pngPixels(buf: Buffer): Buffer {
+  let off = 8;
+  const parts: Buffer[] = [];
+  while (off < buf.length) {
+    const len = buf.readUInt32BE(off);
+    const type = buf.toString('ascii', off + 4, off + 8);
+    if (type === 'IDAT') parts.push(buf.subarray(off + 8, off + 8 + len));
+    off += 12 + len;
+  }
+  return inflateSync(Buffer.concat(parts));
+}
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(
@@ -184,7 +199,11 @@ describe('ADR-045 · 扩展图标两态,必须是不同的图片资源', () => {
       encodePng: (size: number, rgba: Buffer) => Buffer;
       ICON_VARIANTS: Record<string, unknown>;
     };
-    // 重新生成一次,必须与仓库里已提交的产物逐字节一致(确定性输出)。
+    // 重新生成一次,必须与仓库里已提交的产物像素一致(确定性栅格化)。
+    // 注意:不能比较压缩后的字节 —— encodePng 用 deflateSync 压缩,
+    // deflate 的输出字节取决于 zlib 版本,不取决于本项目代码,换一台
+    // 机器/换一个 Node 版本就可能字节不同。比较解压后的像素数据才是
+    // 真正钉住栅格化逻辑本身的断言。
     for (const [variant, def] of Object.entries(mod.ICON_VARIANTS)) {
       for (const size of SIZES) {
         const regenerated = mod.encodePng(size, mod.rasterize(size, def));
@@ -192,8 +211,8 @@ describe('ADR-045 · 扩展图标两态,必须是不同的图片资源', () => {
           resolve(variantDir(variant), `${size}.png`),
         );
         expect(
-          regenerated.equals(committed),
-          `public/icon/${variant}/${size}.png 与生成脚本的输出不一致`,
+          pngPixels(regenerated).equals(pngPixels(committed)),
+          `public/icon/${variant}/${size}.png 的像素数据与生成脚本的输出不一致`,
         ).toBe(true);
       }
     }
